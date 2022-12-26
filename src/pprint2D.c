@@ -1,4 +1,15 @@
-#include "pprint2Dmatrix.h"
+/**
+ * @file pprint2D.c
+ * @author Uwe Röttgermann (uwe@roettgermann.de)
+ * @brief
+ * @version 0.1
+ * @date 26-12-2022
+ *
+ * @copyright Copyright (c) 2022
+ *
+ */
+
+#include "pprint2D.h"
 
 #include <math.h>
 

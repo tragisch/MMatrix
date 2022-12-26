@@ -2,34 +2,25 @@
  * @file matrix.h
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
- * @version 0.1
- * @date 18-04-2021
+ * @version 0.2
+ * @date 26-12-2022
  *
- * @copyright Copyright (c) 2021
+ * @copyright Copyright (c) 2022
  *
  */
 
-#ifndef MATRIX_H
-#define MATRIX_H
+#ifndef MATRIX_UR_H
+#define MATRIX_UR_H
 
-#include <math.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "pprint2D.h"
+#include "utils.h"
+#include "vector.h"
 
 /*******************************/
 /*     Define & Types         */
 /*******************************/
 
 #define INIT_CAPACITY 5u
-
-// Definition of DoubleVector
-typedef struct {
-  double *double_array;
-  size_t length;
-  size_t capacity;
-} DoubleVector;
 
 // Definition of DoubleMatrix
 typedef struct {
@@ -39,54 +30,6 @@ typedef struct {
   size_t column_capacity;
   size_t row_capacity;
 } DoubleMatrix;
-
-/*******************************/
-/*   Helper Functions          */
-/*******************************/
-
-// Functions Gereral:
-int randomInteger(int min, int max);
-double randomNumber();
-
-// Function DoubleArray
-void printDoubleArray(double *p_array, unsigned int length);
-double *createRandomDoubleArray(unsigned int length);
-
-/*******************************/
-/*     I/O Functions           */
-/*******************************/
-
-int readInDoubleVectorData(DoubleVector *vec, const char *filepath);
-int writeOutDoubleVectorData(DoubleVector *vec, const char *filepath);
-
-/*******************************/
-/*  Double Vector  (Dynamic)   */
-/*******************************/
-
-// Function Double Vector:
-DoubleVector *createDoubleVector();
-DoubleVector *createDoubleVectorOfLength(size_t length, double value);
-DoubleVector *createRandomDoubleVectorOfLength(size_t length);
-
-// shrink, push, pop, expand
-void expandDoubleVector(DoubleVector *vec);
-void shrinkDoubleVector(DoubleVector *vec);
-void pushValue(DoubleVector *vec, double value);
-double popValue(DoubleVector *vec);
-
-// math:
-double meanOfDoubleVector(DoubleVector *vec);
-double minOfDoubleVector(DoubleVector *vec);
-double maxOfDoubleVector(DoubleVector *vec);
-DoubleVector *addDoubleVector(DoubleVector *vec1, DoubleVector *vec2);
-DoubleVector *subDoubleVector(DoubleVector *vec1, DoubleVector *vec2);
-DoubleVector *multiplyScalarToVector(DoubleVector *vec, double scalar);
-DoubleVector *divideScalarToVector(DoubleVector *vec, double scalar);
-double multiplyDoubleVectors(DoubleVector *vec1, DoubleVector *vec2);
-
-// free & print:
-void freeDoubleVector(DoubleVector *vec);
-void printDoubleVector(DoubleVector *vec);
 
 /*******************************/
 /*        Double Matrix        */

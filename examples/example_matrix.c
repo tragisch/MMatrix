@@ -1,7 +1,6 @@
 #include <stdio.h>
 
 #include "matrix.h"
-#include "pprint2Dmatrix.h"
 
 int main() {
   size_t rows = 1000;
@@ -9,8 +8,6 @@ int main() {
   DoubleMatrix* matrix = createRandomDoubleMatrix(rows, cols);
 
   printDoubleMatrix(matrix);
-
-  // pprint2D(matrix->values, rows, cols);
 
   // clean up:
   freeDoubleMatrix(matrix);
