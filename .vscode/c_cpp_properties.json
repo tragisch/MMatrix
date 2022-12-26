@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Mac",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/src/include/",
+                "${workspaceFolder}/lib/UR/**",
+                "${workspaceFolder}/bazel-00_C_Repo_Template/external/Unity/src",
+                "${workspaceFolder}/bazel-00_C_Repo_Template/external/CException/lib",
+                "/opt/homebrew/Cellar/glib/2.74.0/**"
+            ],
+            "defines": [],
+            "macFrameworkPath": [],
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "macos-clang-arm64"
+        }
+    ],
+    "version": 4
+}

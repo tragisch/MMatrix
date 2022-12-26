@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "LLDB_Bazel",
+            "preLaunchTask": "Bazel Run (Debug)",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/bazel-bin/${relativeFileDirname}/${fileBasenameNoExtension}",
+            "args": [],
+            "sourceMap": {
+                ".": "${workspaceFolder}",
+                "/private/var/tmp/_bazel_uwe/94f2d41ed6a945fecd6be41e944ebafc/execroot/__main__": "${workspaceFolder}"
+            }
+        }
+    ]
+}

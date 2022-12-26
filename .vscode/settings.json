@@ -1,0 +1,14 @@
+{
+    "bazel-cpp-tools.compileCommands.targets": [
+        "main"
+    ],
+    "C_Cpp.errorSquiggles": "Enabled",
+    "files.associations": {
+        "glib.h": "c",
+        "gslist.h": "c",
+        "cmocka.h": "c",
+        "cmocka_private.h": "c",
+        "armstrong_numbers.h": "c",
+        "unity.h": "c"
+    }
+}
