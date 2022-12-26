@@ -11,9 +11,3 @@ cc_library(
     includes = ["include"],
     visibility = ["//visibility:public"],
 )
-
-cc_binary(
-    name = "example_matrix",
-    srcs = ["example_matrix.c"],
-    deps = ["//lib/UR/DoubleMatrix"],
-)
