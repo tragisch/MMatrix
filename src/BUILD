@@ -40,7 +40,7 @@ cc_library(
         "include/utils.h",
     ],
     includes = ["include"],
-    visibility = ["//visibility:private"],
+    visibility = ["//visibility:public"],
 )
 
 cc_library(
