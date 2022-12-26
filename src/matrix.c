@@ -11,6 +11,8 @@
 
 #include "matrix.h"
 
+#include "pprint2Dmatrix.h"
+
 #define MAX_ROW 20
 #define MAX_ROW_PRINT 5
 #define MAX_COLUMN 10
@@ -45,6 +47,7 @@ int readInDoubleVectorData(DoubleVector* vec, const char* filepath) {
   }
   int succ_read = 1;
   for (size_t i = 0; i < vec->length; i++) {
+    // FIXME: insecure use of fscanf:
     succ_read = fscanf(fp, "%lf", &vec->double_array[i]);
   }
   fclose(fp);
@@ -220,19 +223,19 @@ void printDoubleVector(DoubleVector* vec) {
   size_t length = vec->length;
   for (size_t i = 0; i < length; i++) {
     if (i == 0) {
-      printf("[%lf ", array[i]);
+      printf("[%.2lf ", array[i]);
     } else if (i == length - 1) {
-      printf("%lf]\n", array[i]);
+      printf("%.2lf]\n", array[i]);
     } else {
       if (length < MAX_COLUMN) {
-        printf("%lf ", array[i]);
+        printf("%.2lf ", array[i]);
       } else {
         if (i < MAX_COLUMN_PRINT) {
-          printf("%lf ", array[i]);
+          printf("%.2lf ", array[i]);
         } else if (i == MAX_COLUMN_PRINT) {
           printf(" ... ");
         } else if (i > length - MAX_COLUMN_PRINT - 1) {
-          printf("%lf ", array[i]);
+          printf("%.2lf ", array[i]);
         }
       }
     }
@@ -420,19 +423,19 @@ void printDoubleArray(double* p_array, unsigned int length) {
   if (length > 1) {
     for (size_t i = 0; i < length; i++) {
       if (i == 0) {
-        printf("[%f ", p_array[i]);
+        printf("[%.2f ", p_array[i]);
       } else if (i == length - 1) {
-        printf("%lf]\n", p_array[i]);
+        printf("%.2f]\n", p_array[i]);
       } else {
         if (length < MAX_COLUMN) {
-          printf("%f ", p_array[i]);
+          printf("%.2f ", p_array[i]);
         } else {
           if (i < MAX_COLUMN_PRINT) {
-            printf("%f ", p_array[i]);
+            printf("%.2f ", p_array[i]);
           } else if (i == MAX_COLUMN_PRINT) {
             printf(" ... ");
           } else if (i > length - MAX_COLUMN_PRINT - 1) {
-            printf("%f ", p_array[i]);
+            printf("%.2f ", p_array[i]);
           }
         }
       }
@@ -459,7 +462,7 @@ DoubleMatrix* newDoubleMatrix() {
   matrix->row_capacity = INIT_CAPACITY;
 
   matrix->values = (double**)malloc(sizeof(double*));
-  matrix->values[0] = calloc(sizeof(double), 0u);
+  // matrix->values[0] = calloc(sizeof(double), 0u);
 
   return matrix;
 }
@@ -560,7 +563,7 @@ DoubleMatrix* setArrayToMatrix(size_t rows, size_t cols,
  *
  * @param mat
  */
-static void expandMatrixRow(DoubleMatrix* mat) {
+void expandMatrixRow(DoubleMatrix* mat) {
   size_t old_capacity = mat->row_capacity;
   mat->row_capacity += mat->row_capacity;
   mat->values = realloc(mat->values, (mat->row_capacity) * sizeof(double*));
@@ -574,7 +577,7 @@ static void expandMatrixRow(DoubleMatrix* mat) {
  *
  * @param mat
  */
-static void expandMatrixColumn(DoubleMatrix* mat) {
+void expandMatrixColumn(DoubleMatrix* mat) {
   mat->column_capacity += mat->column_capacity;
   // mat->values = realloc(mat->values, (mat->row_capacity) * sizeof(double**));
   for (size_t i = 0; i < mat->row_capacity; i++) {
@@ -588,7 +591,7 @@ static void expandMatrixColumn(DoubleMatrix* mat) {
  *
  * @param mat
  */
-static void shrinkMatrixColumn(DoubleMatrix* mat) {
+void shrinkMatrixColumn(DoubleMatrix* mat) {
   if ((mat->columns<(mat->column_capacity - INIT_CAPACITY) &
                     (mat->column_capacity - INIT_CAPACITY)> 1)) {
     mat->column_capacity -= INIT_CAPACITY;
@@ -605,7 +608,7 @@ static void shrinkMatrixColumn(DoubleMatrix* mat) {
  *
  * @param mat
  */
-static void shrinkMatrixRow(DoubleMatrix* mat) {
+void shrinkMatrixRow(DoubleMatrix* mat) {
   if ((mat->rows<(mat->row_capacity - INIT_CAPACITY) &
                  (mat->row_capacity - INIT_CAPACITY)> 1)) {
     mat->row_capacity -= INIT_CAPACITY;
@@ -719,15 +722,15 @@ void freeDoubleMatrix(DoubleMatrix* mat) {
 void printDoubleMatrix(DoubleMatrix* matrix) {
   if (matrix->rows < MAX_ROW) {
     for (size_t i = 0; i < matrix->rows; i++) {
-      printDoubleArray(matrix->values[i], matrix->columns);
+      printDoubleArray_2(matrix->values[i], matrix->columns);
     }
   } else {
     for (size_t i = 0; i < 4; i++) {
-      printDoubleArray(matrix->values[i], matrix->columns);
+      printDoubleArray_2(matrix->values[i], matrix->columns);
     }
     printf("...\n");
     for (size_t i = matrix->rows - 4; i < matrix->rows; i++) {
-      printDoubleArray(matrix->values[i], matrix->columns);
+      printDoubleArray_2(matrix->values[i], matrix->columns);
     }
   }
 

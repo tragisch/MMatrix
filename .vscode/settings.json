@@ -2,7 +2,7 @@
     "bazel-cpp-tools.compileCommands.targets": [
         "main"
     ],
-    "C_Cpp.errorSquiggles": "Enabled",
+    "C_Cpp.errorSquiggles": "enabled",
     "files.associations": {
         "glib.h": "c",
         "gslist.h": "c",

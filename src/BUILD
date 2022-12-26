@@ -1,23 +1,19 @@
-cc_binary(
-    name = "main",
-    srcs = ["main.c"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//src:all_libs",
-    ],
-)
-
 cc_library(
-    name = "all_libs",
-    srcs = glob(["*.c"]),
-    hdrs = glob(["**/*.h"]),
+    name = "DoubleMatrix",
+    srcs = [
+        "matrix.c",
+        "pprint2Dmatrix.c",
+    ],
+    hdrs = [
+        "include/matrix.h",
+        "include/pprint2Dmatrix.h",
+    ],
     includes = ["include"],
     visibility = ["//visibility:public"],
 )
 
-cc_library(
-    name = "hello",
-    srcs = ["hello.c"],
-    hdrs = ["include/hello.h"],
-    visibility = ["//visibility:public"],
+cc_binary(
+    name = "example_matrix",
+    srcs = ["example_matrix.c"],
+    deps = ["//lib/UR/DoubleMatrix"],
 )

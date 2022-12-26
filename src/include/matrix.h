@@ -67,7 +67,6 @@ int writeOutDoubleVectorData(DoubleVector *vec, const char *filepath);
 DoubleVector *createDoubleVector();
 DoubleVector *createDoubleVectorOfLength(size_t length, double value);
 DoubleVector *createRandomDoubleVectorOfLength(size_t length);
-DoubleMatrix *cloneMatrix(DoubleMatrix *m);
 
 // shrink, push, pop, expand
 void expandDoubleVector(DoubleVector *vec);
@@ -97,15 +96,16 @@ void printDoubleVector(DoubleVector *vec);
 DoubleMatrix *newDoubleMatrix();
 DoubleMatrix *createDoubleMatrix(size_t rows, size_t cols);
 DoubleMatrix *createRandomDoubleMatrix(size_t rows, size_t cols);
+DoubleMatrix *cloneMatrix(DoubleMatrix *m);
 DoubleMatrix *createIdentityMatrix(size_t rows);
 DoubleMatrix *setArrayToMatrix(size_t rows, size_t cols,
                                double array[rows][cols]);
 
 // shrink, push, pop, expand
-static void expandMatrixRow(DoubleMatrix *mat);
-static void expandMatrixColumn(DoubleMatrix *mat);
-static void shrinkMatrixColumn(DoubleMatrix *mat);
-static void shrinkMatrixRow(DoubleMatrix *mat);
+void expandMatrixRow(DoubleMatrix *mat);
+void expandMatrixColumn(DoubleMatrix *mat);
+void shrinkMatrixColumn(DoubleMatrix *mat);
+void shrinkMatrixRow(DoubleMatrix *mat);
 void pushColumn(DoubleMatrix *mat, DoubleVector *col_vec);
 void pushRow(DoubleMatrix *mat, DoubleVector *row_vec);
 DoubleVector *popColumn(DoubleMatrix *mat);
