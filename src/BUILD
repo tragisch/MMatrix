@@ -52,6 +52,6 @@ cc_library(
         "include/pprint2D.h",
     ],
     includes = ["include"],
-    visibility = ["//visibility:private"],
+    visibility = ["//visibility:public"],
     deps = ["//src:utils"],
 )
