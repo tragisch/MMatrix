@@ -1,0 +1,4 @@
+
+# ld: warning: -undefined dynamic_lookup may not work with chained fixups
+# temporary solution: https://github.com/bazelbuild/bazel/issues/16413
+build --linkopt=-Wl,-no_fixup_chains
