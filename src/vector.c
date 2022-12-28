@@ -9,8 +9,6 @@
  *
  */
 
-
-
 #include "vector.h"
 
 /*******************************/
@@ -144,7 +142,7 @@ DoubleVector* createRandomDoubleVectorOfLength(size_t length) {
  * @param vec
  */
 void expandDoubleVector(DoubleVector* vec) {
-  vec->capacity += vec->capacity;
+  vec->capacity += INIT_CAPACITY;  // TODO: or += vec->capacity;
   vec->double_array =
       realloc(vec->double_array, vec->capacity * sizeof(double));
 }

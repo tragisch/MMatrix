@@ -19,7 +19,7 @@ static void test_create_vector(void) {
 
 static void test_create_vector_of_length(void) {
   size_t length = randomInt_upperBound(1000);
-  size_t value = randomDouble();
+  double value = randomDouble();
   DoubleVector *vec = createDoubleVectorOfLength(length, value);
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_EQUAL_UINT32(length, vec->length);
@@ -28,11 +28,29 @@ static void test_create_vector_of_length(void) {
   freeDoubleVector(vec);
 }
 
+static void test_push_value(void) {
+  size_t length = randomInt_upperBound(100);
+  double value = 0.;
+  DoubleVector *vec = createDoubleVectorOfLength(length, value);
+
+  double new_value = -1.67;
+  pushValue(vec, new_value);
+  TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->double_array[length]);
+
+  for (size_t i = 0; i < length; i++) {
+    pushValue(vec, randomDouble());
+    TEST_ASSERT_TRUE(vec->capacity >= vec->length);
+  }
+
+  freeDoubleVector(vec);
+}
+
 int main(void) {
   UnityBegin("matrix.c");
 
   RUN_TEST(test_create_vector);
   RUN_TEST(test_create_vector_of_length);
+  RUN_TEST(test_push_value);
 
   return UnityEnd();
 }

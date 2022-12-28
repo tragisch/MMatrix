@@ -5,7 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/src/include/",
-                "${workspaceFolder}/lib/UR/misc",
+                "${workspaceFolder}/lib/**",
                 "${workspaceFolder}/bazel-03_DoubleMatrix/external/Unity/src",
                 "${workspaceFolder}/bazel-03_DoubleMatrix/external/CException/lib",
                 "/opt/homebrew/Cellar/glib/2.74.0/**"
