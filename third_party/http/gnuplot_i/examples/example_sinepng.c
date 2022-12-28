@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <unistd.h>  // for close
 
-#include "lib/gnuplot_i/src/gnuplot_i.h"
+#include "gnuplot_i.h"
 
 int main(int argc, char *argv[]) {
   gnuplot_ctrl *g = gnuplot_init();

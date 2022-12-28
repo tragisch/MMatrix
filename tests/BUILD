@@ -1,9 +1,9 @@
 cc_test(
     name = "unity_test_matrix",
-   # size = "small",
+    # size = "small",
     srcs = ["test_DoubleMatrix.c"],
     deps = [
-        "//lib/UR/misc",
+        "//lib/misc",
         "//src:DoubleMatrix",
         "@Unity",
     ],
@@ -11,10 +11,10 @@ cc_test(
 
 cc_test(
     name = "unity_test_vector",
-   # size = "small",
+    # size = "small",
     srcs = ["test_DoubleVector.c"],
     deps = [
-        "//lib/UR/misc",
+        "//lib/misc",
         "//src:DoubleVector",
         "@Unity",
     ],

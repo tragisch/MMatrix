@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>  // for close
 
-#include "lib/gnuplot_i/src/gnuplot_i.h"
+#include "gnuplot_i.h"
 
 #define SLEEP_LGTH 2
 #define NPOINTS 50

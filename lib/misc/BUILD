@@ -10,5 +10,5 @@ cc_binary(
     name = "example_misc",
     srcs = ["example_misc.c"],
     visibility = ["//visibility:public"],
-    deps = ["//lib/UR/misc"],
+    deps = ["//lib/misc"],
 )

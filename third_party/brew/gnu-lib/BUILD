@@ -6,11 +6,3 @@ cc_binary(
         "@glib",
     ],
 )
-
-cc_binary(
-    name = "single_linked_list",
-    srcs = ["single_linked_lists.c"],
-    deps = [
-        "@glib",
-    ],
-)
