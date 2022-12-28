@@ -7,7 +7,7 @@ void tearDown(void) {}
 
 static void test_matric_create(void) {
   DoubleMatrix *mat = newDoubleMatrix();
-  TEST_FAIL();
+  TEST_ASSERT_NOT_NULL(mat);
 }
 
 int main(void) {

@@ -12,11 +12,10 @@ cc_library(
 )
 
 cc_test(
-    name = "TestException",
-    srcs = ["TestException.c"],
+    name = "test_exception",
+    srcs = ["test_exception.c"],
     visibility = ["//visibility:public"],
     deps = [
         "@CException",
-        "@Unity",
     ],
 )
