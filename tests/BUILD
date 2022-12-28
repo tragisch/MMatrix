@@ -1,6 +1,6 @@
 cc_test(
-    name = "unity_test_matrix",
-    # size = "small",
+    name = "test_DoubleMatrix",
+    timeout="short",
     srcs = ["test_DoubleMatrix.c"],
     deps = [
         "//lib/misc",
@@ -10,8 +10,8 @@ cc_test(
 )
 
 cc_test(
-    name = "unity_test_vector",
-    # size = "small",
+    name = "test_DoubleVector",
+    timeout="short",
     srcs = ["test_DoubleVector.c"],
     deps = [
         "//lib/misc",

@@ -1,4 +1,15 @@
-
 # ld: warning: -undefined dynamic_lookup may not work with chained fixups
 # temporary solution: https://github.com/bazelbuild/bazel/issues/16413
 build --linkopt=-Wl,-no_fixup_chains
+
+# test
+test --test_verbose_timeout_warnings
+
+# coverage:
+# coverage --incompatible_cc_coverage
+coverage --combined_report=lcov 
+coverage --instrumentation_filter="//src[/:]" 
+coverage --nocache_test_results 
+coverage --coverage_report_generator=@bazel_tools//tools/test/CoverageOutputGenerator/java/com/google/devtools/coverageoutputgenerator:Main
+
+                   
