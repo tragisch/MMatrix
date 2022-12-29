@@ -123,7 +123,7 @@ DoubleVector* createRandomDoubleVectorOfLength(size_t length) {
   double* array = (double*)malloc(length * sizeof(double));
 
   for (size_t i = 0; i < length; i++) {
-    array[i] = randomNumber();
+    array[i] = randomDouble();
   }
 
   vec->double_array = array;

@@ -1,7 +1,4 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+
 // enforce order of includes
 #include "misc.h"
 
@@ -92,6 +89,9 @@ int mystring_destroy(myString *pms) {
  * @return double
  */
 double randomDouble() { return (double)arc4random() / (double)RAND_MAX; }
+double randomDouble_betweenBounds(uint32_t min, uint32_t max) {
+  return (double)(randomInt_betweenBounds(min, max - 1) + randomDouble());
+}
 
 /**
  * @brief returns a random 32-bit unsigned integer.
@@ -105,4 +105,113 @@ uint32_t randomInt_upperBound(uint32_t limit) {
 uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max) {
   if (max < min) return min;
   return arc4random_uniform((max - min) + 1) + min;
+}
+
+/*******************************/
+/*        Double Array       */
+/*******************************/
+
+/**
+ * @brief Create a DoubleArray object in HEAP
+ *
+ * @param length
+ * @param value
+ * @return double*
+ */
+double *createRandomDoubleArray(unsigned int length) {
+  double *array = (double *)calloc(length, sizeof(double));
+
+  for (unsigned int i = 0; i < length; i++) {
+    array[i] = randomDouble();
+  }
+  return array;  // die Speicheradresse wird zurückgegeben.
+}
+
+/**
+ * @brief printf DoubleArray pretty (instead of printVector)
+ *
+ * @param p_array
+ * @param length
+ * @param method choose '1': Zeros, '2': Points
+ */
+void printDoubleArray(double *p_array, unsigned int length, int method) {
+  if (method == 1) {
+    printDoubleArray_Zeros(p_array, length);
+  } else {
+    printDoubleArray_Points(p_array, length);
+  }
+}
+
+void printDoubleArray_Zeros(double *p_array, unsigned int length) {
+  if (length > 1) {
+    for (size_t i = 0; i < length; i++) {
+      if (i == 0) {
+        printf("[%.2f ", p_array[i]);
+      } else if (i == length - 1) {
+        printf("%.2f]\n", p_array[i]);
+      } else {
+        if (length < MAX_COLUMN) {
+          printf("%.2f ", p_array[i]);
+        } else {
+          if (i < MAX_COLUMN_PRINT) {
+            printf("%.2f ", p_array[i]);
+          } else if (i == MAX_COLUMN_PRINT) {
+            printf(" ... ");
+          } else if (i > length - MAX_COLUMN_PRINT - 1) {
+            printf("%.2f ", p_array[i]);
+          }
+        }
+      }
+    }
+  } else {
+    printf("[%lf]\n", p_array[0]);
+  }
+}
+
+void printDoubleArray_Points(double *p_array, unsigned int length) {
+  int zero = 0;
+  if (length > 1) {
+    for (size_t i = 0; i < length; i++) {
+      if (fabs(p_array[i]) > 10e-8) zero = 1;
+      if (i == 0) {
+        if (zero) {
+          printf("[%.2f ", p_array[i]);
+        } else {
+          printf("[.    ");
+        }
+      } else if (i == length - 1) {
+        if (zero) {
+          printf("%.2f]\n", p_array[i]);
+        } else {
+          printf(".   ]\n");
+        }
+      } else {
+        if (length < MAX_COLUMN) {
+          if (zero) {
+            printf("%.2f ", p_array[i]);
+          } else {
+            printf(".    ");
+          }
+        } else {
+          if (i < MAX_COLUMN_PRINT) {
+            if (zero) {
+              printf("%.2f ", p_array[i]);
+            } else {
+              printf(".    ");
+            }
+          } else if (i == MAX_COLUMN_PRINT) {
+            printf(" ... ");
+          } else if (i > length - MAX_COLUMN_PRINT - 1) {
+            if (zero) {
+              printf("%.2f ", p_array[i]);
+            } else {
+              printf(".    ");
+            }
+          }
+        }
+      }
+    }
+  } else {
+    printf("[%.2f]\n", p_array[0]);
+  }
 }

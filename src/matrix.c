@@ -11,9 +11,6 @@
 
 #include "matrix.h"
 
-#include "pprint2D.h"
-#include "utils.h"
-
 /*******************************/
 /*        Double Matrix        */
 /*******************************/
@@ -85,7 +82,7 @@ DoubleMatrix* createRandomDoubleMatrix(size_t rows, size_t cols) {
 
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
-      mat->values[i][j] = randomNumber();
+      mat->values[i][j] = randomDouble();
     }
   }
 
@@ -291,15 +288,15 @@ void freeDoubleMatrix(DoubleMatrix* mat) {
 void printDoubleMatrix(DoubleMatrix* matrix) {
   if (matrix->rows < MAX_ROW) {
     for (size_t i = 0; i < matrix->rows; i++) {
-      printDoubleArray_2(matrix->values[i], matrix->columns);
+      printDoubleArray(matrix->values[i], matrix->columns, 0);
     }
   } else {
     for (size_t i = 0; i < 4; i++) {
-      printDoubleArray_2(matrix->values[i], matrix->columns);
+      printDoubleArray(matrix->values[i], matrix->columns, 0);
     }
     printf("...\n");
     for (size_t i = matrix->rows - 4; i < matrix->rows; i++) {
-      printDoubleArray_2(matrix->values[i], matrix->columns);
+      printDoubleArray(matrix->values[i], matrix->columns, 0);
     }
   }
 

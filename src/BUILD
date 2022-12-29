@@ -9,9 +9,8 @@ cc_library(
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
+        "//lib/misc",
         "//src:DoubleVector",
-        "//src:pprint",
-        "//src:utils",
     ],
 )
 
@@ -26,32 +25,6 @@ cc_library(
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
-        "//src:pprint",
-        "//src:utils",
+        "//lib/misc",
     ],
-)
-
-cc_library(
-    name = "utils",
-    srcs = [
-        "utils.c",
-    ],
-    hdrs = [
-        "include/utils.h",
-    ],
-    includes = ["include"],
-    visibility = ["//visibility:public"],
-)
-
-cc_library(
-    name = "pprint",
-    srcs = [
-        "pprint2D.c",
-    ],
-    hdrs = [
-        "include/pprint2D.h",
-    ],
-    includes = ["include"],
-    visibility = ["//visibility:public"],
-    deps = ["//src:utils"],
 )
