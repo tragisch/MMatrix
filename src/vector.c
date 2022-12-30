@@ -3,7 +3,7 @@
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
  * @version 0.2
- * @date 26-12-2022
+ * @date 30-12-2022
  *
  * @copyright Copyright (c) 2022
  *
@@ -135,6 +135,25 @@ DoubleVector* createRandomDoubleVectorOfLength(size_t length) {
   return vec;
 }
 
+void setArrayOfDoubleVector(DoubleVector* vec, double* array,
+                            size_t len_array) {
+  if (len_array < vec->length) {
+    for (size_t i = 0; i < len_array; i++) {
+      vec->double_array[i] = array[i];
+    }
+    for (size_t i = len_array; i < vec->length; i++) {
+      popValue(vec);
+    }
+  } else if (len_array >= vec->length) {
+    for (size_t i = 0; i < vec->length; i++) {
+      vec->double_array[i] = array[i];
+    }
+    for (size_t i = vec->length; i < len_array; i++) {
+      pushValue(vec, array[i]);
+    }
+  }
+}
+
 /**
  * @brief expand allocate memory in HEAP with another INIT_CAPACITY
  *
@@ -238,6 +257,33 @@ void freeDoubleVector(DoubleVector* vec) {
 }
 
 /**
+ * @brief swap two elements of an vector
+ *
+ * @param vec*
+ * @param i
+ * @param j
+ */
+void swapElementsOfVector(DoubleVector* vec, size_t i, size_t j) {
+  double tmp = vec->double_array[i];
+  vec->double_array[i] = vec->double_array[j];
+  vec->double_array[j] = tmp;
+}
+
+/**
+ * @brief reverse the order of elements of vec
+ *
+ * @param vec*
+ */
+void reverseVector(DoubleVector* vec) {
+  double temp;
+  for (size_t i = 0; i < vec->length / 2; i++) {
+    temp = vec->double_array[i];
+    vec->double_array[i] = vec->double_array[vec->length - i - 1];
+    vec->double_array[vec->length - i - 1] = temp;
+  }
+}
+
+/**
  * @brief Multiply Vector v1 with Vectot v2  -- dot product!
  *
  * @param vec1
@@ -311,6 +357,18 @@ void multiplyScalarToVector(DoubleVector* vec, const double scalar) {
 void divideScalarToVector(DoubleVector* vec, const double scalar) {
   for (size_t i = 0; i < vec->length; i++) {
     vec->double_array[i] = vec->double_array[i] / scalar;
+  }
+}
+
+/**
+ * @brief add constant to vector
+ *
+ * @param vec
+ * @param scalar
+ */
+void addConstantToVector(DoubleVector* vec, const double constant) {
+  for (size_t i = 0; i < vec->length; i++) {
+    vec->double_array[i] = vec->double_array[i] + constant;
   }
 }
 

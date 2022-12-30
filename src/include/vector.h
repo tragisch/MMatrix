@@ -49,6 +49,7 @@ DoubleVector *createDoubleVector();
 DoubleVector *createDoubleVectorOfLength(size_t length, double value);
 DoubleVector *createRandomDoubleVectorOfLength(size_t length);
 DoubleVector *cloneDoubleVector(const DoubleVector *vector);
+void setArrayOfDoubleVector(DoubleVector *vec, double *array, size_t len_array);
 
 // shrink, push, pop, expand
 void expandDoubleVector(DoubleVector *vec);
@@ -64,6 +65,9 @@ void addDoubleVector(DoubleVector *vec1, const DoubleVector *vec2);
 void subDoubleVector(DoubleVector *vec1, const DoubleVector *vec2);
 void multiplyScalarToVector(DoubleVector *vec, const double scalar);
 void divideScalarToVector(DoubleVector *vec, const double scalar);
+void addConstantToVector(DoubleVector *vec, const double constant);
+void swapElementsOfVector(DoubleVector *vec, size_t i, size_t j);
+void reverseVector(DoubleVector *vec);
 double multiplyDoubleVectors(DoubleVector *vec1, DoubleVector *vec2);
 
 // free & print:
