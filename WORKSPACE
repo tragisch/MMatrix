@@ -29,6 +29,16 @@ http_archive(
     url = "https://github.com/ThrowTheSwitch/CMock/archive/refs/tags/v2.5.3.zip",
 )
 
+# fff is a micro-framework for creating fake C functions for tests
+# https://github.com/meekrosoft/fff
+http_archive(
+    name = "fff",
+    build_file = "@//:third_party/http/fff/BUILD",
+    sha256 = "510efb70ab17a0035affd170960401921c9cc36ec81002ed00d2bfec6e08f385",
+    strip_prefix = "fff-1.1",
+    url = "https://github.com/meekrosoft/fff/archive/refs/tags/v1.1.tar.gz",
+)
+
 # gnuplot is a freely available, command-driven graphical display tool for Unix.
 # http://ndevilla.free.fr/gnuplot/
 http_archive(
