@@ -3,7 +3,7 @@
     "configurations": [
         {
             "name": "LLDB_Bazel",
-            "preLaunchTask": "Bazel Run (Debug)",
+            "preLaunchTask": "Bazel Build (Debug)",
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/bazel-bin/${relativeFileDirname}/${fileBasenameNoExtension}",
