@@ -12,6 +12,7 @@
 #ifndef VECTOR_UR_H
 #define VECTOR_UR_H
 
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -23,6 +24,7 @@
 /*******************************/
 
 #define INIT_CAPACITY 5u
+#define INITIAL_SIZE 4
 
 // Definition of DoubleVector
 typedef struct {
@@ -46,6 +48,7 @@ int writeOutDoubleVectorData(DoubleVector *vec, const char *filepath);
 DoubleVector *createDoubleVector();
 DoubleVector *createDoubleVectorOfLength(size_t length, double value);
 DoubleVector *createRandomDoubleVectorOfLength(size_t length);
+DoubleVector *cloneDoubleVector(const DoubleVector *vector);
 
 // shrink, push, pop, expand
 void expandDoubleVector(DoubleVector *vec);
@@ -57,10 +60,10 @@ double popValue(DoubleVector *vec);
 double meanOfDoubleVector(DoubleVector *vec);
 double minOfDoubleVector(DoubleVector *vec);
 double maxOfDoubleVector(DoubleVector *vec);
-DoubleVector *addDoubleVector(DoubleVector *vec1, DoubleVector *vec2);
-DoubleVector *subDoubleVector(DoubleVector *vec1, DoubleVector *vec2);
-DoubleVector *multiplyScalarToVector(DoubleVector *vec, double scalar);
-DoubleVector *divideScalarToVector(DoubleVector *vec, double scalar);
+void addDoubleVector(DoubleVector *vec1, const DoubleVector *vec2);
+void subDoubleVector(DoubleVector *vec1, const DoubleVector *vec2);
+void multiplyScalarToVector(DoubleVector *vec, const double scalar);
+void divideScalarToVector(DoubleVector *vec, const double scalar);
 double multiplyDoubleVectors(DoubleVector *vec1, DoubleVector *vec2);
 
 // free & print:

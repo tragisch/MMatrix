@@ -15,13 +15,7 @@
 /*         I/O Functions       */
 /*******************************/
 
-/**
- * @brief read in DoubleVector data from file
- *
- * @param vec
- * @param filepath
- * @return int ('0' sucessfull)
- */
+/* read in DoubleVector data from file */
 int readInDoubleVectorData(DoubleVector* vec, const char* filepath) {
   FILE* fp = fopen(filepath, "r");
   if (fp == NULL) {
@@ -37,13 +31,7 @@ int readInDoubleVectorData(DoubleVector* vec, const char* filepath) {
   return succ_read;
 }
 
-/**
- * @brief write data form DoubleVector to file
- *
- * @param vec
- * @param filepath
- * @return int
- */
+/* write data from DoubleVector to file */
 int writeOutDoubleVectorData(DoubleVector* vec, const char* filepath) {
   FILE* fp = fopen(filepath, "w");
   if (fp == NULL) {
@@ -67,11 +55,8 @@ int writeOutDoubleVectorData(DoubleVector* vec, const char* filepath) {
 /*******************************/
 
 /**
- * @brief Create a DoubleVector object (HEAP INI_CAPACITY)
- *
- * @param length
- * @param value
- * @return DoubleVector
+ * @brief Create a DoubleVector object (HEAP INIT_CAPACITY)
+ * @return DoubleVector*
  */
 
 DoubleVector* createDoubleVector() {
@@ -85,6 +70,20 @@ DoubleVector* createDoubleVector() {
   vec->double_array = array;
 
   return vec;
+}
+
+/**
+ * @brief Clone a DoubleVector object
+ * @return DoubleVector*
+ */
+DoubleVector* cloneDoubleVector(const DoubleVector* vector) {
+  size_t org_length = vector->length;
+  DoubleVector* clone = createDoubleVectorOfLength(org_length, 0.);
+  for (size_t i = 0; i < org_length; i++) {
+    clone->double_array[i] = vector->double_array[i];
+  }
+
+  return clone;
 }
 
 /**
@@ -240,9 +239,9 @@ void freeDoubleVector(DoubleVector* vec) {
 
 /**
  * @brief Multiply Vector v1 with Vectot v2  -- dot product!
- * @param col
- * @param row
- * @param length
+ *
+ * @param vec1
+ * @param vec2
  * @return double
  */
 double multiplyDoubleVectors(DoubleVector* vec1, DoubleVector* vec2) {
@@ -264,42 +263,31 @@ double multiplyDoubleVectors(DoubleVector* vec1, DoubleVector* vec2) {
  * @brief add Vector vec1 with Vector vec2
  *
  * @param vec1
- * @param vec2
- * @return DoubleVector*
+ * @param vec2 (const)
  */
-DoubleVector* addDoubleVector(DoubleVector* vec1, DoubleVector* vec2) {
+void addDoubleVector(DoubleVector* vec1, const DoubleVector* vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors are not same length");
-    return NULL;
   }
-
-  DoubleVector* result = createDoubleVectorOfLength(vec1->length, 0.0);
   for (size_t i = 0; i < vec1->length; i++) {
-    result->double_array[i] = vec1->double_array[i] + vec2->double_array[i];
+    vec1->double_array[i] += vec2->double_array[i];
   }
-
-  return result;
 }
 
 /**
- * @brief sub Vector vec1 from Vector vec2
+ * @brief sub Vector vec1 from Vector vec2 (vec1 - vec2)
  *
  * @param vec1
- * @param vec2
- * @return DoubleVector*
+ * @param vec2 (const)
  */
-DoubleVector* subDoubleVector(DoubleVector* vec1, DoubleVector* vec2) {
+void subDoubleVector(DoubleVector* vec1, const DoubleVector* vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors are not same length");
-    return NULL;
   }
 
-  DoubleVector* result = createDoubleVectorOfLength(vec1->length, 0.0);
   for (size_t i = 0; i < vec1->length; i++) {
-    result->double_array[i] = vec1->double_array[i] - vec2->double_array[i];
+    vec1->double_array[i] -= vec2->double_array[i];
   }
-
-  return result;
 }
 
 /**
@@ -307,14 +295,11 @@ DoubleVector* subDoubleVector(DoubleVector* vec1, DoubleVector* vec2) {
  *
  * @param vec
  * @param scalar
- * @return DoubleVector*
  */
-DoubleVector* multiplyScalarToVector(DoubleVector* vec, double scalar) {
-  DoubleVector* result = createDoubleVectorOfLength(vec->length, 0.0);
+void multiplyScalarToVector(DoubleVector* vec, const double scalar) {
   for (size_t i = 0; i < vec->length; i++) {
-    result->double_array[i] = vec->double_array[i] * scalar;
+    vec->double_array[i] = vec->double_array[i] * scalar;
   }
-  return result;
 }
 
 /**
@@ -322,14 +307,11 @@ DoubleVector* multiplyScalarToVector(DoubleVector* vec, double scalar) {
  *
  * @param vec
  * @param scalar
- * @return DoubleVector*
  */
-DoubleVector* divideScalarToVector(DoubleVector* vec, double scalar) {
-  DoubleVector* result = createDoubleVectorOfLength(vec->length, 0.0);
+void divideScalarToVector(DoubleVector* vec, const double scalar) {
   for (size_t i = 0; i < vec->length; i++) {
-    result->double_array[i] = vec->double_array[i] / scalar;
+    vec->double_array[i] = vec->double_array[i] / scalar;
   }
-  return result;
 }
 
 /**
