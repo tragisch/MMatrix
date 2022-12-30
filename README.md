@@ -1,4 +1,4 @@
 # Matrix
 
-Data-Structure DoubleMatrix and DoubleVector as dynamic *array*.
+A very simple Data-Structure for DoubleMatrix and DoubleVector as dynamic *array*.
    
