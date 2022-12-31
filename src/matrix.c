@@ -315,7 +315,7 @@ DoubleVector* getRowVector(DoubleMatrix* mat, size_t row) {
   if (row < 0 || row > (mat->rows - 1)) {
     perror("This row does not exist");
   }
-  DoubleVector* vec = createDoubleVectorOfLength(mat->columns, 0.0);
+  DoubleVector* vec = newDoubleVectorOfLength(mat->columns, 0.0);
   for (size_t i = 0; i < vec->length; i++) {
     vec->double_array[i] = mat->values[row][i];
   }
@@ -334,7 +334,7 @@ DoubleVector* getColumnVector(DoubleMatrix* mat, size_t column) {
   if (column < 0 || column > (mat->columns - 1)) {
     perror("This column does not exist");
   }
-  DoubleVector* vec = createDoubleVectorOfLength(mat->rows, 0.0);
+  DoubleVector* vec = newDoubleVectorOfLength(mat->rows, 0.0);
   for (size_t i = 0; i < mat->rows; i++) {
     vec->double_array[i] = mat->values[i][column];
   }
@@ -475,7 +475,7 @@ double vector_multiply(double* col, double* row, size_t length) {
  * @return DoubleVector*
  */
 DoubleVector* multiplyVectorMatrix(DoubleVector* vec, DoubleMatrix* mat) {
-  DoubleVector* vec_result = createDoubleVectorOfLength(vec->length, 0.0);
+  DoubleVector* vec_result = newDoubleVectorOfLength(vec->length, 0.0);
   for (size_t i = 0; i < vec->length; i++) {
     vec_result->double_array[i] =
         vector_multiply(mat->values[i], vec->double_array, vec->length);

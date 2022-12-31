@@ -31,6 +31,7 @@ typedef struct {
   double *double_array;
   size_t length;
   size_t capacity;
+  bool column_vec;
 } DoubleVector;
 
 /*******************************/
@@ -45,11 +46,11 @@ int writeOutDoubleVectorData(DoubleVector *vec, const char *filepath);
 /*******************************/
 
 // Function Double Vector:
-DoubleVector *createDoubleVector();
-DoubleVector *createDoubleVectorOfLength(size_t length, double value);
-DoubleVector *createRandomDoubleVectorOfLength(size_t length);
+DoubleVector *newDoubleVector();
+DoubleVector *newDoubleVectorOfLength(size_t length, double value);
+DoubleVector *newRandomDoubleVectorOfLength(size_t length);
 DoubleVector *cloneDoubleVector(const DoubleVector *vector);
-void setArrayOfDoubleVector(DoubleVector *vec, double *array, size_t len_array);
+void setDoubleVectorArray(DoubleVector *vec, double *array, size_t len_array);
 
 // shrink, push, pop, expand
 void expandDoubleVector(DoubleVector *vec);

@@ -59,12 +59,13 @@ int writeOutDoubleVectorData(DoubleVector* vec, const char* filepath) {
  * @return DoubleVector*
  */
 
-DoubleVector* createDoubleVector() {
+DoubleVector* newDoubleVector() {
   DoubleVector* vec = (DoubleVector*)malloc(sizeof(DoubleVector));
   if (!vec) return NULL;
 
   vec->length = 0u;
   vec->capacity = INIT_CAPACITY;
+  vec->column_vec = false;
 
   double* array = (double*)malloc(vec->capacity * sizeof(double));
   vec->double_array = array;
@@ -78,7 +79,7 @@ DoubleVector* createDoubleVector() {
  */
 DoubleVector* cloneDoubleVector(const DoubleVector* vector) {
   size_t org_length = vector->length;
-  DoubleVector* clone = createDoubleVectorOfLength(org_length, 0.);
+  DoubleVector* clone = newDoubleVectorOfLength(org_length, 0.);
   for (size_t i = 0; i < org_length; i++) {
     clone->double_array[i] = vector->double_array[i];
   }
@@ -93,7 +94,7 @@ DoubleVector* cloneDoubleVector(const DoubleVector* vector) {
  * @param value
  * @return DoubleVector*
  */
-DoubleVector* createDoubleVectorOfLength(size_t length, double value) {
+DoubleVector* newDoubleVectorOfLength(size_t length, double value) {
   DoubleVector* vec = (DoubleVector*)malloc(sizeof(DoubleVector));
   double* array = (double*)malloc(length * sizeof(double));
 
@@ -102,6 +103,7 @@ DoubleVector* createDoubleVectorOfLength(size_t length, double value) {
   }
 
   vec->double_array = array;
+  vec->column_vec = false;
   vec->length = length;
   if (vec->length > INIT_CAPACITY) {
     vec->capacity = length + INIT_CAPACITY;
@@ -117,7 +119,7 @@ DoubleVector* createDoubleVectorOfLength(size_t length, double value) {
  * @param length
  * @return DoubleVector
  */
-DoubleVector* createRandomDoubleVectorOfLength(size_t length) {
+DoubleVector* newRandomDoubleVectorOfLength(size_t length) {
   DoubleVector* vec = (DoubleVector*)malloc(sizeof(DoubleVector));
   double* array = (double*)malloc(length * sizeof(double));
 
@@ -126,6 +128,7 @@ DoubleVector* createRandomDoubleVectorOfLength(size_t length) {
   }
 
   vec->double_array = array;
+  vec->column_vec = false;
   vec->length = length;
   if (vec->length > INIT_CAPACITY) {
     vec->capacity = length + INIT_CAPACITY;
@@ -135,8 +138,7 @@ DoubleVector* createRandomDoubleVectorOfLength(size_t length) {
   return vec;
 }
 
-void setArrayOfDoubleVector(DoubleVector* vec, double* array,
-                            size_t len_array) {
+void setDoubleVectorArray(DoubleVector* vec, double* array, size_t len_array) {
   if (len_array < vec->length) {
     for (size_t i = 0; i < len_array; i++) {
       vec->double_array[i] = array[i];
@@ -221,26 +223,37 @@ double popValue(DoubleVector* vec) {
 void printDoubleVector(DoubleVector* vec) {
   double* array = vec->double_array;
   size_t length = vec->length;
-  for (size_t i = 0; i < length; i++) {
-    if (i == 0) {
-      printf("[%.2lf ", array[i]);
-    } else if (i == length - 1) {
-      printf("%.2lf]\n", array[i]);
-    } else {
-      if (length < MAX_COLUMN) {
-        printf("%.2lf ", array[i]);
+  if (vec->column_vec == false) {
+    for (size_t i = 0; i < length; i++) {
+      if (i == 0) {
+        printf("[%.2lf ", array[i]);
+      } else if (i == length - 1) {
+        printf("%.2lf]\n", array[i]);
       } else {
-        if (i < MAX_COLUMN_PRINT) {
+        if (length < MAX_COLUMN) {
           printf("%.2lf ", array[i]);
-        } else if (i == MAX_COLUMN_PRINT) {
-          printf(" ... ");
-        } else if (i > length - MAX_COLUMN_PRINT - 1) {
-          printf("%.2lf ", array[i]);
+        } else {
+          if (i < MAX_COLUMN_PRINT) {
+            printf("%.2lf ", array[i]);
+          } else if (i == MAX_COLUMN_PRINT) {
+            printf(" ... ");
+          } else if (i > length - MAX_COLUMN_PRINT - 1) {
+            printf("%.2lf ", array[i]);
+          }
         }
       }
     }
+    printf("(row-)Vector 1x%zi, Capacity %zi\n", vec->length, vec->capacity);
+  } else {
+    for (size_t i = 0; i < length; i++) {
+      if ((i < MAX_COLUMN_PRINT) || (i > length - MAX_COLUMN_PRINT - 1)) {
+        printf("[%.2lf]\n", array[i]);
+      } else if (i == MAX_COLUMN_PRINT) {
+        printf(" ... \n");
+      }
+    }
+    printf("(column-)Vector 1x%zi, Capacity %zi\n", vec->length, vec->capacity);
   }
-  printf("Vector 1x%zi, Capacity %zi\n", vec->length, vec->capacity);
 }
 
 /**

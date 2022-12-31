@@ -12,7 +12,7 @@ void setUp(void) {}
 void tearDown(void) {}
 
 static void test_create_vector(void) {
-  DoubleVector *vec = createDoubleVector();
+  DoubleVector *vec = newDoubleVector();
   TEST_ASSERT_NOT_NULL(vec);
   freeDoubleVector(vec);
 }
@@ -20,7 +20,7 @@ static void test_create_vector(void) {
 static void test_create_vector_of_length(void) {
   size_t length = randomInt_upperBound(1000);
   double value = randomDouble();
-  DoubleVector *vec = createDoubleVectorOfLength(length, value);
+  DoubleVector *vec = newDoubleVectorOfLength(length, value);
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_EQUAL_UINT32(length, vec->length);
   TEST_ASSERT_EQUAL_DOUBLE(value,
@@ -31,7 +31,7 @@ static void test_create_vector_of_length(void) {
 static void test_push_value(void) {
   size_t length = randomInt_upperBound(100);
   double value = 0.;
-  DoubleVector *vec = createDoubleVectorOfLength(length, value);
+  DoubleVector *vec = newDoubleVectorOfLength(length, value);
 
   double new_value = -1.67;
   pushValue(vec, new_value);

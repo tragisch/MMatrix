@@ -11,9 +11,9 @@ int main() {
   }
   printDoubleArray(arr, 9, 1);
 
-  DoubleVector* vec_1 = createDoubleVector();
-  setArrayOfDoubleVector(vec_1, arr, 9);
-  DoubleVector* vec_2 = createDoubleVectorOfLength(9, 3.);
+  DoubleVector* vec_1 = newDoubleVector();
+  setDoubleVectorArray(vec_1, arr, 9);
+  DoubleVector* vec_2 = newDoubleVectorOfLength(9, 3.);
 
   printf("------ vec1, vec2\n");
   printDoubleVector(vec_1);

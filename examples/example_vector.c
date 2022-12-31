@@ -6,7 +6,7 @@
 int main() {
   // create vector with random data
   size_t length = 200;
-  DoubleVector* vec = createRandomDoubleVectorOfLength(length);
+  DoubleVector* vec = newRandomDoubleVectorOfLength(length);
 
   // write vec to file:
   char* file_path =
@@ -16,7 +16,7 @@ int main() {
   writeOutDoubleVectorData(vec, file_path);
 
   // read vec from file:
-  DoubleVector* vec2 = createDoubleVectorOfLength(6 * length, 0.);
+  DoubleVector* vec2 = newDoubleVectorOfLength(6 * length, 0.);
   readInDoubleVectorData(vec2, file_path);
 
   printDoubleArray(vec2->double_array, length, 1);
