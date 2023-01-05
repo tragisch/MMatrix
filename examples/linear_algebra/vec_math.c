@@ -1,7 +1,9 @@
 #include <stdio.h>
 
+#include "dm_io.h"
+#include "dm_math.h"
+#include "dm_matrix.h"
 #include "misc.h"
-#include "vector.h"
 
 int main() {
   // create vector with random data
@@ -13,7 +15,7 @@ int main() {
 
   DoubleVector* vec_1 = newDoubleVector();
   setDoubleVectorArray(vec_1, arr, 9);
-  DoubleVector* vec_2 = newDoubleVectorOfLength(9, 3.);
+  DoubleVector* vec_2 = newDoubleVectorOfLength(9, 3.f);
 
   printf("------ vec1, vec2\n");
   printDoubleVector(vec_1);
@@ -46,7 +48,7 @@ int main() {
   printDoubleVector(vec_1);
 
   printf("------ multiply two vectors\n");
-  printf("Dot produkt: %lf\n", multiplyDoubleVectors(vec_1, vec_2));
+  printf("Dot produkt: %lf\n", dotproductDoubleVectors(vec_1, vec_2));
 
   printf("------ reverseVector\n");
   printDoubleVector(vec_1);

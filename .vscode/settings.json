@@ -10,5 +10,8 @@
         "cmocka_private.h": "c",
         "armstrong_numbers.h": "c",
         "unity.h": "c"
-    }
+    },
+    "C_Cpp.codeAnalysis.clangTidy.checks.disabled": [
+        "clang-analyzer-core.NullDereference"
+    ]
 }

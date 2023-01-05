@@ -1,30 +1,48 @@
 cc_library(
-    name = "DoubleMatrix",
+    name = "dm_matrix",
     srcs = [
-        "matrix.c",
+        "dm_matrix.c",
     ],
     hdrs = [
-        "include/matrix.h",
+        "include/dm_matrix.h",
     ],
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
         "//lib/misc",
-        "//src:DoubleVector",
+        "@CException",
+        "@dbg-macro",
     ],
 )
 
 cc_library(
-    name = "DoubleVector",
+    name = "dm_math",
     srcs = [
-        "vector.c",
+        "dm_math.c",
     ],
     hdrs = [
-        "include/vector.h",
+        "include/dm_math.h",
     ],
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
         "//lib/misc",
+        "//src:dm_matrix",
+    ],
+)
+
+cc_library(
+    name = "dm_io",
+    srcs = [
+        "dm_io.c",
+    ],
+    hdrs = [
+        "include/dm_io.h",
+    ],
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//lib/misc",
+        "//src:dm_matrix",
     ],
 )

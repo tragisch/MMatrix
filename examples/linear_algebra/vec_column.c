@@ -1,15 +1,16 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "dm_io.h"
+#include "dm_matrix.h"
 #include "misc.h"
-#include "vector.h"
 
 int main(void) {
   // create array
 
   double a[] = {1, 2, 3};
   DoubleVector *vec = newDoubleVector();
-  setDoubleVectorArray(vec, a, 3);
+  setDoubleVectorArray(vec, a, 0);
   printDoubleVector(vec);
 
   vec->column_vec = true;
