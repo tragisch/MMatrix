@@ -1,7 +1,8 @@
 #include <stdio.h>
 
+#include "dm_io.h"
+#include "dm_matrix.h"
 #include "misc.h"
-#include "vector.h"
 
 int main() {
   // create vector with random data
@@ -19,7 +20,7 @@ int main() {
   DoubleVector* vec2 = newDoubleVectorOfLength(6 * length, 0.);
   readInDoubleVectorData(vec2, file_path);
 
-  printDoubleArray(vec2->double_array, length, 1);
+  printDoubleVector(vec2);
 
   // free:
   freeDoubleVector(vec);

@@ -1,5 +1,6 @@
+#include "dm_math.h"
+#include "dm_matrix.h"
 #include "misc.h"
-#include "vector.h"
 
 #define UNITY_INCLUDE_DOUBLE
 #define UNITY_DOUBLE_PRECISION 0.0000001
@@ -24,7 +25,7 @@ static void test_create_vector_of_length(void) {
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_EQUAL_UINT32(length, vec->length);
   TEST_ASSERT_EQUAL_DOUBLE(value,
-                           vec->double_array[randomInt_upperBound(length)]);
+                           vec->mat1D->values[randomInt_upperBound(length)][0]);
   freeDoubleVector(vec);
 }
 
@@ -35,11 +36,11 @@ static void test_push_value(void) {
 
   double new_value = -1.67;
   pushValue(vec, new_value);
-  TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->double_array[length]);
+  TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->mat1D->values[length][0]);
 
   for (size_t i = 0; i < length; i++) {
     pushValue(vec, randomDouble());
-    TEST_ASSERT_TRUE(vec->capacity >= vec->length);
+    TEST_ASSERT_TRUE(vec->mat1D->row_capacity >= vec->length);
   }
 
   freeDoubleVector(vec);
