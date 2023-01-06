@@ -5,6 +5,8 @@
 
 #include "misc.h"
 
+// #define NDEBUG
+
 /*******************************/
 /*     Define & Types         */
 /*******************************/
@@ -38,12 +40,12 @@ DoubleMatrix *create_identity_matrix(size_t rows);
 DoubleMatrix *set_array_to_dm_matrix(size_t rows, size_t cols, double **array);
 
 // shrink, push, pop, expand
-void expand_dm_matrix_row(DoubleMatrix *mat);
-void expand_dm_matrix_column(DoubleMatrix *mat);
-void shrink_dm_matrix_column(DoubleMatrix *mat);
-void shrink_dm_matrix_row(DoubleMatrix *mat);
-void push_column(DoubleMatrix *mat, DoubleVector *col_vec);
-void push_row(DoubleMatrix *mat, DoubleVector *row_vec);
+static void expand_dm_matrix_row(DoubleMatrix *mat);
+static void expand_dm_matrix_column(DoubleMatrix *mat);
+static void shrink_dm_matrix_column(DoubleMatrix *mat);
+static void shrink_dm_matrix_row(DoubleMatrix *mat);
+void push_column(DoubleMatrix *mat, const DoubleVector *col_vec);
+void push_row(DoubleMatrix *mat, const DoubleVector *row_vec);
 
 // free
 void free_dm_matrix(DoubleMatrix *mat);
@@ -59,14 +61,15 @@ DoubleVector *new_rand_dm_vector_length(size_t length);
 DoubleVector *clone_dm_vector(const DoubleVector *vector);
 DoubleVector *pop_column(DoubleMatrix *mat);
 DoubleVector *pop_row(DoubleMatrix *mat);
-DoubleVector *get_row_vector(DoubleMatrix *mat, size_t row);
-DoubleVector *get_column_vector(DoubleMatrix *mat, size_t column);
-void set_dm_vector_to_array(DoubleVector *vec, double *array, size_t len_array);
-double *get_array_from_vector(DoubleVector *vec);
+DoubleVector *get_row_vector(const DoubleMatrix *mat, size_t row);
+DoubleVector *get_column_vector(const DoubleMatrix *mat, size_t column);
+void set_dm_vector_to_array(DoubleVector *vec, const double *array,
+                            size_t len_array);
+double *get_array_from_vector(const DoubleVector *vec);
 
 // shrink, push, pop, expand
-void expand_dm_vector(DoubleVector *vec);
-void shrink_dm_vector(DoubleVector *vec);
+static void expand_dm_vector(DoubleVector *vec);
+static void shrink_dm_vector(DoubleVector *vec);
 void push_value(DoubleVector *vec, double value);
 double pop_value(DoubleVector *vec);
 

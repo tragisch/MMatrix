@@ -1,11 +1,14 @@
 #include "dm_io.h"
 
+#include <assert.h>
+
 #include "dbg.h"
+
+// #define NDEBUG
 
 /*******************************/
 /*         I/O Functions       */
 /*******************************/
-
 #define MAX_ROW 20
 #define MAX_ROW_PRINT 5
 #define MAX_COLUMN 10

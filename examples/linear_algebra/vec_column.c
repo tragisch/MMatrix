@@ -10,7 +10,7 @@ int main(void) {
 
   double a[] = {1, 2, 3};
   DoubleVector *vec = new_dm_vector();
-  set_dm_vector_to_array(vec, a, 0);
+  set_dm_vector_to_array(vec, a, -1);
   print_dm_vector(vec);
 
   vec->isColumnVector = true;

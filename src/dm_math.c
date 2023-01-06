@@ -1,5 +1,9 @@
+#include <assert.h>
+
+#include "dbg.h"
 #include "dm_matrix.h"
 
+// #define NDEBUG
 #define INITIAL_SIZE 4
 
 /*******************************/
@@ -107,7 +111,7 @@ DoubleMatrix* multiply_dm_matrices(DoubleMatrix* m1, DoubleMatrix* m2) {
 
 /* v1 x v2  -- simply a helper function -- computes dot product between two
  * vectors*/
-double vector_multiply(double* col, double* row, size_t length) {
+static double vector_multiply(double* col, double* row, size_t length) {
   double sum;
   size_t i;
   sum = 0;
@@ -124,7 +128,8 @@ double vector_multiply(double* col, double* row, size_t length) {
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector* multiply_dm_vector_matrix(DoubleVector* vec, DoubleMatrix* mat) {
+DoubleVector* multiply_dm_vector_matrix(const DoubleVector* vec,
+                                        const DoubleMatrix* mat) {
   DoubleVector* vec_result = new_dm_vector_length(vec->length, 0.0);
   for (size_t i = 0; i < vec->length; i++) {
     vec_result->mat1D->values[i][0] = vector_multiply(

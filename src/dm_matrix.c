@@ -14,7 +14,9 @@
 #include <assert.h>
 
 #include "dbg.h"
+#include "dm_matrix.h"
 
+// #define NDEBUG
 #define INIT_CAPACITY 2u
 
 /*******************************/
@@ -133,7 +135,7 @@ DoubleMatrix* set_array_to_dm_matrix(size_t rows, size_t cols, double** array) {
  *
  * @param mat
  */
-void expand_dm_matrix_row(DoubleMatrix* mat) {
+static void expand_dm_matrix_row(DoubleMatrix* mat) {
   // size_t old_capacity = mat->row_capacity;
   mat->rowCapacity += 1;
   mat->values = realloc(mat->values, (mat->rowCapacity) * sizeof(double*));
@@ -148,7 +150,7 @@ void expand_dm_matrix_row(DoubleMatrix* mat) {
  *
  * @param mat
  */
-void expand_dm_matrix_column(DoubleMatrix* mat) {
+static void expand_dm_matrix_column(DoubleMatrix* mat) {
   mat->columnCapacity += mat->columnCapacity;
   mat->values = realloc(mat->values, (mat->rowCapacity) * sizeof(double*));
   for (size_t i = 0; i < mat->rowCapacity; i++) {
@@ -161,7 +163,7 @@ void expand_dm_matrix_column(DoubleMatrix* mat) {
  *
  * @param mat
  */
-void shrink_dm_matrix_column(DoubleMatrix* mat) {
+static void shrink_dm_matrix_column(DoubleMatrix* mat) {
   if ((mat->columns<(mat->columnCapacity - INIT_CAPACITY) &
                     (mat->columnCapacity - INIT_CAPACITY)> 1)) {
     mat->columnCapacity -= INIT_CAPACITY;
@@ -178,7 +180,7 @@ void shrink_dm_matrix_column(DoubleMatrix* mat) {
  *
  * @param mat
  */
-void shrink_dm_matrix_row(DoubleMatrix* mat) {
+static void shrink_dm_matrix_row(DoubleMatrix* mat) {
   if ((mat->rows<(mat->rowCapacity - INIT_CAPACITY) &
                  (mat->rowCapacity - INIT_CAPACITY)> 1)) {
     mat->rowCapacity -= INIT_CAPACITY;
@@ -193,7 +195,7 @@ void shrink_dm_matrix_row(DoubleMatrix* mat) {
  * @param mat
  * @param col_vec
  */
-void push_column(DoubleMatrix* mat, DoubleVector* col_vec) {
+void push_column(DoubleMatrix* mat, const DoubleVector* col_vec) {
   if (col_vec->length != mat->rows) {
     perror("Error: length of vector does not fit to number or matrix rows");
 
@@ -217,7 +219,7 @@ void push_column(DoubleMatrix* mat, DoubleVector* col_vec) {
  * @param mat
  * @param row_vec
  */
-void push_row(DoubleMatrix* mat, DoubleVector* row_vec) {
+void push_row(DoubleMatrix* mat, const DoubleVector* row_vec) {
   if (row_vec->length != mat->columns) {
     perror("Error: length of vector does not fit to number or matrix columns");
 
@@ -253,7 +255,7 @@ void free_dm_matrix(DoubleMatrix* mat) {
  * @param row
  * @return DoubleVector
  */
-DoubleVector* get_row_vector(DoubleMatrix* mat, size_t row) {
+DoubleVector* get_row_vector(const DoubleMatrix* mat, size_t row) {
   if (row < 0 || row > (mat->rows - 1)) {
     perror("This row does not exist");
   }
@@ -273,7 +275,7 @@ DoubleVector* get_row_vector(DoubleMatrix* mat, size_t row) {
  * @param column
  * @return DoubleVector
  */
-DoubleVector* get_column_vector(DoubleMatrix* mat, size_t column) {
+DoubleVector* get_column_vector(const DoubleMatrix* mat, size_t column) {
   if (column < 0 || column > (mat->columns - 1)) {
     perror("This column does not exist");
   }
@@ -293,7 +295,7 @@ DoubleVector* get_column_vector(DoubleMatrix* mat, size_t column) {
  * @param row
  * @return DoubleVector*
  */
-double* get_row_array(DoubleMatrix* mat, size_t row) {
+double* get_row_array(const DoubleMatrix* mat, size_t row) {
   if (row < 0 || row > (mat->rows - 1)) {
     perror("This row does not exist");
   }
@@ -376,9 +378,9 @@ DoubleVector* new_rand_dm_vector_length(size_t length) {
   return vec;
 }
 
-void set_dm_vector_to_array(DoubleVector* vec, double* array,
+void set_dm_vector_to_array(DoubleVector* vec, const double* array,
                             size_t len_array) {
-  if (len_array <= 0) assert(len_array);
+  assert(len_array > 0);
   if (vec->mat1D->values != NULL) {
     if (len_array < vec->length) {
       for (size_t i = 0; i < len_array; i++) {
@@ -443,7 +445,7 @@ DoubleVector* pop_row(DoubleMatrix* mat) {
  * @param vec
  * @return double*
  */
-double* get_array_from_vector(DoubleVector* vec) {
+double* get_array_from_vector(const DoubleVector* vec) {
   double* array = (double*)malloc(vec->mat1D->rowCapacity * sizeof(double));
   for (size_t i = 0; i < vec->mat1D->rows; i++) {
     array[i] = vec->mat1D->values[i][0];
@@ -457,7 +459,7 @@ double* get_array_from_vector(DoubleVector* vec) {
  *
  * @param vec
  */
-void expand_dm_vector(DoubleVector* vec) {
+static void expand_dm_vector(DoubleVector* vec) {
   // Remove: printf("capacity: %zu", vec->mat1D->row_capacity);
   expand_dm_matrix_row(vec->mat1D);
 }
@@ -467,7 +469,9 @@ void expand_dm_vector(DoubleVector* vec) {
  *
  * @param vec
  */
-void shrink_dm_vector(DoubleVector* vec) { shrink_dm_matrix_row(vec->mat1D); }
+static void shrink_dm_vector(DoubleVector* vec) {
+  shrink_dm_matrix_row(vec->mat1D);
+}
 
 /**
  * @brief push (add) new value to vector vec
