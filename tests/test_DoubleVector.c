@@ -13,37 +13,37 @@ void setUp(void) {}
 void tearDown(void) {}
 
 static void test_create_vector(void) {
-  DoubleVector *vec = newDoubleVector();
+  DoubleVector *vec = new_dm_vector();
   TEST_ASSERT_NOT_NULL(vec);
-  freeDoubleVector(vec);
+  free_dm_vector(vec);
 }
 
 static void test_create_vector_of_length(void) {
   size_t length = randomInt_upperBound(1000);
   double value = randomDouble();
-  DoubleVector *vec = newDoubleVectorOfLength(length, value);
+  DoubleVector *vec = new_dm_vector_length(length, value);
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_EQUAL_UINT32(length, vec->length);
   TEST_ASSERT_EQUAL_DOUBLE(value,
                            vec->mat1D->values[randomInt_upperBound(length)][0]);
-  freeDoubleVector(vec);
+  free_dm_vector(vec);
 }
 
 static void test_push_value(void) {
   size_t length = randomInt_upperBound(100);
   double value = 0.;
-  DoubleVector *vec = newDoubleVectorOfLength(length, value);
+  DoubleVector *vec = new_dm_vector_length(length, value);
 
   double new_value = -1.67;
-  pushValue(vec, new_value);
+  push_value(vec, new_value);
   TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->mat1D->values[length][0]);
 
   for (size_t i = 0; i < length; i++) {
-    pushValue(vec, randomDouble());
-    TEST_ASSERT_TRUE(vec->mat1D->row_capacity >= vec->length);
+    push_value(vec, randomDouble());
+    TEST_ASSERT_TRUE(vec->mat1D->rowCapacity >= vec->length);
   }
 
-  freeDoubleVector(vec);
+  free_dm_vector(vec);
 }
 
 int main(void) {

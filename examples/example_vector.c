@@ -7,24 +7,24 @@
 int main() {
   // create vector with random data
   size_t length = 200;
-  DoubleVector* vec = newRandomDoubleVectorOfLength(length);
+  DoubleVector* vec = new_rand_dm_vector_length(length);
 
   // write vec to file:
   char* file_path =
       "/Users/uwe/Documents/Programmierung/C/03_Projects/03_DoubleMatrix/data/"
       "doublevec.dat";
 
-  writeOutDoubleVectorData(vec, file_path);
+  write_dm_vector_to_file(vec, file_path);
 
   // read vec from file:
-  DoubleVector* vec2 = newDoubleVectorOfLength(6 * length, 0.);
-  readInDoubleVectorData(vec2, file_path);
+  DoubleVector* vec2 = new_dm_vector_length(6 * length, 0.);
+  read_dm_vector_from_file(vec2, file_path);
 
-  printDoubleVector(vec2);
+  print_dm_vector(vec2);
 
   // free:
-  freeDoubleVector(vec);
-  freeDoubleVector(vec2);
+  free_dm_vector(vec);
+  free_dm_vector(vec2);
 
   return 0;
 }

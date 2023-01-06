@@ -12,7 +12,7 @@
  * @param mat
  * @param scalar
  */
-void scalarMultiply(DoubleMatrix* mat, double scalar) {
+void multiply_scalar_matrix(DoubleMatrix* mat, double scalar) {
   size_t i, j;
   for (i = 0; i < mat->columns; i++) {
     for (j = 0; j < mat->rows; j++) (mat->values[i])[j] *= scalar;
@@ -41,10 +41,10 @@ void transpose(DoubleMatrix* mat) {
  * @param m
  * @return DoubleMatrix*
  */
-DoubleMatrix* cloneMatrix(DoubleMatrix* m) {
+DoubleMatrix* clone_dm_matrix(DoubleMatrix* m) {
   DoubleMatrix* copy;
   size_t i, j;
-  copy = createDoubleMatrix(m->rows, m->columns);
+  copy = create_dm_matrix(m->rows, m->columns);
   for (i = 0; i < m->columns; i++)
     for (j = 0; j < m->rows; j++) copy->values[i][j] = m->values[i][j];
   return copy;
@@ -58,7 +58,7 @@ DoubleMatrix* cloneMatrix(DoubleMatrix* m) {
  * @return true
  * @return false
  */
-bool areEqualDoubleMatrices(DoubleMatrix* m1, DoubleMatrix* m2) {
+bool are_dm_matrix_equal(DoubleMatrix* m1, DoubleMatrix* m2) {
   unsigned int i, j;
   if (m1 == NULL || m2 == NULL) return false;
   if (m1->columns != m2->columns || m1->rows != m2->rows) return false;
@@ -77,7 +77,7 @@ bool areEqualDoubleMatrices(DoubleMatrix* m1, DoubleMatrix* m2) {
  * @param m2
  * @return DoubleMatrix*
  */
-DoubleMatrix* multiplyDoubleMatrices(DoubleMatrix* m1, DoubleMatrix* m2) {
+DoubleMatrix* multiply_dm_matrices(DoubleMatrix* m1, DoubleMatrix* m2) {
   size_t i, j, k;
   if (m1 == NULL || m2 == NULL) {
     perror("Error: Matrices shouldn't be empty.");
@@ -91,7 +91,7 @@ DoubleMatrix* multiplyDoubleMatrices(DoubleMatrix* m1, DoubleMatrix* m2) {
     return NULL;
   }
 
-  DoubleMatrix* product = createDoubleMatrix(m1->rows, m2->columns);
+  DoubleMatrix* product = create_dm_matrix(m1->rows, m2->columns);
 
   // Multiplying first and second matrices and storing it in product
   for (i = 0; i < m1->rows; ++i) {
@@ -124,8 +124,8 @@ double vector_multiply(double* col, double* row, size_t length) {
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector* multiplyVectorMatrix(DoubleVector* vec, DoubleMatrix* mat) {
-  DoubleVector* vec_result = newDoubleVectorOfLength(vec->length, 0.0);
+DoubleVector* multiply_dm_vector_matrix(DoubleVector* vec, DoubleMatrix* mat) {
+  DoubleVector* vec_result = new_dm_vector_length(vec->length, 0.0);
   for (size_t i = 0; i < vec->length; i++) {
     vec_result->mat1D->values[i][0] = vector_multiply(
         mat->values[i], (double*)vec->mat1D->values, vec->length);
@@ -145,12 +145,12 @@ DoubleVector* multiplyVectorMatrix(DoubleVector* vec, DoubleMatrix* mat) {
  * @param vec2
  * @return double
  */
-double dotproductDoubleVectors(DoubleVector* vec1, DoubleVector* vec2) {
+double dot_product_dm_vectors(DoubleVector* vec1, DoubleVector* vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors have not same length");
     return 0;
   }
-  if (vec1->column_vec != vec2->column_vec) {
+  if (vec1->isColumnVector != vec2->isColumnVector) {
     perror("no dot product for: column-vectors * row_vector");
     return 0;
   }
@@ -171,7 +171,7 @@ double dotproductDoubleVectors(DoubleVector* vec1, DoubleVector* vec2) {
  * @param vec1
  * @param vec2 (const)
  */
-void addDoubleVector(DoubleVector* vec1, const DoubleVector* vec2) {
+void add_dm_vector(DoubleVector* vec1, const DoubleVector* vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors are not same length");
   }
@@ -187,7 +187,7 @@ void addDoubleVector(DoubleVector* vec1, const DoubleVector* vec2) {
  * @param vec1
  * @param vec2 (const)
  */
-void subDoubleVector(DoubleVector* vec1, const DoubleVector* vec2) {
+void sub_dm_vector(DoubleVector* vec1, const DoubleVector* vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors are not same length");
   }
@@ -203,7 +203,7 @@ void subDoubleVector(DoubleVector* vec1, const DoubleVector* vec2) {
  * @param vec
  * @param scalar
  */
-void multiplyScalarToVector(DoubleVector* vec, const double scalar) {
+void multiply_scalar_vector(DoubleVector* vec, const double scalar) {
   for (size_t i = 0; i < vec->length; i++) {
     vec->mat1D->values[i][0] = vec->mat1D->values[i][0] * scalar;
   }
@@ -215,7 +215,7 @@ void multiplyScalarToVector(DoubleVector* vec, const double scalar) {
  * @param vec
  * @param scalar
  */
-void divideScalarToVector(DoubleVector* vec, const double scalar) {
+void divide_scalar_vector(DoubleVector* vec, const double scalar) {
   for (size_t i = 0; i < vec->length; i++) {
     vec->mat1D->values[i][0] = vec->mat1D->values[i][0] / scalar;
   }
@@ -227,7 +227,7 @@ void divideScalarToVector(DoubleVector* vec, const double scalar) {
  * @param vec
  * @param scalar
  */
-void addConstantToVector(DoubleVector* vec, const double constant) {
+void add_constant_vector(DoubleVector* vec, const double constant) {
   for (size_t i = 0; i < vec->length; i++) {
     vec->mat1D->values[i][0] = vec->mat1D->values[i][0] + constant;
   }
@@ -239,7 +239,7 @@ void addConstantToVector(DoubleVector* vec, const double constant) {
  * @param vec
  * @return double
  */
-double meanOfDoubleVector(DoubleVector* vec) {
+double mean_dm_vector(DoubleVector* vec) {
   double mean = 0.0;
   for (size_t i = 0; i < vec->length; i++) {
     mean += vec->mat1D->values[i][0];
@@ -254,7 +254,7 @@ double meanOfDoubleVector(DoubleVector* vec) {
  * @param vec
  * @return double
  */
-double minOfDoubleVector(DoubleVector* vec) {
+double min_dm_vector(DoubleVector* vec) {
   double min = vec->mat1D->values[0][0];
   for (size_t i = 0; i < vec->length; i++) {
     if (min > vec->mat1D->values[i][0]) min = vec->mat1D->values[i][0];
@@ -268,7 +268,7 @@ double minOfDoubleVector(DoubleVector* vec) {
  * @param vec
  * @return double
  */
-double maxOfDoubleVector(DoubleVector* vec) {
+double max_dm_vector(DoubleVector* vec) {
   double max = vec->mat1D->values[0][0];
   for (size_t i = 0; i < vec->length; i++) {
     if (max < vec->mat1D->values[i][0]) max = vec->mat1D->values[i][0];

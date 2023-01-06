@@ -102,3 +102,6 @@ user.bazelrc
 /compile_commands.json
 # Directory where clangd puts its indexing work
 /.cache/
+
+# Style-Guide
+StyleGuide.md

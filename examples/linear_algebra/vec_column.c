@@ -9,14 +9,14 @@ int main(void) {
   // create array
 
   double a[] = {1, 2, 3};
-  DoubleVector *vec = newDoubleVector();
-  setDoubleVectorArray(vec, a, 0);
-  printDoubleVector(vec);
+  DoubleVector *vec = new_dm_vector();
+  set_dm_vector_to_array(vec, a, 0);
+  print_dm_vector(vec);
 
-  vec->column_vec = true;
-  printDoubleVector(vec);
+  vec->isColumnVector = true;
+  print_dm_vector(vec);
 
-  freeDoubleVector(vec);
+  free_dm_vector(vec);
 
   return 0;
 }

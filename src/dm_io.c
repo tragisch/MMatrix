@@ -16,7 +16,7 @@
 /*******************************/
 
 /* read in DoubleVector data from file */
-int readInDoubleVectorData(DoubleVector* vec, const char* filepath) {
+int read_dm_vector_from_file(DoubleVector* vec, const char* filepath) {
   FILE* fp = fopen(filepath, "r");
   if (fp == NULL) {
     return 1;
@@ -32,7 +32,7 @@ int readInDoubleVectorData(DoubleVector* vec, const char* filepath) {
 }
 
 /* write data from DoubleVector to file */
-int writeOutDoubleVectorData(DoubleVector* vec, const char* filepath) {
+int write_dm_vector_to_file(DoubleVector* vec, const char* filepath) {
   FILE* fp = fopen(filepath, "w");
   if (fp == NULL) {
     return 1;
@@ -55,10 +55,10 @@ int writeOutDoubleVectorData(DoubleVector* vec, const char* filepath) {
  *
  * @param DoubleVector* vec
  */
-void printDoubleVector(DoubleVector* vec) {
-  double* array = getArrayFromVector(vec);
+void print_dm_vector(DoubleVector* vec) {
+  double* array = get_array_from_vector(vec);
   size_t length = vec->mat1D->rows;
-  if (vec->column_vec == false) {
+  if (vec->isColumnVector == false) {
     for (size_t i = 0; i < length; i++) {
       if (i == 0) {
         printf("[%.2lf ", array[i]);
@@ -79,7 +79,7 @@ void printDoubleVector(DoubleVector* vec) {
       }
     }
     printf("Vector 1x%zi, Capacity %zi\n", vec->mat1D->rows,
-           vec->mat1D->row_capacity);
+           vec->mat1D->rowCapacity);
   } else {
     for (size_t i = 0; i < length; i++) {
       if ((i < MAX_COLUMN_PRINT) || (i > length - MAX_COLUMN_PRINT - 1)) {
@@ -89,7 +89,7 @@ void printDoubleVector(DoubleVector* vec) {
       }
     }
     printf("Vector 1x%zi, Capacity %zi\n", vec->mat1D->rows,
-           vec->mat1D->row_capacity);
+           vec->mat1D->rowCapacity);
   }
 }
 
@@ -104,7 +104,7 @@ void printDoubleVector(DoubleVector* vec) {
  * @param num_rows
  * @param matrix
  */
-void printDoubleMatrix(DoubleMatrix* matrix) {
+void print_dm_matrix(DoubleMatrix* matrix) {
   if (matrix->rows < MAX_ROW) {
     for (size_t i = 0; i < matrix->rows; i++) {
       printDoubleArray(matrix->values[i], matrix->columns, 0);
@@ -120,5 +120,5 @@ void printDoubleMatrix(DoubleMatrix* matrix) {
   }
 
   printf("Matrix %zix%zi, Capacity %zix%zi\n", matrix->rows, matrix->columns,
-         matrix->row_capacity, matrix->column_capacity);
+         matrix->rowCapacity, matrix->columnCapacity);
 }
