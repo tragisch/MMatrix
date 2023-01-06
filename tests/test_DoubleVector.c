@@ -1,5 +1,6 @@
+#include "dm_math.h"
+#include "dm_matrix.h"
 #include "misc.h"
-#include "vector.h"
 
 #define UNITY_INCLUDE_DOUBLE
 #define UNITY_DOUBLE_PRECISION 0.0000001
@@ -12,37 +13,37 @@ void setUp(void) {}
 void tearDown(void) {}
 
 static void test_create_vector(void) {
-  DoubleVector *vec = createDoubleVector();
+  DoubleVector *vec = new_dm_vector();
   TEST_ASSERT_NOT_NULL(vec);
-  freeDoubleVector(vec);
+  free_dm_vector(vec);
 }
 
 static void test_create_vector_of_length(void) {
   size_t length = randomInt_upperBound(1000);
   double value = randomDouble();
-  DoubleVector *vec = createDoubleVectorOfLength(length, value);
+  DoubleVector *vec = new_dm_vector_length(length, value);
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_EQUAL_UINT32(length, vec->length);
   TEST_ASSERT_EQUAL_DOUBLE(value,
-                           vec->double_array[randomInt_upperBound(length)]);
-  freeDoubleVector(vec);
+                           vec->mat1D->values[randomInt_upperBound(length)][0]);
+  free_dm_vector(vec);
 }
 
 static void test_push_value(void) {
   size_t length = randomInt_upperBound(100);
   double value = 0.;
-  DoubleVector *vec = createDoubleVectorOfLength(length, value);
+  DoubleVector *vec = new_dm_vector_length(length, value);
 
   double new_value = -1.67;
-  pushValue(vec, new_value);
-  TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->double_array[length]);
+  push_value(vec, new_value);
+  TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->mat1D->values[length][0]);
 
   for (size_t i = 0; i < length; i++) {
-    pushValue(vec, randomDouble());
-    TEST_ASSERT_TRUE(vec->capacity >= vec->length);
+    push_value(vec, randomDouble());
+    TEST_ASSERT_TRUE(vec->mat1D->rowCapacity >= vec->length);
   }
 
-  freeDoubleVector(vec);
+  free_dm_vector(vec);
 }
 
 int main(void) {

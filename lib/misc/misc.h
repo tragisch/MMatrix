@@ -65,10 +65,7 @@ uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max);
 /*  Double Arrays              */
 /*******************************/
 
-#define MAX_ROW 20
-#define MAX_ROW_PRINT 5
-#define MAX_COLUMN 10
-#define MAX_COLUMN_PRINT 4
+
 
 void printDoubleArray(double *p_array, unsigned int length, int method);
 void printDoubleArray_Zeros(double *p_array, unsigned int length);

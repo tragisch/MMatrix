@@ -1,7 +1,9 @@
 #include <stdio.h>
 
+#include "dm_io.h"
+#include "dm_math.h"
+#include "dm_matrix.h"
 #include "misc.h"
-#include "vector.h"
 
 int main() {
   // create vector with random data
@@ -11,56 +13,56 @@ int main() {
   }
   printDoubleArray(arr, 9, 1);
 
-  DoubleVector* vec_1 = createDoubleVector();
-  setArrayOfDoubleVector(vec_1, arr, 9);
-  DoubleVector* vec_2 = createDoubleVectorOfLength(9, 3.);
+  DoubleVector* vec_1 = new_dm_vector();
+  set_dm_vector_to_array(vec_1, arr, 9);
+  DoubleVector* vec_2 = new_dm_vector_length(9, 3.f);
 
   printf("------ vec1, vec2\n");
-  printDoubleVector(vec_1);
-  printDoubleVector(vec_2);
+  print_dm_vector(vec_1);
+  print_dm_vector(vec_2);
 
   printf("------ vec1  + vec2\n");
-  addDoubleVector(vec_1, vec_2);
-  printDoubleVector(vec_1);
+  add_dm_vector(vec_1, vec_2);
+  print_dm_vector(vec_1);
 
   printf("------ vec1  - vec2\n");
-  subDoubleVector(vec_1, vec_2);
-  printDoubleVector(vec_1);
+  sub_dm_vector(vec_1, vec_2);
+  print_dm_vector(vec_1);
 
   printf("------ min, max, mean");
-  double mean_vec = meanOfDoubleVector(vec_1);
-  double min_vec = minOfDoubleVector(vec_1);
-  double max_vec = maxOfDoubleVector(vec_1);
+  double mean_vec = mean_dm_vector(vec_1);
+  double min_vec = min_dm_vector(vec_1);
+  double max_vec = max_dm_vector(vec_1);
   printf("\nMean: %lf \tMin: %lf \tMax: %lf\n", mean_vec, min_vec, max_vec);
 
   printf("------ multiply scalar to vec_1\n");
-  multiplyScalarToVector(vec_1, 3.2);
-  printDoubleVector(vec_1);
+  multiply_scalar_vector(vec_1, 3.2);
+  print_dm_vector(vec_1);
 
   printf("------ divide scalar to vec_1\n");
-  divideScalarToVector(vec_1, 0.9);
-  printDoubleVector(vec_1);
+  divide_scalar_vector(vec_1, 0.9);
+  print_dm_vector(vec_1);
 
   printf("------ add_constant to vector\n");
-  addConstantToVector(vec_1, -4.5);
-  printDoubleVector(vec_1);
+  add_constant_vector(vec_1, -4.5);
+  print_dm_vector(vec_1);
 
   printf("------ multiply two vectors\n");
-  printf("Dot produkt: %lf\n", multiplyDoubleVectors(vec_1, vec_2));
+  printf("Dot produkt: %lf\n", dot_product_dm_vectors(vec_1, vec_2));
 
   printf("------ reverseVector\n");
-  printDoubleVector(vec_1);
-  reverseVector(vec_1);
-  printDoubleVector(vec_1);
+  print_dm_vector(vec_1);
+  reverse_vector(vec_1);
+  print_dm_vector(vec_1);
 
   printf("------ swap two elements\n");
-  printDoubleVector(vec_1);
-  swapElementsOfVector(vec_1, 2, 5);
-  printDoubleVector(vec_1);
+  print_dm_vector(vec_1);
+  swap_elements_vector(vec_1, 2, 5);
+  print_dm_vector(vec_1);
 
   // free:
-  freeDoubleVector(vec_1);
-  freeDoubleVector(vec_2);
+  free_dm_vector(vec_1);
+  free_dm_vector(vec_2);
 
   return 0;
 }
