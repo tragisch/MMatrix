@@ -4,6 +4,7 @@
 
 #define UNITY_INCLUDE_DOUBLE
 #define UNITY_DOUBLE_PRECISION 0.0000001
+#define UPPER_BOUND 100
 
 #include "unity.h"
 #include "unity_internals.h"
@@ -19,7 +20,7 @@ static void test_create_vector(void) {
 }
 
 static void test_create_vector_of_length(void) {
-  size_t length = randomInt_upperBound(1000);
+  size_t length = randomInt_upperBound(UPPER_BOUND);
   double value = randomDouble();
   DoubleVector *vec = new_dm_vector_length(length, value);
   TEST_ASSERT_NOT_NULL(vec);
@@ -30,11 +31,11 @@ static void test_create_vector_of_length(void) {
 }
 
 static void test_push_value(void) {
-  size_t length = randomInt_upperBound(100);
+  size_t length = randomInt_upperBound(UPPER_BOUND);
   double value = 0.;
   DoubleVector *vec = new_dm_vector_length(length, value);
 
-  double new_value = -1.67;
+  const double new_value = -1.67;
   push_value(vec, new_value);
   TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->mat1D->values[length][0]);
 
@@ -44,14 +45,4 @@ static void test_push_value(void) {
   }
 
   free_dm_vector(vec);
-}
-
-int main(void) {
-  UnityBegin("matrix.c");
-
-  RUN_TEST(test_create_vector);
-  RUN_TEST(test_create_vector_of_length);
-  RUN_TEST(test_push_value);
-
-  return UnityEnd();
 }

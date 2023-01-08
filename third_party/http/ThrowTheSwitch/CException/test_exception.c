@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #include "CException.h"
 #include "unity.h"
 
