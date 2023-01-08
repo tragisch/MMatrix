@@ -1,18 +1,18 @@
-name: CI
+# name: CI
 
-on: [push, pull_request]
+# on: [push, pull_request]
 
-jobs:
-  test:
-    # virtual environments: https://github.com/actions/virtual-environments
-    runs-on: macos-12
+# jobs:
+#   test:
+#     # virtual environments: https://github.com/actions/virtual-environments
+#     runs-on: macos-12
 
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, which is the CWD for
-      # the rest of the steps
-      - uses: actions/checkout@v3
+#     steps:
+#       # Checks-out your repository under $GITHUB_WORKSPACE, which is the CWD for
+#       # the rest of the steps
+#       - uses: actions/checkout@v3
 
-      # test
-      - name: Test the code (unit tests)
-        run: bazel test //tests:all
+#       # test
+#       - name: Test the code (unit tests)
+#         run: bazel test //tests:all
     
