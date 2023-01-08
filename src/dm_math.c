@@ -27,10 +27,11 @@
  * @param mat
  * @param scalar
  */
-void multiply_scalar_matrix(DoubleMatrix* mat, double scalar) {
-  size_t i, j;
-  for (i = 0; i < mat->columns; i++) {
-    for (j = 0; j < mat->rows; j++) (mat->values[i])[j] *= scalar;
+void multiply_scalar_matrix(DoubleMatrix *mat, double scalar) {
+  for (size_t i = 0; i < mat->columns; i++) {
+    for (size_t j = 0; j < mat->rows; j++) {
+      (mat->values[i])[j] *= scalar;
+    }
   }
 }
 
@@ -40,11 +41,9 @@ void multiply_scalar_matrix(DoubleMatrix* mat, double scalar) {
  * @param mat
  * @return mat
  */
-void transpose(DoubleMatrix* mat) {
-  size_t i, j;
-
-  for (i = 0; i < mat->columns; i++) {
-    for (j = 0; j < mat->rows; j++) {
+void transpose(DoubleMatrix *mat) {
+  for (size_t i = 0; i < mat->columns; i++) {
+    for (size_t j = 0; j < mat->rows; j++) {
       mat->values[i][j] = mat->values[j][i];
     }
   }
@@ -56,12 +55,13 @@ void transpose(DoubleMatrix* mat) {
  * @param m
  * @return DoubleMatrix*
  */
-DoubleMatrix* clone_dm_matrix(DoubleMatrix* m) {
-  DoubleMatrix* copy;
-  size_t i, j;
-  copy = create_dm_matrix(m->rows, m->columns);
-  for (i = 0; i < m->columns; i++)
-    for (j = 0; j < m->rows; j++) copy->values[i][j] = m->values[i][j];
+DoubleMatrix *clone_dm_matrix(DoubleMatrix *mat) {
+  DoubleMatrix *copy = create_dm_matrix(mat->rows, mat->columns);
+  for (size_t i = 0; i < mat->columns; i++) {
+    for (size_t j = 0; j < mat->rows; j++) {
+      copy->values[i][j] = mat->values[i][j];
+    }
+  }
   return copy;
 }
 
@@ -73,13 +73,18 @@ DoubleMatrix* clone_dm_matrix(DoubleMatrix* m) {
  * @return true
  * @return false
  */
-bool are_dm_matrix_equal(DoubleMatrix* m1, DoubleMatrix* m2) {
-  unsigned int i, j;
-  if (m1 == NULL || m2 == NULL) return false;
-  if (m1->columns != m2->columns || m1->rows != m2->rows) return false;
-  for (i = 0; i < m1->columns; i++) {
-    for (j = 0; j < m1->rows; j++) {
-      if (m1->values[i][j] != m2->values[i][j]) return false;
+bool are_dm_matrix_equal(DoubleMatrix *mat1, DoubleMatrix *mat2) {
+  if (mat1 == NULL || mat2 == NULL) {
+    return false;
+  }
+  if (mat1->columns != mat2->columns || mat1->rows != mat2->rows) {
+    return false;
+  }
+  for (size_t i = 0; i < mat1->columns; i++) {
+    for (size_t j = 0; j < mat1->rows; j++) {
+      if (mat1->values[i][j] != mat2->values[i][j]) {
+        return false;
+      }
     }
   }
   return true;
@@ -92,27 +97,27 @@ bool are_dm_matrix_equal(DoubleMatrix* m1, DoubleMatrix* m2) {
  * @param m2
  * @return DoubleMatrix*
  */
-DoubleMatrix* multiply_dm_matrices(DoubleMatrix* m1, DoubleMatrix* m2) {
-  size_t i, j, k;
-  if (m1 == NULL || m2 == NULL) {
+DoubleMatrix *multiply_dm_matrices(DoubleMatrix *mat1, DoubleMatrix *mat2) {
+
+  if (mat1 == NULL || mat2 == NULL) {
     perror("Error: Matrices shouldn't be empty.");
     return NULL;
   }
 
-  if (m1->columns != m2->rows) {
+  if (mat1->columns != mat2->rows) {
     perror(
         "Error: number of columns of m1 has to be euqal to number fo rows of "
         "m2!");
     return NULL;
   }
 
-  DoubleMatrix* product = create_dm_matrix(m1->rows, m2->columns);
+  DoubleMatrix *product = create_dm_matrix(mat1->rows, mat2->columns);
 
   // Multiplying first and second matrices and storing it in product
-  for (i = 0; i < m1->rows; ++i) {
-    for (j = 0; j < m2->columns; ++j) {
-      for (k = 0; k < m1->columns; ++k) {
-        product->values[i][j] += m1->values[i][k] * m2->values[k][j];
+  for (size_t i = 0; i < mat1->rows; ++i) {
+    for (size_t j = 0; j < mat2->columns; ++j) {
+      for (size_t k = 0; k < mat1->columns; ++k) {
+        product->values[i][j] += mat1->values[i][k] * mat2->values[k][j];
       }
     }
   }
@@ -122,11 +127,10 @@ DoubleMatrix* multiply_dm_matrices(DoubleMatrix* m1, DoubleMatrix* m2) {
 
 /* v1 x v2  -- simply a helper function -- computes dot product between two
  * vectors*/
-static double vector_multiply(double* col, double* row, size_t length) {
-  double sum;
-  size_t i;
-  sum = 0;
-  for (i = 0; i < length; i++) {
+static double vector_multiply(const double *col, const double *row,
+                              size_t length) {
+  double sum = 0.;
+  for (size_t i = 0; i < length; i++) {
     sum += col[i] * row[i];
   }
   return sum;
@@ -139,12 +143,12 @@ static double vector_multiply(double* col, double* row, size_t length) {
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector* multiply_dm_vector_matrix(const DoubleVector* vec,
-                                        const DoubleMatrix* mat) {
-  DoubleVector* vec_result = new_dm_vector_length(vec->length, 0.0);
+DoubleVector *multiply_dm_vector_matrix(const DoubleVector *vec,
+                                        const DoubleMatrix *mat) {
+  DoubleVector *vec_result = new_dm_vector_length(vec->length, 0.0);
   for (size_t i = 0; i < vec->length; i++) {
     vec_result->mat1D->values[i][0] = vector_multiply(
-        mat->values[i], (double*)vec->mat1D->values, vec->length);
+        mat->values[i], (double *)vec->mat1D->values, vec->length);
   }
 
   return vec_result;
@@ -161,7 +165,7 @@ DoubleVector* multiply_dm_vector_matrix(const DoubleVector* vec,
  * @param vec2
  * @return double
  */
-double dot_product_dm_vectors(DoubleVector* vec1, DoubleVector* vec2) {
+double dot_product_dm_vectors(DoubleVector *vec1, DoubleVector *vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors have not same length");
     return 0;
@@ -171,10 +175,8 @@ double dot_product_dm_vectors(DoubleVector* vec1, DoubleVector* vec2) {
     return 0;
   }
 
-  double sum;
-  size_t i;
-  sum = 0;
-  for (i = 0; i < vec1->length; i++) {
+  double sum = 0;
+  for (size_t i = 0; i < vec1->length; i++) {
     sum += vec1->mat1D->values[i][0] * vec2->mat1D->values[i][0];
   }
 
@@ -187,7 +189,7 @@ double dot_product_dm_vectors(DoubleVector* vec1, DoubleVector* vec2) {
  * @param vec1
  * @param vec2 (const)
  */
-void add_dm_vector(DoubleVector* vec1, const DoubleVector* vec2) {
+void add_dm_vector(DoubleVector *vec1, const DoubleVector *vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors are not same length");
   }
@@ -203,7 +205,7 @@ void add_dm_vector(DoubleVector* vec1, const DoubleVector* vec2) {
  * @param vec1
  * @param vec2 (const)
  */
-void sub_dm_vector(DoubleVector* vec1, const DoubleVector* vec2) {
+void sub_dm_vector(DoubleVector *vec1, const DoubleVector *vec2) {
   if (vec1->length != vec2->length) {
     perror("vectors are not same length");
   }
@@ -219,7 +221,7 @@ void sub_dm_vector(DoubleVector* vec1, const DoubleVector* vec2) {
  * @param vec
  * @param scalar
  */
-void multiply_scalar_vector(DoubleVector* vec, const double scalar) {
+void multiply_scalar_vector(DoubleVector *vec, const double scalar) {
   for (size_t i = 0; i < vec->length; i++) {
     vec->mat1D->values[i][0] = vec->mat1D->values[i][0] * scalar;
   }
@@ -231,7 +233,7 @@ void multiply_scalar_vector(DoubleVector* vec, const double scalar) {
  * @param vec
  * @param scalar
  */
-void divide_scalar_vector(DoubleVector* vec, const double scalar) {
+void divide_scalar_vector(DoubleVector *vec, const double scalar) {
   for (size_t i = 0; i < vec->length; i++) {
     vec->mat1D->values[i][0] = vec->mat1D->values[i][0] / scalar;
   }
@@ -243,7 +245,7 @@ void divide_scalar_vector(DoubleVector* vec, const double scalar) {
  * @param vec
  * @param scalar
  */
-void add_constant_vector(DoubleVector* vec, const double constant) {
+void add_constant_vector(DoubleVector *vec, const double constant) {
   for (size_t i = 0; i < vec->length; i++) {
     vec->mat1D->values[i][0] = vec->mat1D->values[i][0] + constant;
   }
@@ -255,13 +257,13 @@ void add_constant_vector(DoubleVector* vec, const double constant) {
  * @param vec
  * @return double
  */
-double mean_dm_vector(DoubleVector* vec) {
+double mean_dm_vector(DoubleVector *vec) {
   double mean = 0.0;
   for (size_t i = 0; i < vec->length; i++) {
     mean += vec->mat1D->values[i][0];
   }
 
-  return (mean / vec->length);
+  return (mean / (double)vec->length);
 }
 
 /**
@@ -270,10 +272,12 @@ double mean_dm_vector(DoubleVector* vec) {
  * @param vec
  * @return double
  */
-double min_dm_vector(DoubleVector* vec) {
+double min_dm_vector(DoubleVector *vec) {
   double min = vec->mat1D->values[0][0];
   for (size_t i = 0; i < vec->length; i++) {
-    if (min > vec->mat1D->values[i][0]) min = vec->mat1D->values[i][0];
+    if (min > vec->mat1D->values[i][0]) {
+      min = vec->mat1D->values[i][0];
+    }
   }
   return min;
 }
@@ -284,10 +288,12 @@ double min_dm_vector(DoubleVector* vec) {
  * @param vec
  * @return double
  */
-double max_dm_vector(DoubleVector* vec) {
+double max_dm_vector(DoubleVector *vec) {
   double max = vec->mat1D->values[0][0];
   for (size_t i = 0; i < vec->length; i++) {
-    if (max < vec->mat1D->values[i][0]) max = vec->mat1D->values[i][0];
+    if (max < vec->mat1D->values[i][0]) {
+      max = vec->mat1D->values[i][0];
+    }
   }
   return max;
 }

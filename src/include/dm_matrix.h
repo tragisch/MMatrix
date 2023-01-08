@@ -76,4 +76,4 @@ double pop_value(DoubleVector *vec);
 // free
 void free_dm_vector(DoubleVector *vec);
 
-#endif  // !MATRIX_H
+#endif // !MATRIX_H
