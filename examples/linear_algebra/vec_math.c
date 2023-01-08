@@ -7,15 +7,16 @@
 
 int main() {
   // create vector with random data
-  double* arr = (double*)malloc(9 * sizeof(double));
+  double *arr = (double *)malloc(9 * sizeof(double));
   for (size_t i = 0; i < 9; i++) {
     arr[i] = (double)randomInt_betweenBounds(0, 24);
   }
   printDoubleArray(arr, 9, 1);
 
-  DoubleVector* vec_1 = new_dm_vector();
+  DoubleVector *vec_1 = new_dm_vector();
   set_dm_vector_to_array(vec_1, arr, 9);
-  DoubleVector* vec_2 = new_dm_vector_length(9, 3.f);
+  DoubleVector *vec_2 = new_dm_vector_length(9, 3.f);
+
 
   printf("------ vec1, vec2\n");
   print_dm_vector(vec_1);

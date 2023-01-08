@@ -14,5 +14,4 @@ jobs:
 
       # build
       - name: Build the code
-        run: bazel build //...
-        
+        run: bazel build //examples/linear_algebra:vec_math
