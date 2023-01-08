@@ -63,16 +63,6 @@ http_archive(
     url = "https://github.com/meekrosoft/fff/archive/refs/tags/v1.1.tar.gz",
 )
 
-# gnuplot is a freely available, command-driven graphical display tool for Unix.
-# http://ndevilla.free.fr/gnuplot/
-http_archive(
-    name = "gnuplot_i",
-    build_file = "@//:third_party/http/gnuplot_i/BUILD",
-    sha256 = "be453cf2683353c9330d7784ffc2cae5f58a5c864aa1adb09baedf3e2caf5e3a",
-    strip_prefix = "gnuplot_i-master",
-    url = "https://github.com/mithodin/gnuplot_i/archive/refs/heads/master.zip",
-)
-
 # A few macros that prints and returns the value of a given expression
 # for quick and dirty debugging, inspired by Rusts dbg!(…) macro and its C++ variant.
 # https://github.com/eerimoq/dbg-macro
