@@ -16,7 +16,7 @@
 #include "dbg.h"
 
 // #define NDEBUG
-#define INIT_CAPACITY 2u
+enum { INIT_CAPACITY = 2U };
 
 /*******************************/
 /*        Double Matrix        */
