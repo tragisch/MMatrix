@@ -9,17 +9,19 @@
 #include "unity.h"
 #include "unity_internals.h"
 
-void setUp(void) {}
+void setUp(void) {
+  //..
+}
 
 void tearDown(void) {}
 
-static void test_create_vector(void) {
+void test_create_vector(void) {
   DoubleVector *vec = new_dm_vector();
   TEST_ASSERT_NOT_NULL(vec);
   free_dm_vector(vec);
 }
 
-static void test_create_vector_of_length(void) {
+void test_create_vector_of_length(void) {
   size_t length = randomInt_upperBound(UPPER_BOUND);
   double value = randomDouble();
   DoubleVector *vec = new_dm_vector_length(length, value);
@@ -30,7 +32,7 @@ static void test_create_vector_of_length(void) {
   free_dm_vector(vec);
 }
 
-static void test_push_value(void) {
+void test_push_value(void) {
   size_t length = randomInt_upperBound(UPPER_BOUND);
   double value = 0.;
   DoubleVector *vec = new_dm_vector_length(length, value);
