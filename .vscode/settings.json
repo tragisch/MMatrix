@@ -1,17 +1,11 @@
 {
-    "bazel-cpp-tools.compileCommands.targets": [
-        "main"
-    ],
+    // CPP 
+    
     "C_Cpp.errorSquiggles": "enabled",
-    "files.associations": {
-        "glib.h": "c",
-        "gslist.h": "c",
-        "cmocka.h": "c",
-        "cmocka_private.h": "c",
-        "armstrong_numbers.h": "c",
-        "unity.h": "c"
-    },
-    "C_Cpp.codeAnalysis.clangTidy.checks.disabled": [
-        "clang-analyzer-core.NullDereference"
-    ]
+    "C_Cpp.enhancedColorization": "enabled",
+    "C_Cpp.clang_format_fallbackStyle": "LLVM",
+    "C_Cpp.clang_format_style": "LLVM",
+    "editor.defaultFormatter": "ms-vscode.cpptools",
+    "editor.formatOnSave": true,
+    
 }
