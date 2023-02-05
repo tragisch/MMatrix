@@ -30,8 +30,8 @@
 /*******************************/
 
 /* read in DoubleVector data from file */
-int read_dm_vector_from_file(DoubleVector* vec, const char* filepath) {
-  FILE* fp = fopen(filepath, "r");
+int read_dm_vector_from_file(DoubleVector *vec, const char *filepath) {
+  FILE *fp = fopen(filepath, "r");
   if (fp == NULL) {
     return 1;
   }
@@ -46,8 +46,8 @@ int read_dm_vector_from_file(DoubleVector* vec, const char* filepath) {
 }
 
 /* write data from DoubleVector to file */
-int write_dm_vector_to_file(DoubleVector* vec, const char* filepath) {
-  FILE* fp = fopen(filepath, "w");
+int write_dm_vector_to_file(DoubleVector *vec, const char *filepath) {
+  FILE *fp = fopen(filepath, "w");
   if (fp == NULL) {
     return 1;
   }
@@ -69,8 +69,8 @@ int write_dm_vector_to_file(DoubleVector* vec, const char* filepath) {
  *
  * @param DoubleVector* vec
  */
-void print_dm_vector(DoubleVector* vec) {
-  double* array = get_array_from_vector(vec);
+void print_dm_vector(DoubleVector *vec) {
+  double *array = get_array_from_vector(vec);
   size_t length = vec->mat1D->rows;
   if (vec->isColumnVector == false) {
     for (size_t i = 0; i < length; i++) {
@@ -118,7 +118,7 @@ void print_dm_vector(DoubleVector* vec) {
  * @param num_rows
  * @param matrix
  */
-void print_dm_matrix(DoubleMatrix* matrix) {
+void print_dm_matrix(DoubleMatrix *matrix) {
   if (matrix->rows < MAX_ROW) {
     for (size_t i = 0; i < matrix->rows; i++) {
       printDoubleArray(matrix->values[i], matrix->columns, 0);
