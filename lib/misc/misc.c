@@ -5,26 +5,25 @@
 #define MAX_ROW_PRINT 5
 #define MAX_COLUMN 10
 #define MAX_COLUMN_PRINT 4
+#define UNITY_DOUBLE_PRECISION 0.0000001
 
 /**********************
  *** STRINGS
  ************************/
 
 char *file2string(char *path) {
-  FILE *fp;
-  fp = fopen(path, "r");
+  FILE *file = fopen(path, "r");
   char *buffer = 0;
-  long length;
 
-  if (fp) {
-    fseek(fp, 0, SEEK_END);
-    length = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
+  if (file) {
+    fseek(file, 0, SEEK_END);
+    long length = ftell(file);
+    fseek(file, 0, SEEK_SET);
     buffer = malloc(length);
     if (buffer) {
-      fread(buffer, 1, length, fp);
+      fread(buffer, 1, length, file);
     }
-    fclose(fp);
+    fclose(file);
   } else {
     printf("no file found, or can't read.");
   }
@@ -39,24 +38,26 @@ int string2file(char *filepath, char *data) {
     if (fputs(data, fOut) != EOF) {
       rc = 1;
     }
-    if (fclose(fOut) == EOF) rc = 0;
+    if (fclose(fOut) == EOF) {
+      rc = 0;
+    }
   }
 
   return rc;
 }
 
 void slice(const char *str, char *buffer, size_t start, size_t end) {
-  size_t j = 0;
+  size_t idx = 0;
   for (size_t i = start; i <= end; ++i) {
-    buffer[j++] = str[i];
+    buffer[idx++] = str[i];
   }
-  buffer[j] = 0;
+  buffer[idx] = 0;
 }
 
 // error checking omitted for sake of brevity
 myString *mystring_init(const char *src) {
   myString *pms = malloc(sizeof(myString));
-  pms->len = strlen(src + 1);
+  pms->len = (int)strlen(src + 1);
   pms->capacity = pms->len;
   pms->str = (char *)malloc(pms->capacity + 1);
   strcpy(pms->str, src);
@@ -66,7 +67,7 @@ myString *mystring_init(const char *src) {
 // error checking omitted for sake of brevity
 int mystring_cat(myString *pms, const char *src) {
   // if (pms == NULL) return 1;
-  pms->len += strlen(src + 1);
+  pms->len += (int)strlen(src + 1);
   pms->capacity = pms->len;
   pms->str = (char *)realloc(pms->str, pms->capacity + 1);
   strcat(pms->str, src);
@@ -75,7 +76,9 @@ int mystring_cat(myString *pms, const char *src) {
 
 // destroy pointer:
 int mystring_destroy(myString *pms) {
-  if (pms == NULL) return 1;
+  if (pms == NULL) {
+    return 1;
+  }
   pms->str = NULL;
   free(pms->str);
   pms = NULL;
@@ -94,7 +97,7 @@ int mystring_destroy(myString *pms) {
  */
 double randomDouble() { return (double)arc4random() / (double)RAND_MAX; }
 double randomDouble_betweenBounds(uint32_t min, uint32_t max) {
-  return (double)(randomInt_betweenBounds(min, max - 1) + randomDouble());
+  return (randomInt_betweenBounds(min, max - 1) + randomDouble());
 }
 
 /**
@@ -107,7 +110,9 @@ uint32_t randomInt_upperBound(uint32_t limit) {
   return arc4random_uniform(limit);
 }
 uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max) {
-  if (max < min) return min;
+  if (max < min) {
+    return min;
+  }
   return arc4random_uniform((max - min) + 1) + min;
 }
 
@@ -128,7 +133,7 @@ double *createRandomDoubleArray(unsigned int length) {
   for (unsigned int i = 0; i < length; i++) {
     array[i] = randomDouble();
   }
-  return array;  // die Speicheradresse wird zurückgegeben.
+  return array; // die Speicheradresse wird zurückgegeben.
 }
 
 /**
@@ -176,7 +181,9 @@ void printDoubleArray_Points(double *p_array, unsigned int length) {
   int zero = 0;
   if (length > 1) {
     for (size_t i = 0; i < length; i++) {
-      if (fabs(p_array[i]) > 10e-8) zero = 1;
+      if (fabs(p_array[i]) > UNITY_DOUBLE_PRECISION) {
+        zero = 1;
+      }
       if (i == 0) {
         if (zero) {
           printf("[%.2f ", p_array[i]);
