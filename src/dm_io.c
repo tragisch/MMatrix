@@ -31,35 +31,35 @@
 
 /* read in DoubleVector data from file */
 int read_dm_vector_from_file(DoubleVector *vec, const char *filepath) {
-  FILE *fp = fopen(filepath, "r");
-  if (fp == NULL) {
+  FILE *file = fopen(filepath, "r");
+  if (file == NULL) {
     return 1;
   }
   int succ_read = 1;
   for (size_t i = 0; i < vec->length; i++) {
     // FIXME: insecure use of fscanf:
-    succ_read = fscanf(fp, "%15lf", &vec->mat1D->values[i][0]);
+    succ_read = fscanf(file, "%15lf", &vec->mat1D->values[i][0]);
   }
-  fclose(fp);
+  fclose(file);
 
   return succ_read;
 }
 
 /* write data from DoubleVector to file */
 int write_dm_vector_to_file(DoubleVector *vec, const char *filepath) {
-  FILE *fp = fopen(filepath, "w");
-  if (fp == NULL) {
+  FILE *file = fopen(filepath, "w");
+  if (file == NULL) {
     return 1;
   }
 
   for (size_t i = 0; i < vec->length; i++) {
     if (i < vec->length - 1) {
-      fprintf(fp, "%lf\n", vec->mat1D->values[i][0]);
+      fprintf(file, "%lf\n", vec->mat1D->values[i][0]);
     } else {
-      fprintf(fp, "%lf", vec->mat1D->values[i][0]);
+      fprintf(file, "%lf", vec->mat1D->values[i][0]);
     }
   }
-  fclose(fp);
+  fclose(file);
 
   return 0;
 }

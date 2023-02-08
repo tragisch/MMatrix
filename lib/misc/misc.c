@@ -31,19 +31,19 @@ char *file2string(char *path) {
 }
 
 int string2file(char *filepath, char *data) {
-  int rc = 0;
+  int write_ok = 0;
 
   FILE *fOut = fopen(filepath, "ab+");
   if (fOut != NULL) {
     if (fputs(data, fOut) != EOF) {
-      rc = 1;
+      write_ok = 1;
     }
     if (fclose(fOut) == EOF) {
-      rc = 0;
+      write_ok = 0;
     }
   }
 
-  return rc;
+  return write_ok;
 }
 
 void slice(const char *str, char *buffer, size_t start, size_t end) {
