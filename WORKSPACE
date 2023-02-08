@@ -21,6 +21,23 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 # hedron_compile_commands_setup()
 
 ##########################
+## Code Coverage
+##########################
+# How to use:
+# 1. Generate coverage data with bazel coverage //your/targets/... --instrumentation_filter=<...>
+# 2. Build the coverage report generator: bazel build @hchauvin_bazel_coverage_report//report:bin
+# 3. Generate the report: bazel-bin/external/hchauvin_bazel_coverage_report/report/bin --dest_dir=<dest dir>
+
+# git_repository(
+#     name = "hchauvin_bazel_coverage_report",
+#     remote = "https://github.com/hchauvin/bazel-coverage-report.git",
+#     commit = "{HEAD}",
+# )
+# load("@hchauvin_bazel_coverage_report//report:defs.bzl", "bazel_coverage_report_repositories")
+# bazel_coverage_report_repositories()  # lcov, ...
+
+
+##########################
 ## Http Archives
 ##########################
 
@@ -82,5 +99,5 @@ http_archive(
 new_local_repository(
     name = "glib",
     build_file = "./third_party/brew/gnu-lib/glib.BUILD",
-    path = "/opt/homebrew/Cellar/glib/2.74.0",
+    path = "/opt/homebrew/Cellar/glib/2.74.4",
 )
