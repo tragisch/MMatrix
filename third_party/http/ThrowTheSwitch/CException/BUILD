@@ -19,5 +19,6 @@ cc_test(
     visibility = ["//visibility:public"],
     deps = [
         "@CException",
+        "@Unity",
     ],
 )
