@@ -8,7 +8,8 @@
     "editor.defaultFormatter": "ms-vscode.cpptools",
     "editor.formatOnSave": true,
     "C_Cpp.codeAnalysis.clangTidy.checks.disabled": [
-        "bugprone-easily-swappable-parameters"
+        "bugprone-easily-swappable-parameters",
+        "cppcoreguidelines-avoid-magic-numbers"
     ],
     
 }
