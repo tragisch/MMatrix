@@ -32,23 +32,23 @@ typedef struct Vector {
 /*******************************/
 
 // Function DoubleMatrix:
-DoubleMatrix *new_dm_matrix();
-DoubleMatrix *create_dm_matrix(size_t rows, size_t cols);
-DoubleMatrix *create_rand_dm_matrix(size_t rows, size_t cols);
-DoubleMatrix *clone_dm_matrix(DoubleMatrix *m);
-DoubleMatrix *create_identity_matrix(size_t rows);
-DoubleMatrix *set_array_to_dm_matrix(size_t rows, size_t cols, double **array);
+DoubleMatrix *dm_matrix();
+DoubleMatrix *dm_create(size_t rows, size_t cols);
+DoubleMatrix *dm_create_rand(size_t rows, size_t cols);
+DoubleMatrix *dm_clone(DoubleMatrix *m);
+DoubleMatrix *dm_create_identity(size_t rows);
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array);
 
 // shrink, push, pop, expand
 static void expand_dm_matrix_row(DoubleMatrix *mat);
 static void expand_dm_matrix_column(DoubleMatrix *mat);
 static void shrink_dm_matrix_column(DoubleMatrix *mat);
 static void shrink_dm_matrix_row(DoubleMatrix *mat);
-void push_column(DoubleMatrix *mat, const DoubleVector *col_vec);
-void push_row(DoubleMatrix *mat, const DoubleVector *row_vec);
+void dm_push_column(DoubleMatrix *mat, const DoubleVector *col_vec);
+void dm_push_row(DoubleMatrix *mat, const DoubleVector *row_vec);
 
 // free
-void free_dm_matrix(DoubleMatrix *mat);
+void dm_free_matrix(DoubleMatrix *mat);
 
 /*******************************/
 /*  Double Vector  (Dynamic)   */

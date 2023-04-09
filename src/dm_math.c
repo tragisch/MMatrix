@@ -55,8 +55,8 @@ void transpose(DoubleMatrix *mat) {
  * @param m
  * @return DoubleMatrix*
  */
-DoubleMatrix *clone_dm_matrix(DoubleMatrix *mat) {
-  DoubleMatrix *copy = create_dm_matrix(mat->rows, mat->columns);
+DoubleMatrix *dm_clone(DoubleMatrix *mat) {
+  DoubleMatrix *copy = dm_create(mat->rows, mat->columns);
   for (size_t i = 0; i < mat->columns; i++) {
     for (size_t j = 0; j < mat->rows; j++) {
       copy->values[i][j] = mat->values[i][j];
@@ -111,7 +111,7 @@ DoubleMatrix *multiply_dm_matrices(DoubleMatrix *mat1, DoubleMatrix *mat2) {
     return NULL;
   }
 
-  DoubleMatrix *product = create_dm_matrix(mat1->rows, mat2->columns);
+  DoubleMatrix *product = dm_create(mat1->rows, mat2->columns);
 
   // Multiplying first and second matrices and storing it in product
   for (size_t i = 0; i < mat1->rows; ++i) {

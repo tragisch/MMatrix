@@ -27,7 +27,7 @@ enum { INIT_CAPACITY = 2U };
  *
  * @return DoubleMatrix*
  */
-DoubleMatrix *new_dm_matrix() {
+DoubleMatrix *dm_matrix() {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->columns = 0U;
   matrix->rows = 0U;
@@ -47,7 +47,7 @@ DoubleMatrix *new_dm_matrix() {
  * @param cols
  * @return DoubleMatrix*
  */
-DoubleMatrix *create_dm_matrix(size_t rows, size_t cols) {
+DoubleMatrix *dm_create(size_t rows, size_t cols) {
 
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->rows = rows;
@@ -80,8 +80,8 @@ DoubleMatrix *create_dm_matrix(size_t rows, size_t cols) {
  * @param num_cols
  * @return double**
  */
-DoubleMatrix *create_rand_dm_matrix(size_t rows, size_t cols) {
-  DoubleMatrix *mat = create_dm_matrix(rows, cols);
+DoubleMatrix *dm_create_rand(size_t rows, size_t cols) {
+  DoubleMatrix *mat = dm_create(rows, cols);
 
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
@@ -98,8 +98,8 @@ DoubleMatrix *create_rand_dm_matrix(size_t rows, size_t cols) {
  * @param rows
  * @return DoubleMatrix*
  */
-DoubleMatrix *create_identity_matrix(size_t rows) {
-  DoubleMatrix *mat = create_dm_matrix(rows, rows);
+DoubleMatrix *dm_create_identity(size_t rows) {
+  DoubleMatrix *mat = dm_create(rows, rows);
   for (size_t i = 0; i < rows; i++) {
     (mat->values[i])[i] = 1;
   }
@@ -114,8 +114,8 @@ DoubleMatrix *create_identity_matrix(size_t rows) {
  * @param array
  * @return DoubleMatrix*
  */
-DoubleMatrix *set_array_to_dm_matrix(size_t rows, size_t cols, double **array) {
-  DoubleMatrix *mat = create_dm_matrix(rows, cols);
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
+  DoubleMatrix *mat = dm_create(rows, cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->columns; j++) {
@@ -191,7 +191,7 @@ static void shrink_dm_matrix_row(DoubleMatrix *mat) {
  * @param mat
  * @param col_vec
  */
-void push_column(DoubleMatrix *mat, const DoubleVector *col_vec) {
+void dm_push_column(DoubleMatrix *mat, const DoubleVector *col_vec) {
   if (col_vec->length != mat->rows) {
     perror("Error: length of vector does not fit to number or matrix rows");
 
@@ -215,7 +215,7 @@ void push_column(DoubleMatrix *mat, const DoubleVector *col_vec) {
  * @param mat
  * @param row_vec
  */
-void push_row(DoubleMatrix *mat, const DoubleVector *row_vec) {
+void dm_push_row(DoubleMatrix *mat, const DoubleVector *row_vec) {
   if (row_vec->length != mat->columns) {
     perror("Error: length of vector does not fit to number or matrix columns");
 
@@ -238,7 +238,7 @@ void push_row(DoubleMatrix *mat, const DoubleVector *row_vec) {
  *
  * @param mat
  */
-void free_dm_matrix(DoubleMatrix *mat) {
+void dm_free_matrix(DoubleMatrix *mat) {
   for (size_t i = 0; i < mat->rowCapacity; i++) {
     free(mat->values[i]);
   }
@@ -316,7 +316,7 @@ DoubleVector *dv_new_vector() {
   }
   vec->isColumnVector = false;
   vec->length = 0;
-  vec->mat1D = new_dm_matrix();
+  vec->mat1D = dm_matrix();
   return vec;
 }
 
@@ -354,7 +354,7 @@ DoubleVector *dv_create(size_t length) {
   DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
   vec->isColumnVector = false;
   vec->length = length;
-  vec->mat1D = create_dm_matrix(length, 0);
+  vec->mat1D = dm_create(length, 0);
 
   if (vec->mat1D->values == NULL) {
     dbg(vec->mat1D);
@@ -373,7 +373,7 @@ DoubleVector *dv_create_rand(size_t length) {
   DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
   vec->isColumnVector = false;
   vec->length = length;
-  vec->mat1D = create_dm_matrix(length, 0);
+  vec->mat1D = dm_create(length, 0);
 
   for (size_t i = 0; i < length; i++) {
     vec->mat1D->values[i][0] = randomDouble();
@@ -516,7 +516,7 @@ double dv_pop_value(DoubleVector *vec) {
  * @return DoubleVector*
  */
 void dv_free_vector(DoubleVector *vec) {
-  free_dm_matrix(vec->mat1D);
+  dm_free_matrix(vec->mat1D);
   vec->mat1D = NULL;
   free(vec);
   vec = NULL;

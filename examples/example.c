@@ -6,7 +6,7 @@
 
 int main() {
   // Create a DoubleMatrix to push a column to
-  DoubleMatrix *mat = create_dm_matrix(3, 2);
+  DoubleMatrix *mat = dm_create(3, 2);
   mat->values[0][0] = 1.0;
   mat->values[1][0] = 2.0;
   mat->values[2][0] = 3.0;
@@ -19,7 +19,7 @@ int main() {
   print_dm_vector(vec1);
 
   // Clean up
-  free_dm_matrix(mat);
+  dm_free_matrix(mat);
   dv_free_vector(vec1);
 
   return 0;

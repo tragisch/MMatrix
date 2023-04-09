@@ -7,7 +7,7 @@
 int main() {
   size_t rows = 5;
   size_t cols = 5;
-  DoubleMatrix *matrix = create_rand_dm_matrix(rows, cols);
+  DoubleMatrix *matrix = dm_create_rand(rows, cols);
   print_dm_matrix(matrix);
 
   // DoubleVector* col_last = newDoubleVectorOfLength(5, 2.1);
@@ -20,7 +20,7 @@ int main() {
   printf("-------\n");
   print_dm_vector(row_last);
 
-  DoubleMatrix *mat = create_dm_matrix(5, 0);
+  DoubleMatrix *mat = dm_create(5, 0);
   print_dm_matrix(mat);
   printf("row-capacity: %zu\n", col_last->mat1D->rowCapacity);
 
@@ -31,8 +31,8 @@ int main() {
   print_dm_vector(col_last);
 
   // clean up:
-  free_dm_matrix(matrix);
-  free_dm_matrix(mat);
+  dm_free_matrix(matrix);
+  dm_free_matrix(mat);
   dv_free_vector(col_last);
 
   // initialise mytring

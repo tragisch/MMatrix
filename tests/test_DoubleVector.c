@@ -110,7 +110,7 @@ void test_set_dm_vector_to_array() {
 
 // void test_pop_column() {
 //   // create a matrix with 3 rows and 2 columns
-//   DoubleMatrix *mat = create_dm_matrix(3, 2);
+//   DoubleMatrix *mat = dm_create(3, 2);
 //   DoubleVector *vec1 = dv_create_from_array((double[]){1, 2, 3}, 3);
 //   DoubleVector *vec2 = dv_create_from_array((double[]){4, 5, 6}, 3);
 
@@ -129,7 +129,7 @@ void test_set_dm_vector_to_array() {
 
 //   // free memory
 //   dv_free_vector(popped);
-//   free_dm_matrix(mat);
+//   dm_free_matrix(mat);
 // }
 
 void test_push_value(void) {
