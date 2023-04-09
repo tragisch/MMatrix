@@ -95,7 +95,11 @@ int mystring_destroy(myString *pms) {
  *
  * @return double
  */
-double randomDouble() { return (double)arc4random() / (double)RAND_MAX; }
+double randomDouble() {
+  uint32_t random_uint32 = arc4random();
+  double random_double = (double)random_uint32 / (double)UINT32_MAX;
+  return random_double;
+}
 double randomDouble_betweenBounds(uint32_t min, uint32_t max) {
   return (randomInt_betweenBounds(min, max - 1) + randomDouble());
 }
