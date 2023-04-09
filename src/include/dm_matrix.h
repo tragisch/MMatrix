@@ -58,6 +58,7 @@ void free_dm_matrix(DoubleMatrix *mat);
 DoubleVector *new_dm_vector();
 DoubleVector *new_dm_vector_length(size_t length, double value);
 DoubleVector *new_rand_dm_vector_length(size_t length);
+DoubleVector *dv_create_from_array(const double *array, const size_t length);
 DoubleVector *clone_dm_vector(const DoubleVector *vector);
 DoubleVector *pop_column(DoubleMatrix *mat);
 DoubleVector *pop_row(DoubleMatrix *mat);

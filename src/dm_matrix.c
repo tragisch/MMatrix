@@ -48,10 +48,7 @@ DoubleMatrix *new_dm_matrix() {
  * @return DoubleMatrix*
  */
 DoubleMatrix *create_dm_matrix(size_t rows, size_t cols) {
-  if (rows < 0 || cols < 0) {
-    perror("Dimension has to be positive");
-    return NULL;
-  }
+
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->rows = rows;
   matrix->columns = cols;
@@ -135,7 +132,7 @@ DoubleMatrix *set_array_to_dm_matrix(size_t rows, size_t cols, double **array) {
  * @param mat
  */
 static void expand_dm_matrix_row(DoubleMatrix *mat) {
-  // size_t old_capacity = mat->row_capacity;
+  // size_t old_capacity = mat->rowCapacity;
   mat->rowCapacity += 1;
   mat->values = realloc(mat->values, (mat->rowCapacity) * sizeof(double *));
   for (size_t i = 0; i < mat->rowCapacity; i++) {
@@ -242,7 +239,7 @@ void push_row(DoubleMatrix *mat, const DoubleVector *row_vec) {
  * @param mat
  */
 void free_dm_matrix(DoubleMatrix *mat) {
-  for (size_t i = 0; i < mat->columns; i++) {
+  for (size_t i = 0; i < mat->rowCapacity; i++) {
     free(mat->values[i]);
   }
   free(mat->values);
@@ -261,7 +258,7 @@ DoubleVector *get_row_vector(const DoubleMatrix *mat, size_t row) {
     perror("This row does not exist");
   }
   // INFO: chg mat->column in mat->rows
-  DoubleVector *vec = new_dm_vector_length(mat->rows, 0.0);
+  DoubleVector *vec = new_dm_vector_length(mat->columns, 0.0);
   for (size_t i = 0; i < vec->mat1D->columns; i++) {
     vec->mat1D->values[i][0] = mat->values[row][i];
   }
@@ -281,7 +278,7 @@ DoubleVector *get_column_vector(const DoubleMatrix *mat, size_t column) {
     perror("This column does not exist");
   }
   DoubleVector *vec = new_dm_vector_length(
-      mat->columns, 0.0); // INFO: chg mat->rows in mat->columns
+      mat->rows, 0.0); // INFO: chg mat->rows in mat->columns
   for (size_t i = 0; i < mat->rows; i++) {
     vec->mat1D->values[i][0] = mat->values[i][column];
   }
@@ -320,6 +317,15 @@ DoubleVector *new_dm_vector() {
   vec->isColumnVector = false;
   vec->length = 0;
   vec->mat1D = new_dm_matrix();
+  return vec;
+}
+
+DoubleVector *dv_create_from_array(const double *array, const size_t length) {
+  DoubleVector *vec = new_dm_vector_length(length, 0.0);
+  for (size_t i = 0; i < vec->length; i++) {
+    vec->mat1D->values[i][0] = array[i];
+  }
+
   return vec;
 }
 
