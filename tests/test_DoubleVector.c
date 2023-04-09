@@ -22,7 +22,7 @@ void setUp(void) {
 void tearDown(void) {}
 
 void test_new_dm_vector() {
-  DoubleVector *vec = new_dm_vector();
+  DoubleVector *vec = dv_new_vector();
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_FALSE(vec->isColumnVector);
   TEST_ASSERT_EQUAL_UINT(0, vec->length);
@@ -33,18 +33,18 @@ void test_new_dm_vector() {
   TEST_ASSERT_EQUAL_UINT(INIT_CAPACITY, vec->mat1D->columnCapacity);
 
   // Clean up
-  free_dm_vector(vec);
+  dv_free_vector(vec);
 }
 
 void test_clone_dm_vector() {
   // Create a test vector
-  DoubleVector *original = new_dm_vector_length(3, 0.0);
+  DoubleVector *original = dv_create(3);
   original->mat1D->values[0][0] = 1.0;
   original->mat1D->values[1][0] = 2.0;
   original->mat1D->values[2][0] = 3.0;
 
   // Clone the vector
-  DoubleVector *clone = clone_dm_vector(original);
+  DoubleVector *clone = dv_clone(original);
 
   // Check that the clone is equal to the original
   TEST_ASSERT_EQUAL(original->length, clone->length);
@@ -55,26 +55,26 @@ void test_clone_dm_vector() {
   }
 
   // Clean up memory
-  free_dm_vector(original);
-  free_dm_vector(clone);
+  dv_free_vector(original);
+  dv_free_vector(clone);
 }
 
 void test_new_dm_vector_length() {
-  DoubleVector *vec = new_dm_vector_length(5, 1.0);
+  DoubleVector *vec = dv_create(5);
 
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_FALSE(vec->isColumnVector);
   TEST_ASSERT_EQUAL_UINT32(5, vec->length);
 
   for (size_t i = 0; i < vec->length; i++) {
-    TEST_ASSERT_EQUAL_DOUBLE(1.0, vec->mat1D->values[i][0]);
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, vec->mat1D->values[i][0]);
   }
 
-  free_dm_vector(vec);
+  dv_free_vector(vec);
 }
 
 void test_new_rand_dm_vector_length() {
-  DoubleVector *vec = new_rand_dm_vector_length(5);
+  DoubleVector *vec = dv_create_rand(5);
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT_FALSE(vec->isColumnVector);
   TEST_ASSERT_EQUAL_INT(5, vec->length);
@@ -83,19 +83,19 @@ void test_new_rand_dm_vector_length() {
     TEST_ASSERT_DOUBLE_WITHIN(1.0, 0.0, vec->mat1D->values[i][0]);
   }
 
-  free_dm_vector(vec);
+  dv_free_vector(vec);
 }
 
 void test_set_dm_vector_to_array() {
   // Create a new DoubleVector
-  DoubleVector *vec = new_dm_vector_length(5, 0.0);
+  DoubleVector *vec = dv_create(5);
 
   // Define an array to set the DoubleVector to
   double array[] = {1.0, 2.0, 3.0, 4.0, 5.0};
   size_t len_array = 5;
 
   // Call the function
-  set_dm_vector_to_array(vec, array, len_array);
+  dv_set_array(vec, array, len_array);
 
   // Check that the DoubleVector was set correctly
   TEST_ASSERT_EQUAL_FLOAT(array[0], vec->mat1D->values[0][0]);
@@ -105,7 +105,7 @@ void test_set_dm_vector_to_array() {
   TEST_ASSERT_EQUAL_FLOAT(array[4], vec->mat1D->values[4][0]);
 
   // Free the memory used by the DoubleVector
-  free_dm_vector(vec);
+  dv_free_vector(vec);
 }
 
 // void test_pop_column() {
@@ -125,26 +125,26 @@ void test_set_dm_vector_to_array() {
 //   // assert that the matrix has been updated correctly
 //   TEST_ASSERT_EQUAL_INT(1, mat->columns);
 //   TEST_ASSERT_EQUAL_DOUBLE_ARRAY(
-//       (double[]){1, 2, 3}, get_column_vector(mat, 0)->mat1D->values[0], 3);
+//       (double[]){1, 2, 3}, dv_get_column(mat, 0)->mat1D->values[0], 3);
 
 //   // free memory
-//   free_dm_vector(popped);
+//   dv_free_vector(popped);
 //   free_dm_matrix(mat);
 // }
 
 void test_push_value(void) {
   size_t length = randomInt_upperBound(UPPER_BOUND);
   double value = 0.;
-  DoubleVector *vec = new_dm_vector_length(length, value);
+  DoubleVector *vec = dv_create(length);
 
   const double new_value = -1.67;
-  push_value(vec, new_value);
+  dv_push_value(vec, new_value);
   TEST_ASSERT_EQUAL_DOUBLE(new_value, vec->mat1D->values[length][0]);
 
   for (size_t i = 0; i < length; i++) {
-    push_value(vec, randomDouble());
+    dv_push_value(vec, randomDouble());
     TEST_ASSERT_TRUE(vec->mat1D->rowCapacity >= vec->length);
   }
 
-  free_dm_vector(vec);
+  dv_free_vector(vec);
 }

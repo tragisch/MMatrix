@@ -55,26 +55,25 @@ void free_dm_matrix(DoubleMatrix *mat);
 /*******************************/
 
 // Function Double Vector:
-DoubleVector *new_dm_vector();
-DoubleVector *new_dm_vector_length(size_t length, double value);
-DoubleVector *new_rand_dm_vector_length(size_t length);
+DoubleVector *dv_new_vector();
+DoubleVector *dv_create(size_t length);
+DoubleVector *dv_create_rand(size_t length);
 DoubleVector *dv_create_from_array(const double *array, const size_t length);
-DoubleVector *clone_dm_vector(const DoubleVector *vector);
-DoubleVector *pop_column(DoubleMatrix *mat);
-DoubleVector *pop_row(DoubleMatrix *mat);
-DoubleVector *get_row_vector(const DoubleMatrix *mat, size_t row);
-DoubleVector *get_column_vector(const DoubleMatrix *mat, size_t column);
-void set_dm_vector_to_array(DoubleVector *vec, const double *array,
-                            size_t len_array);
-double *get_array_from_vector(const DoubleVector *vec);
+DoubleVector *dv_clone(const DoubleVector *vector);
+DoubleVector *dv_pop_column(DoubleMatrix *mat);
+DoubleVector *dv_pop_row(DoubleMatrix *mat);
+DoubleVector *dv_get_row(const DoubleMatrix *mat, size_t row);
+DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column);
+void dv_set_array(DoubleVector *vec, const double *array, size_t len_array);
+double *dv_get_array(const DoubleVector *vec);
 
 // shrink, push, pop, expand
 static void expand_dm_vector(DoubleVector *vec);
 static void shrink_dm_vector(DoubleVector *vec);
-void push_value(DoubleVector *vec, double value);
-double pop_value(DoubleVector *vec);
+void dv_push_value(DoubleVector *vec, double value);
+double dv_pop_value(DoubleVector *vec);
 
 // free
-void free_dm_vector(DoubleVector *vec);
+void dv_free_vector(DoubleVector *vec);
 
 #endif // !MATRIX_H

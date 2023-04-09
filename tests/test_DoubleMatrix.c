@@ -163,10 +163,10 @@ void test_push_column() {
   mat->values[2][0] = 3.0;
 
   // Create a DoubleVector to push as a column
-  DoubleVector *col_vec = new_dm_vector();
-  push_value(col_vec, 4.0);
-  push_value(col_vec, 5.0);
-  push_value(col_vec, 6.0);
+  DoubleVector *col_vec = dv_new_vector();
+  dv_push_value(col_vec, 4.0);
+  dv_push_value(col_vec, 5.0);
+  dv_push_value(col_vec, 6.0);
 
   // Push the column to the DoubleMatrix
   push_column(mat, col_vec);
@@ -185,7 +185,7 @@ void test_push_column() {
 
   // Clean up
   free_dm_matrix(mat);
-  free_dm_vector(col_vec);
+  dv_free_vector(col_vec);
 }
 
 void test_push_row() {
@@ -196,10 +196,10 @@ void test_push_row() {
   mat->values[2][0] = 3.0;
 
   // Create a DoubleVector to push as a row
-  DoubleVector *col_row = new_dm_vector();
-  push_value(col_row, 4.0);
-  push_value(col_row, 5.0);
-  push_value(col_row, 6.0);
+  DoubleVector *col_row = dv_new_vector();
+  dv_push_value(col_row, 4.0);
+  dv_push_value(col_row, 5.0);
+  dv_push_value(col_row, 6.0);
 
   // Push the column to the DoubleMatrix
   push_row(mat, col_row);
@@ -217,7 +217,7 @@ void test_push_row() {
 
   // Clean up
   free_dm_matrix(mat);
-  free_dm_vector(col_row);
+  dv_free_vector(col_row);
 }
 
 void test_get_row_vector(void) {
@@ -238,7 +238,7 @@ void test_get_row_vector(void) {
   values[2][3] = 12.0;
 
   // get row vector
-  DoubleVector *vec = get_row_vector(mat, 1);
+  DoubleVector *vec = dv_get_row(mat, 1);
 
   // check vector length
   TEST_ASSERT_EQUAL_INT(4, vec->length);
@@ -251,7 +251,7 @@ void test_get_row_vector(void) {
 
   // free memory
   free_dm_matrix(mat);
-  free_dm_vector(vec);
+  dv_free_vector(vec);
 }
 
 void test_get_column_vector(void) {
@@ -262,13 +262,13 @@ void test_get_column_vector(void) {
       mat->values[i][j] = values[i][j];
     }
   }
-  DoubleVector *vec = get_column_vector(mat, 1);
+  DoubleVector *vec = dv_get_column(mat, 1);
   TEST_ASSERT_EQUAL_DOUBLE(2.0, vec->mat1D->values[0][0]);
   TEST_ASSERT_EQUAL_DOUBLE(4.0, vec->mat1D->values[1][0]);
   TEST_ASSERT_EQUAL_DOUBLE(6.0, vec->mat1D->values[2][0]);
   TEST_ASSERT_EQUAL(3, vec->length);
   free_dm_matrix(mat);
-  free_dm_vector(vec);
+  dv_free_vector(vec);
 }
 
 void test_get_row_array() {

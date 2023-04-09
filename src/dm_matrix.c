@@ -253,12 +253,12 @@ void free_dm_matrix(DoubleMatrix *mat) {
  * @param row
  * @return DoubleVector
  */
-DoubleVector *get_row_vector(const DoubleMatrix *mat, size_t row) {
+DoubleVector *dv_get_row(const DoubleMatrix *mat, size_t row) {
   if (row < 0 || row > (mat->rows - 1)) {
     perror("This row does not exist");
   }
   // INFO: chg mat->column in mat->rows
-  DoubleVector *vec = new_dm_vector_length(mat->columns, 0.0);
+  DoubleVector *vec = dv_create(mat->columns);
   for (size_t i = 0; i < vec->mat1D->columns; i++) {
     vec->mat1D->values[i][0] = mat->values[row][i];
   }
@@ -273,12 +273,12 @@ DoubleVector *get_row_vector(const DoubleMatrix *mat, size_t row) {
  * @param column
  * @return DoubleVector
  */
-DoubleVector *get_column_vector(const DoubleMatrix *mat, size_t column) {
+DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column) {
   if (column < 0 || column > (mat->columns - 1)) {
     perror("This column does not exist");
   }
-  DoubleVector *vec = new_dm_vector_length(
-      mat->rows, 0.0); // INFO: chg mat->rows in mat->columns
+  DoubleVector *vec =
+      dv_create(mat->rows); // INFO: chg mat->rows in mat->columns
   for (size_t i = 0; i < mat->rows; i++) {
     vec->mat1D->values[i][0] = mat->values[i][column];
   }
@@ -309,7 +309,7 @@ double *get_row_array(const DoubleMatrix *mat, size_t row) {
  * @return DoubleVector*
  */
 
-DoubleVector *new_dm_vector() {
+DoubleVector *dv_new_vector() {
   DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
   if (!vec) {
     return NULL;
@@ -321,7 +321,7 @@ DoubleVector *new_dm_vector() {
 }
 
 DoubleVector *dv_create_from_array(const double *array, const size_t length) {
-  DoubleVector *vec = new_dm_vector_length(length, 0.0);
+  DoubleVector *vec = dv_create(length);
   for (size_t i = 0; i < vec->length; i++) {
     vec->mat1D->values[i][0] = array[i];
   }
@@ -333,9 +333,9 @@ DoubleVector *dv_create_from_array(const double *array, const size_t length) {
  * @brief Clone a DoubleVector object
  * @return DoubleVector*
  */
-DoubleVector *clone_dm_vector(const DoubleVector *vector) {
+DoubleVector *dv_clone(const DoubleVector *vector) {
   size_t org_length = vector->length;
-  DoubleVector *clone = new_dm_vector_length(org_length, 0.);
+  DoubleVector *clone = dv_create(org_length);
   for (size_t i = 0; i < org_length; i++) {
     clone->mat1D->values[i][0] = vector->mat1D->values[i][0];
   }
@@ -350,19 +350,16 @@ DoubleVector *clone_dm_vector(const DoubleVector *vector) {
  * @param value
  * @return DoubleVector*
  */
-DoubleVector *new_dm_vector_length(size_t length, double value) {
+DoubleVector *dv_create(size_t length) {
   DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
   vec->isColumnVector = false;
   vec->length = length;
-
   vec->mat1D = create_dm_matrix(length, 0);
+
   if (vec->mat1D->values == NULL) {
     dbg(vec->mat1D);
   }
-  for (size_t i = 0; i < length; i++) {
-    vec->mat1D->values[i][0] = value;
-    // dbg(vec->mat1D->values[i][0]);
-  }
+
   return vec;
 }
 
@@ -372,7 +369,7 @@ DoubleVector *new_dm_vector_length(size_t length, double value) {
  * @param length
  * @return DoubleVector
  */
-DoubleVector *new_rand_dm_vector_length(size_t length) {
+DoubleVector *dv_create_rand(size_t length) {
   DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
   vec->isColumnVector = false;
   vec->length = length;
@@ -385,8 +382,7 @@ DoubleVector *new_rand_dm_vector_length(size_t length) {
   return vec;
 }
 
-void set_dm_vector_to_array(DoubleVector *vec, const double *array,
-                            size_t len_array) {
+void dv_set_array(DoubleVector *vec, const double *array, size_t len_array) {
   assert(len_array > 0);
   if (vec->mat1D->values != NULL) {
     if (len_array < vec->length) {
@@ -394,7 +390,7 @@ void set_dm_vector_to_array(DoubleVector *vec, const double *array,
         vec->mat1D->values[i][0] = array[i];
       }
       for (size_t i = len_array; i < vec->length; i++) {
-        pop_value(vec);
+        dv_pop_value(vec);
       }
     } else if (len_array >= vec->length) {
       for (size_t i = 0; i < vec->length; i++) {
@@ -402,7 +398,7 @@ void set_dm_vector_to_array(DoubleVector *vec, const double *array,
       }
       size_t len = vec->length;
       for (size_t i = len; i < len_array; i++) {
-        push_value(vec, array[i]);
+        dv_push_value(vec, array[i]);
       }
     }
   } else {
@@ -416,8 +412,8 @@ void set_dm_vector_to_array(DoubleVector *vec, const double *array,
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector *pop_column(DoubleMatrix *mat) {
-  DoubleVector *column_vec = get_column_vector(mat, mat->columns - 1);
+DoubleVector *dv_pop_column(DoubleMatrix *mat) {
+  DoubleVector *column_vec = dv_get_column(mat, mat->columns - 1);
 
   mat->columns--;
 
@@ -434,8 +430,8 @@ DoubleVector *pop_column(DoubleMatrix *mat) {
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector *pop_row(DoubleMatrix *mat) {
-  DoubleVector *row_vec = get_row_vector(mat, mat->rows - 1);
+DoubleVector *dv_pop_row(DoubleMatrix *mat) {
+  DoubleVector *row_vec = dv_get_row(mat, mat->rows - 1);
 
   mat->rows--;
 
@@ -452,7 +448,7 @@ DoubleVector *pop_row(DoubleMatrix *mat) {
  * @param vec
  * @return double*
  */
-double *get_array_from_vector(const DoubleVector *vec) {
+double *dv_get_array(const DoubleVector *vec) {
   double *array = (double *)malloc(vec->mat1D->rowCapacity * sizeof(double));
   for (size_t i = 0; i < vec->mat1D->rows; i++) {
     array[i] = vec->mat1D->values[i][0];
@@ -486,7 +482,7 @@ static void shrink_dm_vector(DoubleVector *vec) {
  * @param vec
  * @param value
  */
-void push_value(DoubleVector *vec, double value) {
+void dv_push_value(DoubleVector *vec, double value) {
   vec->length = vec->length + 1;
   if (vec->length >= vec->mat1D->rowCapacity) {
     expand_dm_vector(vec);
@@ -501,7 +497,7 @@ void push_value(DoubleVector *vec, double value) {
  * @param vec
  * @return double
  */
-double pop_value(DoubleVector *vec) {
+double dv_pop_value(DoubleVector *vec) {
   double value = vec->mat1D->values[vec->mat1D->rows - 1][0];
 
   vec->mat1D->values[vec->length][0] = 0.0;
@@ -519,7 +515,7 @@ double pop_value(DoubleVector *vec) {
  * @param vec
  * @return DoubleVector*
  */
-void free_dm_vector(DoubleVector *vec) {
+void dv_free_vector(DoubleVector *vec) {
   free_dm_matrix(vec->mat1D);
   vec->mat1D = NULL;
   free(vec);

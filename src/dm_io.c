@@ -70,7 +70,7 @@ int write_dm_vector_to_file(DoubleVector *vec, const char *filepath) {
  * @param DoubleVector* vec
  */
 void print_dm_vector(DoubleVector *vec) {
-  double *array = get_array_from_vector(vec);
+  double *array = dv_get_array(vec);
   size_t length = vec->mat1D->rows;
   if (vec->isColumnVector == false) {
     for (size_t i = 0; i < length; i++) {

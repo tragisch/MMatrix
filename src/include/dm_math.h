@@ -9,8 +9,8 @@
 /*      Double Matrix Math     */
 /*******************************/
 
-DoubleVector *get_row_vector(const DoubleMatrix *mat, size_t row);
-DoubleVector *get_column_vector(const DoubleMatrix *mat, size_t column);
+DoubleVector *dv_get_row(const DoubleMatrix *mat, size_t row);
+DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column);
 double *get_row_array(const DoubleMatrix *mat, size_t row);
 void multiply_scalar_matrix(DoubleMatrix *mat, double scalar);
 void transpose(DoubleMatrix *mat);

@@ -13,10 +13,9 @@ int main() {
   }
   printDoubleArray(arr, 9, 1);
 
-  DoubleVector *vec_1 = new_dm_vector();
-  set_dm_vector_to_array(vec_1, arr, 9);
-  DoubleVector *vec_2 = new_dm_vector_length(9, 3.f);
-
+  DoubleVector *vec_1 = dv_new_vector();
+  dv_set_array(vec_1, arr, 9);
+  DoubleVector *vec_2 = dv_create(9);
 
   printf("------ vec1, vec2\n");
   print_dm_vector(vec_1);
@@ -62,8 +61,8 @@ int main() {
   print_dm_vector(vec_1);
 
   // free:
-  free_dm_vector(vec_1);
-  free_dm_vector(vec_2);
+  dv_free_vector(vec_1);
+  dv_free_vector(vec_2);
 
   return 0;
 }

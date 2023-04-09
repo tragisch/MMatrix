@@ -20,7 +20,7 @@ int main() {
 
   // Clean up
   free_dm_matrix(mat);
-  free_dm_vector(vec1);
+  dv_free_vector(vec1);
 
   return 0;
 }

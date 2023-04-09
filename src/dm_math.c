@@ -145,7 +145,7 @@ static double vector_multiply(const double *col, const double *row,
  */
 DoubleVector *multiply_dm_vector_matrix(const DoubleVector *vec,
                                         const DoubleMatrix *mat) {
-  DoubleVector *vec_result = new_dm_vector_length(vec->length, 0.0);
+  DoubleVector *vec_result = dv_create(vec->length);
   for (size_t i = 0; i < vec->length; i++) {
     vec_result->mat1D->values[i][0] = vector_multiply(
         mat->values[i], (double *)vec->mat1D->values, vec->length);
