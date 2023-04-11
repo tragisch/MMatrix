@@ -134,7 +134,6 @@ void test_set_dm_vector_to_array() {
 
 void test_push_value(void) {
   size_t length = randomInt_upperBound(UPPER_BOUND);
-  double value = 0.;
   DoubleVector *vec = dv_create(length);
 
   const double new_value = -1.67;
