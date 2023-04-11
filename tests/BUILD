@@ -24,6 +24,19 @@ unity_test(
     ],
 )
 
+unity_test(
+    size = "small",
+    cexception = False,
+    file_name = "test_dm_math.c",
+    deps = [
+        "//lib/misc",
+        "//src:dm_io",
+        "//src:dm_math",
+        "//src:dm_matrix",
+    ],
+)
+
+
 # generate_a_unity_test_for_every_file(
 #     name = "all",
 #     cexception = False,

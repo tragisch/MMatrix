@@ -297,3 +297,17 @@ double max_dm_vector(DoubleVector *vec) {
   }
   return max;
 }
+
+/**
+ * @brief retrun adress of row vector
+ *
+ * @param mat
+ * @param row
+ * @return DoubleVector*
+ */
+double *get_row_array(const DoubleMatrix *mat, size_t row) {
+  if (row < 0 || row > (mat->rows - 1)) {
+    perror("This row does not exist");
+  }
+  return (mat->values[row]);
+}

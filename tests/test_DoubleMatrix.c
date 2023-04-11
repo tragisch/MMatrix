@@ -37,7 +37,7 @@ void test_double_precision(void) {
  *******************************/
 
 // dm_create
-void test_create_dm_matrix(void) {
+void test_dm_create(void) {
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   size_t cols = 4;
@@ -59,7 +59,7 @@ void test_create_dm_matrix(void) {
 }
 
 // test dm_matrix
-void test_matrix_create(void) {
+void test_dm_matrix(void) {
   // Create a new matrix:
   DoubleMatrix *mat = dm_matrix();
 
@@ -73,7 +73,7 @@ void test_matrix_create(void) {
 }
 
 // dm_create_rand
-void test_create_rand_dm_matrix(void) {
+void test_dm_create_rand(void) {
 
   // Create a random matrix with 2 rows and 3 columns.
   DoubleMatrix *mat = dm_create_rand(2, 3);
@@ -96,7 +96,7 @@ void test_create_rand_dm_matrix(void) {
 }
 
 // dm_create
-void test_create_identity_matrix(void) {
+void test_dm_create_identity(void) {
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   DoubleMatrix *matrix = dm_create_identity(rows);
@@ -123,7 +123,7 @@ void test_create_identity_matrix(void) {
  ** Operations on matrices:
  *******************************/
 
-void test_set_array_to_dm_matrix() {
+void test_dm_create_from_array() {
   // Test input data
   size_t rows = 2;
   size_t cols = 3;
@@ -155,7 +155,7 @@ void test_set_array_to_dm_matrix() {
   dm_free_matrix(matrix);
 }
 
-void test_push_column() {
+void test_dm_push_column() {
   // Create a DoubleMatrix to push a column to
   DoubleMatrix *mat = dm_create(3, 2);
   mat->values[0][0] = 1.0;
@@ -188,7 +188,7 @@ void test_push_column() {
   dv_free_vector(col_vec);
 }
 
-void test_push_row() {
+void test_dm_push_row() {
   // Create a DoubleMatrix to push a row to
   DoubleMatrix *mat = dm_create(3, 2);
   mat->values[0][0] = 1.0;
@@ -220,7 +220,7 @@ void test_push_row() {
   dv_free_vector(col_row);
 }
 
-void test_get_row_vector(void) {
+void test_dv_get_row(void) {
   // create test matrix
   DoubleMatrix *mat = dm_create(3, 4);
   double **values = mat->values;
@@ -254,7 +254,7 @@ void test_get_row_vector(void) {
   dv_free_vector(vec);
 }
 
-void test_get_column_vector(void) {
+void test_dv_get_column(void) {
   DoubleMatrix *mat = dm_create(3, 2);
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
   for (size_t i = 0; i < mat->rows; i++) {
@@ -271,51 +271,36 @@ void test_get_column_vector(void) {
   dv_free_vector(vec);
 }
 
-void test_get_row_array() {
-  DoubleMatrix *mat = dm_create(3, 3);
-  double **arr = (double **)malloc(3 * sizeof(double *));
-  for (size_t i = 0; i < 3; i++) {
-    arr[i] = (double *)malloc(3 * sizeof(double));
-    for (size_t j = 0; j < 3; j++) {
-      arr[i][j] = i + j;
-      mat->values[i][j] = i + j;
-    }
-  }
 
-  DoubleMatrix *result = dm_create_from_array(3, 3, arr);
-  double *row = get_row_array(result, 1);
+void test_dm_set(void) {
+  // Create a matrix with 2 rows and 3 columns.
+  DoubleMatrix *mat = dm_create(2, 3);
 
-  TEST_ASSERT_EQUAL_DOUBLE_ARRAY(arr[1], row, 3);
+  // Set the value of the element at row 0, column 1 to 1.23.
+  dm_set(mat, 0, 1, 1.23);
 
+  // Check that the value was set correctly.
+  TEST_ASSERT_EQUAL_DOUBLE(1.23, mat->values[0][1]);
+
+  // Free the memory allocated for the matrix.
   dm_free_matrix(mat);
-  free(arr);
-  dm_free_matrix(result);
 }
 
-void test_multiply_scalar_matrix(void) {
-  // Initialize test data
-  DoubleMatrix *mat = dm_create(2, 2);
-  mat->values[0][0] = 1.0;
-  mat->values[0][1] = 2.0;
-  mat->values[1][0] = 3.0;
-  mat->values[1][1] = 4.0;
+void test_dm_get(void) {
+  // Create a matrix with 2 rows and 3 columns.
+  DoubleMatrix *mat = dm_create(2, 3);
 
-  double scalar = 2.0;
+  // Set the value of the element at row 0, column 1 to 1.23.
+  mat->values[0][1] = 1.23;
 
-  DoubleMatrix *expected = dm_create(2, 2);
+  // Get the value of the element at row 0, column 1.
+  double value = dm_get(mat, 0, 1);
 
-  expected->values[0][0] = 2.0;
-  expected->values[0][1] = 4.0;
-  expected->values[1][0] = 6.0;
-  expected->values[1][1] = 8.0;
+  // Check that the value was retrieved correctly.
+  TEST_ASSERT_EQUAL_DOUBLE(1.23, value);
 
-  // Call the function to be tested
-  multiply_scalar_matrix(mat, scalar);
-
-  // Check the result against the expected
-  // output
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[0][0], mat->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[0][1], mat->values[0][1]);
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[1][0], mat->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[1][1], mat->values[1][1]);
+  // Free the memory allocated for the matrix.
+  dm_free_matrix(mat);
 }
+
+

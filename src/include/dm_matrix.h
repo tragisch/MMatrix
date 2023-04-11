@@ -46,6 +46,8 @@ static void shrink_dm_matrix_column(DoubleMatrix *mat);
 static void shrink_dm_matrix_row(DoubleMatrix *mat);
 void dm_push_column(DoubleMatrix *mat, const DoubleVector *col_vec);
 void dm_push_row(DoubleMatrix *mat, const DoubleVector *row_vec);
+double dm_get(DoubleMatrix *mat, size_t i, size_t j);
+void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value);
 
 // free
 void dm_free_matrix(DoubleMatrix *mat);

@@ -234,6 +234,38 @@ void dm_push_row(DoubleMatrix *mat, const DoubleVector *row_vec) {
 }
 
 /**
+ * @brief get value of index i, j
+ *
+ * @param mat
+ * @param i,j
+ * @return double
+ */
+double dm_get(DoubleMatrix *mat, size_t i, size_t j) {
+  if (i >= mat->rows || j >= mat->columns) {
+    perror("Index out of bounds");
+    return 0.0;
+  }
+  return mat->values[i][j];
+}
+
+/**
+ * @brief set value of index i, j
+ *
+ * @param mat
+ * @param i,j
+ * @param value
+ */
+void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value) {
+  // Check that the indices are within bounds.
+  if (i >= mat->rows || j >= mat->columns) {
+    perror("Index out of bounds");
+    return;
+  }
+
+  mat->values[i][j] = value;
+}
+
+/**
  * @brief free memory of DoubleMatrix
  *
  * @param mat
@@ -286,19 +318,6 @@ DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column) {
   return vec;
 }
 
-/**
- * @brief retrun adress of row vector
- *
- * @param mat
- * @param row
- * @return DoubleVector*
- */
-double *get_row_array(const DoubleMatrix *mat, size_t row) {
-  if (row < 0 || row > (mat->rows - 1)) {
-    perror("This row does not exist");
-  }
-  return (mat->values[row]);
-}
 
 /*******************************/
 /*  Double Vector (Dynamic)    */
