@@ -33,11 +33,6 @@ filegroup(
 #     ],
 # )
 
-genrule(
-    name = "hello10s",
-    outs = ["hello10s.txt"],
-    cmd_bash = "sleep 10 && echo 'hello20s' >$@",
-)
 
 genrule(
     name = "envinfo",
