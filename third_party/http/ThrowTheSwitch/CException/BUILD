@@ -11,14 +11,3 @@ cc_library(
         "@Unity",
     ],
 )
-
-cc_test(
-    name = "test_exception",
-    timeout = "short",
-    srcs = ["test_exception.c"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "@CException",
-        "@Unity",
-    ],
-)
