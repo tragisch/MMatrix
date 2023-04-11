@@ -99,5 +99,5 @@ http_archive(
 new_local_repository(
     name = "glib",
     build_file = "./third_party/brew/gnu-lib/glib.BUILD",
-    path = "/opt/homebrew/Cellar/glib/2.74.4",
+    path = "/opt/homebrew/Cellar/glib/2.76.1",
 )
