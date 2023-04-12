@@ -5,22 +5,19 @@
 #include "misc.h"
 
 int main() {
-  // Create a DoubleMatrix to push a column to
-  DoubleMatrix *mat = dm_create(3, 2);
-  mat->values[0][0] = 1.0;
-  mat->values[1][0] = 2.0;
-  mat->values[2][0] = 3.0;
 
-  print_dm_matrix(mat);
+  double arr[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
 
-  // Create a DoubleVector to push as a column
-  DoubleVector *vec1 = dv_create_from_array((double[]){1, 2, 3}, 3);
+  DoubleMatrix *mat2 = dm_create_from_array(3, 3, arr);
+  print_dm_matrix(mat2);
+  DoubleVector *row1 = dv_get_row_matrix(mat2, 2);
+  print_dm_vector(row1);
 
-  print_dm_vector(vec1);
-
+  DoubleVector *row = dv_pop_row_matrix(mat2);
+  print_dm_matrix(mat2);
+  print_dm_vector(row);
   // Clean up
-  dm_free_matrix(mat);
-  dv_free_vector(vec1);
+  dm_free_matrix(mat2);
 
   return 0;
 }

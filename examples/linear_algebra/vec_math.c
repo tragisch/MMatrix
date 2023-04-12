@@ -52,12 +52,12 @@ int main() {
 
   printf("------ reverseVector\n");
   print_dm_vector(vec_1);
-  reverse_vector(vec_1);
+  dv_reverse(vec_1);
   print_dm_vector(vec_1);
 
   printf("------ swap two elements\n");
   print_dm_vector(vec_1);
-  swap_elements_vector(vec_1, 2, 5);
+  dv_swap_elements(vec_1, 2, 5);
   print_dm_vector(vec_1);
 
   // free:

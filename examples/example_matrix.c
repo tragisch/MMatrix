@@ -11,7 +11,7 @@ int main() {
   print_dm_matrix(matrix);
 
   // DoubleVector* col_last = newDoubleVectorOfLength(5, 2.1);
-  DoubleVector *col_last = dv_get_column(matrix, matrix->columns - 1);
+  DoubleVector *col_last = dv_get_column_matrix(matrix, matrix->columns - 1);
 
   DoubleVector *row_last = dv_create(9);
 
