@@ -114,7 +114,8 @@ DoubleMatrix *dm_create_identity(size_t rows) {
  * @param array
  * @return DoubleMatrix*
  */
-DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
+                                   double array[rows][cols]) {
   DoubleMatrix *mat = dm_create(rows, cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
@@ -285,14 +286,14 @@ void dm_free_matrix(DoubleMatrix *mat) {
  * @param row
  * @return DoubleVector
  */
-DoubleVector *dv_get_row(const DoubleMatrix *mat, size_t row) {
+DoubleVector *dv_get_row_matrix(const DoubleMatrix *mat, size_t row) {
   if (row < 0 || row > (mat->rows - 1)) {
     perror("This row does not exist");
   }
   // INFO: chg mat->column in mat->rows
   DoubleVector *vec = dv_create(mat->columns);
-  for (size_t i = 0; i < vec->mat1D->columns; i++) {
-    vec->mat1D->values[i][0] = mat->values[row][i];
+  for (size_t i = 0; i < vec->length; i++) {
+    vec->mat1D->values[i][0] = (double)mat->values[row][i];
   }
 
   return vec;
@@ -305,7 +306,7 @@ DoubleVector *dv_get_row(const DoubleMatrix *mat, size_t row) {
  * @param column
  * @return DoubleVector
  */
-DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column) {
+DoubleVector *dv_get_column_matrix(const DoubleMatrix *mat, size_t column) {
   if (column < 0 || column > (mat->columns - 1)) {
     perror("This column does not exist");
   }
@@ -317,7 +318,6 @@ DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column) {
 
   return vec;
 }
-
 
 /*******************************/
 /*  Double Vector (Dynamic)    */
@@ -401,6 +401,34 @@ DoubleVector *dv_create_rand(size_t length) {
   return vec;
 }
 
+/**
+ * @brief get value of index
+ *
+ * @param vec
+ * @param idx
+ * @return double
+ */
+double dv_get(DoubleVector *vec, size_t idx) {
+  if (idx < 0 || idx > (vec->length)) {
+    perror("This index does not exist");
+  }
+  return vec->mat1D->values[idx][0];
+}
+
+/**
+ * @brief set value of index
+ *
+ * @param vec
+ * @param idx
+ * @param double
+ */
+void dv_set(DoubleVector *vec, size_t idx, double value) {
+  if (idx < 0 || idx > (vec->length)) {
+    perror("This index does not exist");
+  }
+  vec->mat1D->values[idx][0] = value;
+}
+
 void dv_set_array(DoubleVector *vec, const double *array, size_t len_array) {
   assert(len_array > 0);
   if (vec->mat1D->values != NULL) {
@@ -431,8 +459,8 @@ void dv_set_array(DoubleVector *vec, const double *array, size_t len_array) {
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector *dv_pop_column(DoubleMatrix *mat) {
-  DoubleVector *column_vec = dv_get_column(mat, mat->columns - 1);
+DoubleVector *dv_pop_column_matrix(DoubleMatrix *mat) {
+  DoubleVector *column_vec = dv_get_column_matrix(mat, mat->columns - 1);
 
   mat->columns--;
 
@@ -449,8 +477,8 @@ DoubleVector *dv_pop_column(DoubleMatrix *mat) {
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector *dv_pop_row(DoubleMatrix *mat) {
-  DoubleVector *row_vec = dv_get_row(mat, mat->rows - 1);
+DoubleVector *dv_pop_row_matrix(DoubleMatrix *mat) {
+  DoubleVector *row_vec = dv_get_row_matrix(mat, mat->rows - 1);
 
   mat->rows--;
 
@@ -548,7 +576,7 @@ void dv_free_vector(DoubleVector *vec) {
  * @param i
  * @param j
  */
-void swap_elements_vector(DoubleVector *vec, size_t idx_i, size_t idx_j) {
+void dv_swap_elements(DoubleVector *vec, size_t idx_i, size_t idx_j) {
   double tmp = vec->mat1D->values[idx_i][0];
   vec->mat1D->values[idx_i][0] = vec->mat1D->values[idx_j][0];
   vec->mat1D->values[idx_j][0] = tmp;
@@ -559,7 +587,7 @@ void swap_elements_vector(DoubleVector *vec, size_t idx_i, size_t idx_j) {
  *
  * @param vec*
  */
-void reverse_vector(DoubleVector *vec) {
+void dv_reverse(DoubleVector *vec) {
   double temp = 0;
 
   for (size_t i = 0; i < vec->mat1D->rows / 2; i++) {

@@ -9,8 +9,8 @@
 /*      Double Matrix Math     */
 /*******************************/
 
-DoubleVector *dv_get_row(const DoubleMatrix *mat, size_t row);
-DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column);
+DoubleVector *dv_get_row_matrix(const DoubleMatrix *mat, size_t row);
+DoubleVector *dv_get_column_matrix(const DoubleMatrix *mat, size_t column);
 double *get_row_array(const DoubleMatrix *mat, size_t row);
 void multiply_scalar_matrix(DoubleMatrix *mat, double scalar);
 void transpose(DoubleMatrix *mat);
@@ -37,8 +37,8 @@ void sub_dm_vector(DoubleVector *vec1, const DoubleVector *vec2);
 void multiply_scalar_vector(DoubleVector *vec, const double scalar);
 void divide_scalar_vector(DoubleVector *vec, const double scalar);
 void add_constant_vector(DoubleVector *vec, const double constant);
-void swap_elements_vector(DoubleVector *vec, size_t idx_i, size_t idx_j);
-void reverse_vector(DoubleVector *vec);
+void dv_swap_elements(DoubleVector *vec, size_t idx_i, size_t idx_j);
+void dv_reverse(DoubleVector *vec);
 double dot_product_dm_vectors(const DoubleVector *vec1,
                               const DoubleVector *vec2);
 

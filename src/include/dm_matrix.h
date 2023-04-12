@@ -37,7 +37,8 @@ DoubleMatrix *dm_create(size_t rows, size_t cols);
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols);
 DoubleMatrix *dm_clone(DoubleMatrix *m);
 DoubleMatrix *dm_create_identity(size_t rows);
-DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array);
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
+                                   double array[rows][cols]);
 
 // shrink, push, pop, expand
 static void expand_dm_matrix_row(DoubleMatrix *mat);
@@ -62,12 +63,14 @@ DoubleVector *dv_create(size_t length);
 DoubleVector *dv_create_rand(size_t length);
 DoubleVector *dv_create_from_array(const double *array, const size_t length);
 DoubleVector *dv_clone(const DoubleVector *vector);
-DoubleVector *dv_pop_column(DoubleMatrix *mat);
-DoubleVector *dv_pop_row(DoubleMatrix *mat);
-DoubleVector *dv_get_row(const DoubleMatrix *mat, size_t row);
-DoubleVector *dv_get_column(const DoubleMatrix *mat, size_t column);
+DoubleVector *dv_pop_column_matrix(DoubleMatrix *mat);
+DoubleVector *dv_pop_row_matrix(DoubleMatrix *mat);
+DoubleVector *dv_get_row_matrix(const DoubleMatrix *mat, size_t row);
+DoubleVector *dv_get_column_matrix(const DoubleMatrix *mat, size_t column);
 void dv_set_array(DoubleVector *vec, const double *array, size_t len_array);
 double *dv_get_array(const DoubleVector *vec);
+void dv_set(DoubleVector *vec, size_t idx, double value);
+double dv_get(DoubleVector *vec, size_t idx);
 
 // shrink, push, pop, expand
 static void expand_dm_vector(DoubleVector *vec);
