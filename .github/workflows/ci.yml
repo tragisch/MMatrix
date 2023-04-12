@@ -1,6 +1,6 @@
-# name: CI
+name: CI
 
-# on: [push, pull_request]
+on: [push, pull_request]
 
 # jobs:
 #   test:
@@ -15,4 +15,7 @@
 #       # test
 #       - name: Test the code (unit tests)
 #         run: bazel test //tests:all
+
+name: Upload coverage reports to Codecov
+uses: codecov/codecov-action@v3
     
