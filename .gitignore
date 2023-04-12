@@ -106,4 +106,4 @@ user.bazelrc
 # Style-Guide
 StyleGuide.md
 
-/examples
+/examples/*
