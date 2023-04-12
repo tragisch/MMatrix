@@ -17,23 +17,14 @@
 enum { INIT_CAPACITY = 2U };
 
 void test_get_row_array() {
-  DoubleMatrix *mat = dm_create(3, 3);
-  double **arr = (double **)malloc(3 * sizeof(double *));
-  for (size_t i = 0; i < 3; i++) {
-    arr[i] = (double *)malloc(3 * sizeof(double));
-    for (size_t j = 0; j < 3; j++) {
-      arr[i][j] = i + j;
-      mat->values[i][j] = i + j;
-    }
-  }
+  // Test input data
+  double arr[3][3] = {{1.1, 2.2, 3.3}, {4.4, 5.5, 6.6}, {7.7, 8.8, 9.9}};
 
   DoubleMatrix *result = dm_create_from_array(3, 3, arr);
   double *row = get_row_array(result, 1);
 
   TEST_ASSERT_EQUAL_DOUBLE_ARRAY(arr[1], row, 3);
 
-  dm_free_matrix(mat);
-  free(arr);
   dm_free_matrix(result);
 }
 
