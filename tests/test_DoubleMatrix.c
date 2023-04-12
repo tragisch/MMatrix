@@ -125,15 +125,12 @@ void test_dm_create_identity(void) {
 
 void test_dm_create_from_array() {
   // Test input data
+  double array[2][3] = {
+      {1.1, 2.2, 3.3},
+      {4.4, 5.5, 6.6},
+  };
   size_t rows = 2;
   size_t cols = 3;
-  double **array = (double **)malloc(rows * sizeof(double *));
-  for (size_t i = 0; i < rows; i++) {
-    array[i] = (double *)malloc(cols * sizeof(double));
-    for (size_t j = 0; j < cols; j++) {
-      array[i][j] = i + j;
-    }
-  }
 
   // Call the function being tested
   DoubleMatrix *matrix = dm_create_from_array(rows, cols, array);
@@ -148,10 +145,6 @@ void test_dm_create_from_array() {
   }
 
   // Free the input data and output matrix
-  for (size_t i = 0; i < rows; i++) {
-    free(array[i]);
-  }
-  free(array);
   dm_free_matrix(matrix);
 }
 
@@ -238,7 +231,7 @@ void test_dv_get_row(void) {
   values[2][3] = 12.0;
 
   // get row vector
-  DoubleVector *vec = dv_get_row(mat, 1);
+  DoubleVector *vec = dv_get_row_matrix(mat, 1);
 
   // check vector length
   TEST_ASSERT_EQUAL_INT(4, vec->length);
@@ -262,7 +255,7 @@ void test_dv_get_column(void) {
       mat->values[i][j] = values[i][j];
     }
   }
-  DoubleVector *vec = dv_get_column(mat, 1);
+  DoubleVector *vec = dv_get_column_matrix(mat, 1);
   TEST_ASSERT_EQUAL_DOUBLE(2.0, vec->mat1D->values[0][0]);
   TEST_ASSERT_EQUAL_DOUBLE(4.0, vec->mat1D->values[1][0]);
   TEST_ASSERT_EQUAL_DOUBLE(6.0, vec->mat1D->values[2][0]);
@@ -270,7 +263,6 @@ void test_dv_get_column(void) {
   dm_free_matrix(mat);
   dv_free_vector(vec);
 }
-
 
 void test_dm_set(void) {
   // Create a matrix with 2 rows and 3 columns.
@@ -302,5 +294,3 @@ void test_dm_get(void) {
   // Free the memory allocated for the matrix.
   dm_free_matrix(mat);
 }
-
-
