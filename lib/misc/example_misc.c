@@ -19,5 +19,6 @@ int main() {
     printf("Dice: %d\n", randomInt_upperBound(6));
     printf("Double: %f\n", randomDouble());
   }
+  
   return 0;
 }

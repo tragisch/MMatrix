@@ -166,12 +166,10 @@ void printDoubleArray_Zeros(double *p_array, unsigned int length) {
         if (length < MAX_COLUMN) {
           printf("%.2f ", p_array[i]);
         } else {
-          if (i < MAX_COLUMN_PRINT) {
+          if ((i < MAX_COLUMN_PRINT) || (i > length - MAX_COLUMN_PRINT - 1)) {
             printf("%.2f ", p_array[i]);
           } else if (i == MAX_COLUMN_PRINT) {
             printf(" ... ");
-          } else if (i > length - MAX_COLUMN_PRINT - 1) {
-            printf("%.2f ", p_array[i]);
           }
         }
       }
@@ -183,50 +181,62 @@ void printDoubleArray_Zeros(double *p_array, unsigned int length) {
 
 void printDoubleArray_Points(double *p_array, unsigned int length) {
   int zero = 0;
-  if (length > 1) {
-    for (size_t i = 0; i < length; i++) {
-      if (fabs(p_array[i]) > UNITY_DOUBLE_PRECISION) {
-        zero = 1;
-      }
-      if (i == 0) {
-        if (zero) {
-          printf("[%.2f ", p_array[i]);
-        } else {
-          printf("[.    ");
-        }
-      } else if (i == length - 1) {
-        if (zero) {
-          printf("%.2f]\n", p_array[i]);
-        } else {
-          printf(".   ]\n");
-        }
+  if (length == 0) {
+    return;
+  }
+
+  if (length == 1) {
+    printf("[%.2f]\n", p_array[0]);
+    return;
+  }
+
+  for (int i = 0; i < length; i++) {
+    if (fabs(p_array[i]) > UNITY_DOUBLE_PRECISION) {
+      zero = 1;
+    }
+    printArrayElement(p_array[i], zero, i, length);
+  }
+}
+
+void printArrayStart(double firstValue, int zero) {
+  if (zero) {
+    printf("[%.2f ", firstValue);
+  } else {
+    printf("[.    ");
+  }
+}
+
+void printArrayEnd(double lastValue, int zero) {
+  if (zero) {
+    printf("%.2f]\n", lastValue);
+  } else {
+    printf(".   ]\n");
+  }
+}
+
+void printArrayElement(double value, int zero, int index, unsigned int length) {
+  if (index == 0) {
+    printArrayStart(value, zero);
+  } else if (index == length - 1) {
+    printArrayEnd(value, zero);
+  } else {
+    if (length < MAX_COLUMN) {
+      if (zero) {
+        printf("%.2f ", value);
       } else {
-        if (length < MAX_COLUMN) {
-          if (zero) {
-            printf("%.2f ", p_array[i]);
-          } else {
-            printf(".    ");
-          }
+        printf(".    ");
+      }
+    } else {
+      if ((index < MAX_COLUMN_PRINT) ||
+          (index > length - MAX_COLUMN_PRINT - 1)) {
+        if (zero) {
+          printf("%.2f ", value);
         } else {
-          if (i < MAX_COLUMN_PRINT) {
-            if (zero) {
-              printf("%.2f ", p_array[i]);
-            } else {
-              printf(".    ");
-            }
-          } else if (i == MAX_COLUMN_PRINT) {
-            printf(" ... ");
-          } else if (i > length - MAX_COLUMN_PRINT - 1) {
-            if (zero) {
-              printf("%.2f ", p_array[i]);
-            } else {
-              printf(".    ");
-            }
-          }
+          printf(".    ");
         }
+      } else if (index == MAX_COLUMN_PRINT) {
+        printf(" ... ");
       }
     }
-  } else {
-    printf("[%.2f]\n", p_array[0]);
   }
 }
