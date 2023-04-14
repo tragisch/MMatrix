@@ -16,10 +16,7 @@ jobs:
       steps:
       - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Set up Bazel
-        uses: bazelbuild/setup-bazel@v1
-        
+  
       - name: Test the code (unit tests)
         run: bazel test //tests/...
 

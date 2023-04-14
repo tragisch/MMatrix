@@ -33,6 +33,7 @@ unity_test(
         "//src:dm_io",
         "//src:dm_math",
         "//src:dm_matrix",
+        "@dbg-macro"
     ],
 )
 

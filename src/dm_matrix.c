@@ -128,6 +128,22 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
 }
 
 /**
+ * @brief return copy of matrix
+ *
+ * @param m
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_clone(DoubleMatrix *mat) {
+  DoubleMatrix *copy = dm_create(mat->rows, mat->columns);
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->columns; j++) {
+      copy->values[i][j] = mat->values[i][j];
+    }
+  }
+  return copy;
+}
+
+/**
  * @brief extend memory in HEAP to fit changed matrix rows
  *
  * @param mat
