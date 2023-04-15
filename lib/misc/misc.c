@@ -96,7 +96,7 @@ int mystring_destroy(myString *pms) {
  * @return double
  */
 double randomDouble() {
-  uint32_t random_uint32 = arc4random();
+  uint32_t random_uint32 = random_number_generator();
   double random_double = (double)random_uint32 / (double)UINT32_MAX;
   return random_double;
 }

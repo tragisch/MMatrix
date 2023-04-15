@@ -1,10 +1,18 @@
 #ifndef MISC_UR_H
 #define MISC_UR_H
 
+#ifdef __APPLE__
+#include <stdlib.h>
+#define random_number_generator arc4random
+#else
+#include <stdlib.h>
+#include <time.h>
+#define random_number_generator rand
+#endif
+
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 /*******************************/
@@ -38,10 +46,6 @@ int string2file(char *filepath, char *data);
  */
 void slice(const char *str, char *buffer, size_t start, size_t end);
 
-/**
- * @brief myString Definition
- *
- */
 typedef struct _myString {
   char *str;
   int len;
