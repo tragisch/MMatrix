@@ -96,7 +96,7 @@ int mystring_destroy(myString *pms) {
  * @return double
  */
 double randomDouble() {
-  uint32_t random_uint32 = random_number_generator();
+  uint32_t random_uint32 = randomInt();
   double random_double = (double)random_uint32 / (double)UINT32_MAX;
   return random_double;
 }
@@ -109,15 +109,36 @@ double randomDouble_betweenBounds(uint32_t min, uint32_t max) {
  *
  * @return uint
  */
-uint32_t randomInt() { return arc4random(); }
+uint32_t randomInt() { return random_number_generator(); }
+
+#ifdef __APPLE__
+
 uint32_t randomInt_upperBound(uint32_t limit) {
   return arc4random_uniform(limit);
 }
+
+#else
+
+uint32_t randomInt_upperBound(uint32_t limit) {
+  static int initialized = 0;
+  if (!initialized) {
+    srand(time(NULL));
+    initialized = 1;
+  }
+  int r;
+  do {
+    r = rand();
+  } while (r >= RAND_MAX - RAND_MAX % n);
+  return r % n;
+}
+
+#endif
+
 uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max) {
   if (max < min) {
     return min;
   }
-  return arc4random_uniform((max - min) + 1) + min;
+  return randomInt_upperBound((max - min) + 1) + min;
 }
 
 /*******************************/
