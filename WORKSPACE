@@ -70,16 +70,6 @@ http_archive(
     url = "https://github.com/ThrowTheSwitch/CMock/archive/refs/tags/v2.5.3.zip",
 )
 
-# fff is a micro-framework for creating fake C functions for tests
-# https://github.com/meekrosoft/fff
-http_archive(
-    name = "fff",
-    build_file = "@//:third_party/http/fff/BUILD",
-    sha256 = "510efb70ab17a0035affd170960401921c9cc36ec81002ed00d2bfec6e08f385",
-    strip_prefix = "fff-1.1",
-    url = "https://github.com/meekrosoft/fff/archive/refs/tags/v1.1.tar.gz",
-)
-
 # A few macros that prints and returns the value of a given expression
 # for quick and dirty debugging, inspired by Rusts dbg!(…) macro and its C++ variant.
 # https://github.com/eerimoq/dbg-macro
@@ -91,13 +81,3 @@ http_archive(
     url = "https://github.com/eerimoq/dbg-macro/archive/refs/tags/0.12.1.zip",
 )
 
-##########################
-## LOCAL REPOSITORIES (e.g. BREW)
-##########################
-
-# stellt Standdard Datenstrukturen zur Verfügung (mit Brew installiert.)
-new_local_repository(
-    name = "glib",
-    build_file = "./third_party/brew/gnu-lib/glib.BUILD",
-    path = "/opt/homebrew/Cellar/glib/2.76.1",
-)
