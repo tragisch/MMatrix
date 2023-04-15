@@ -128,8 +128,8 @@ uint32_t randomInt_upperBound(uint32_t limit) {
   int r;
   do {
     r = rand();
-  } while (r >= RAND_MAX - RAND_MAX % n);
-  return r % n;
+  } while (r >= RAND_MAX - RAND_MAX % limit);
+  return r % limit;
 }
 
 #endif
