@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v3
   
       - name: Test the code (unit tests)
-        run: bazel test //tests:DoubleVector
+        run: bazel test //tests:test_DoubleVector
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
