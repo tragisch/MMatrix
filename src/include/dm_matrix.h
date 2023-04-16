@@ -31,8 +31,7 @@ DoubleMatrix *dm_create(size_t rows, size_t cols);
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols);
 DoubleMatrix *dm_clone(DoubleMatrix *m);
 DoubleMatrix *dm_create_identity(size_t rows);
-DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
-                                   double array[rows][cols]);
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double array[rows][cols]);
 
 // Test if vector or matrix (true = vector)
 bool dm_is_vector(DoubleMatrix *mat);
@@ -78,7 +77,6 @@ double dv_pop_value(DoubleVector *vec);
 
 // shrink, push, pop, expand
 void dv_resize(DoubleVector *vec, size_t rows);
-
 
 // free
 void dv_destroy(DoubleVector *vec);

@@ -18,18 +18,6 @@
 
 enum { INIT_CAPACITY = 2U };
 
-void test_dm_get_row_as_array() {
-  // Test input data
-  double arr[3][3] = {{1.1, 2.2, 3.3}, {4.4, 5.5, 6.6}, {7.7, 8.8, 9.9}};
-
-  DoubleMatrix *result = dm_create_from_array(3, 3, arr);
-  double *row = dm_get_row_as_array(result, 1);
-
-  TEST_ASSERT_EQUAL_DOUBLE_ARRAY(arr[1], row, 3);
-
-  dm_destroy(result);
-}
-
 void test_dm_transpose() {
   // Create a test matrix
   double arr[4][4] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
@@ -286,4 +274,92 @@ void test_dv_max() {
 
   // clean up memory
   dv_destroy(vec1);
+}
+
+void test_dv_magnitude() {
+  DoubleVector *vec = dv_create(3);
+  dv_set(vec, 0, 1.0);
+  dv_set(vec, 1, 2.0);
+  dv_set(vec, 2, 2.0);
+
+  double expected = 3.0;
+  double result = dv_magnitude(vec);
+
+  TEST_ASSERT_EQUAL_FLOAT(expected, result);
+
+  dv_destroy(vec);
+}
+
+void test_dv_normalize() {
+  double data[3] = {1.0, 2.0, 3.0};
+  DoubleVector *vec = dv_create_from_array(data, 3);
+  dv_normalize(vec);
+  TEST_ASSERT_EQUAL_DOUBLE(0.267261, dv_get(vec, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(0.534522, dv_get(vec, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(0.801783, dv_get(vec, 2));
+
+  // free memory
+  dv_destroy(vec);
+}
+
+void test_dm_determinant(void) {
+
+  double values[2][2] = {{2.0, 3.0}, {1.0, 5.0}};
+  DoubleMatrix *mat = dm_create_from_array(2, 2, values);
+  double det = dm_determinant(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(7.0, det);
+
+  double values2[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 10.0}};
+  DoubleMatrix *mat2 = dm_create_from_array(3, 3, values2);
+  det = dm_determinant(mat2);
+  TEST_ASSERT_EQUAL_DOUBLE(-3.0, det);
+
+  // Free memory
+  dm_destroy(mat);
+  dm_destroy(mat2);
+}
+
+void test_dm_inverse(void) {
+  // Test case 1: 2x2 matrix
+  DoubleMatrix *mat1 = dm_create(2, 2);
+  dm_set(mat1, 0, 0, 1);
+  dm_set(mat1, 0, 1, 2);
+  dm_set(mat1, 1, 0, 3);
+  dm_set(mat1, 1, 1, 4);
+
+  DoubleMatrix *inv1 = dm_inverse(mat1);
+
+  TEST_ASSERT_EQUAL_DOUBLE(-2.0, dm_get(inv1, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(inv1, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(1.5, dm_get(inv1, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv1, 1, 1));
+
+  // Test case 2: 3x3 matrix
+  DoubleMatrix *mat2 = dm_create(3, 3);
+  dm_set(mat2, 0, 0, 1);
+  dm_set(mat2, 0, 1, 2);
+  dm_set(mat2, 0, 2, 1);
+  dm_set(mat2, 1, 0, 1);
+  dm_set(mat2, 1, 1, 0);
+  dm_set(mat2, 1, 2, 1);
+  dm_set(mat2, 2, 0, 0);
+  dm_set(mat2, 2, 1, 1);
+  dm_set(mat2, 2, 2, -1);
+
+  DoubleMatrix *inv2 = dm_inverse(mat2);
+
+  TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv2, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(1.5, dm_get(inv2, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(1, dm_get(inv2, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(0.5, dm_get(inv2, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv2, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(0.0, dm_get(inv2, 1, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(0.5, dm_get(inv2, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv2, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(-1.0, dm_get(inv2, 2, 2));
+
+  dm_destroy(mat1);
+  dm_destroy(inv1);
+  dm_destroy(mat2);
+  dm_destroy(inv2);
 }

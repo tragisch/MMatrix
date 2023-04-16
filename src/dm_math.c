@@ -2,8 +2,8 @@
  * @file dm_math.c
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
- * @version 0.1
- * @date 26-12-2022
+ * @version 0.2
+ * @date 16-04-2023
  *
  * @copyright Copyright (c) 2021
  *
@@ -100,16 +100,23 @@ DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
   return product;
 }
 
-// /* v1 x v2  -- simply a helper function -- computes dot product between two
-//  * vectors*/
-// static double vector_multiply(const double *col, const double *row,
-//                               size_t length) {
-//   double sum = 0.;
-//   for (size_t i = 0; i < length; i++) {
-//     sum += col[i] * row[i];
-//   }
-//   return sum;
-// }
+/**
+ * @brief Multiply a matrix with a scalar
+ *
+ * @param mat
+ * @param scalar
+ * @return DoubleMatrix
+ */
+DoubleMatrix dm_multiply_by_scalar(const DoubleMatrix *mat,
+                                   const double scalar) {
+  DoubleMatrix *result = dm_create(mat->rows, mat->cols);
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      dm_set(result, i, j, dm_get(mat, i, j) * scalar);
+    }
+  }
+  return *result;
+}
 
 /**
  * @brief Vector Matrix
@@ -118,17 +125,6 @@ DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
  * @param mat
  * @return DoubleVector*
  */
-// DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
-//                                       const DoubleMatrix *mat) {
-//   DoubleVector *vec_result = dv_create(vec->length);
-//   for (size_t i = 0; i < vec->length; i++) {
-//     vec_result->mat1D->values[i][0] = vector_multiply(
-//         mat->values[i], (double *)vec->mat1D->values, vec->length);
-//   }
-
-//   return vec_result;
-// }
-
 DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
                                       const DoubleMatrix *mat) {
   if (vec->rows != mat->cols) {
@@ -144,6 +140,82 @@ DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
     }
   }
   return vec_result;
+}
+
+/**
+ * @brief Matrix Vector
+ *
+ * @param mat
+ * @param vec
+ * @return DoubleVector*
+ */
+double dm_determinant(DoubleMatrix *mat) {
+  if (mat->cols != mat->rows) {
+    perror("the Matrix has to be square!");
+  }
+  if (mat->cols == 1) {
+    return dm_get(mat, 0, 0);
+  }
+  if (mat->cols == 2) {
+    return dm_get(mat, 0, 0) * dm_get(mat, 1, 1) -
+           dm_get(mat, 0, 1) * dm_get(mat, 1, 0);
+  }
+  double det = 0;
+  for (size_t i = 0; i < mat->cols; i++) {
+    DoubleMatrix *sub_mat = dm_create(mat->cols - 1, mat->cols - 1);
+    for (size_t j = 1; j < mat->cols; j++) {
+      for (size_t k = 0; k < mat->cols; k++) {
+        if (k < i) {
+          dm_set(sub_mat, j - 1, k, dm_get(mat, j, k));
+        } else if (k > i) {
+          dm_set(sub_mat, j - 1, k - 1, dm_get(mat, j, k));
+        }
+      }
+    }
+    det += pow(-1, i) * dm_get(mat, 0, i) * dm_determinant(sub_mat);
+    dm_destroy(sub_mat);
+  }
+  return det;
+}
+
+/**
+ * @brief dm_inverse
+ *
+ * @param mat
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_inverse(DoubleMatrix *mat) {
+  if (mat->cols != mat->rows) {
+    perror("the Matrix has to be square!");
+  }
+  double det = dm_determinant(mat);
+  if (det == 0) {
+    perror("the Matrix has no inverse!");
+  }
+  DoubleMatrix *inverse = dm_create(mat->cols, mat->cols);
+  for (size_t i = 0; i < mat->cols; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      DoubleMatrix *sub_mat = dm_create(mat->cols - 1, mat->cols - 1);
+      for (size_t k = 0; k < mat->cols; k++) {
+        for (size_t l = 0; l < mat->cols; l++) {
+          if (k < i && l < j) {
+            dm_set(sub_mat, k, l, dm_get(mat, k, l));
+          } else if (k < i && l > j) {
+            dm_set(sub_mat, k, l - 1, dm_get(mat, k, l));
+          } else if (k > i && l < j) {
+            dm_set(sub_mat, k - 1, l, dm_get(mat, k, l));
+          } else if (k > i && l > j) {
+            dm_set(sub_mat, k - 1, l - 1, dm_get(mat, k, l));
+          }
+        }
+      }
+      dm_set(inverse, i, j, pow(-1, i + j) * dm_determinant(sub_mat));
+      dm_destroy(sub_mat);
+    }
+  }
+  dm_transpose(inverse);
+  dm_multiply_by_scalar(inverse, 1 / det);
+  return inverse;
 }
 
 /*******************************/
@@ -324,6 +396,19 @@ void dv_transpose(DoubleVector *vec) {
 }
 
 /**
+ * @brief swap two elements of an vector
+ *
+ * @param vec*
+ * @param i
+ * @param j
+ */
+void dv_swap_elements(DoubleVector *vec, size_t idx_i, size_t idx_j) {
+  double tmp = dv_get(vec, idx_i);
+  dv_set(vec, idx_i, dv_get(vec, idx_j));
+  dv_set(vec, idx_j, tmp);
+}
+
+/**
  * @brief reverse the order of elements of vec
  *
  * @param vec*
@@ -333,4 +418,30 @@ void dv_reverse(DoubleVector *vec) {
   for (size_t i = 0; i < vec->rows / 2; i++) {
     dv_swap_elements(vec, i, vec->rows - i - 1);
   }
+}
+
+/**
+ * @brief return the magnitude of a vector
+ *
+ * @param vec
+ * @return double
+ */
+double dv_magnitude(DoubleVector *vec) {
+  double sum_of_squares = 0.0;
+  for (size_t i = 0; i < vec->rows; i++) {
+    double component = dv_get(vec, i);
+    sum_of_squares += component * component;
+  }
+  double magnitude = sqrt(sum_of_squares);
+  return magnitude;
+}
+
+/**
+ * @brief normalize a vector
+ *
+ * @param vec
+ */
+void dv_normalize(DoubleVector *vec) {
+  double magnitude = dv_magnitude(vec);
+  dv_divide_by_scalar(vec, magnitude);
 }

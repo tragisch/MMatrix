@@ -464,20 +464,3 @@ void dv_destroy(DoubleVector *vec) {
   // in case of a dense matrix:
   dm_destroy(vec);
 }
-
-/**
- * @brief swap two elements of an vector
- *
- * @param vec*
- * @param i
- * @param j
- */
-void dv_swap_elements(DoubleVector *vec, size_t idx_i, size_t idx_j) {
-  double tmp = dv_get(vec, idx_i);
-  dv_set(vec, idx_i, dv_get(vec, idx_j));
-  dv_set(vec, idx_j, tmp);
-}
-
-
-
-

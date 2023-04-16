@@ -15,5 +15,7 @@ int dv_write_to_file(DoubleVector *vec, const char *filepath);
 // print stdout:
 void dm_print(DoubleMatrix *matrix);
 void dv_print(DoubleVector *vec);
+static void dv_print_col(DoubleVector *vec);
+static void dv_print_row(DoubleVector *vec);
 
 #endif // DM_IO_H

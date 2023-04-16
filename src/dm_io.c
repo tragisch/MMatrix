@@ -70,22 +70,37 @@ int dv_write_to_file(DoubleVector *vec, const char *filepath) {
  * @param DoubleVector* vec
  */
 void dv_print(DoubleVector *vec) {
-  double *array = dv_get_array(vec);
-  size_t length = vec->rows;
-
-  printf("[");
-  for (size_t i = 0; i < length; i++) {
-    if (i > 0) {
-      printf(", ");
-    }
-
-    if (i < MAX_COLUMN_PRINT || i >= length - MAX_COLUMN_PRINT) {
-      printf("%.2lf", array[i]);
-    } else if (i == MAX_COLUMN_PRINT) {
-      printf("...");
-    }
+  if (dv_is_row_vector(vec)) {
+    dv_print_row(vec);
+  } else if (dv_is_row_vector(vec) == false) {
+    dv_print_col(vec);
+  } else {
+    printf("not a vector!\n");
   }
-  printf("]\nVector 1x%zi\n", vec->rows);
+}
+
+// function to print DOubleVector as row vector
+static void dv_print_row(DoubleVector *vec) {
+  if (dv_is_row_vector(vec)) {
+    printf("[ ");
+    for (size_t i = 0; i < vec->rows; i++) {
+      if (i > 0) {
+        printf(", ");
+      }
+      printf("%.2lf", vec->values[i]);
+    }
+    printf(" ]\n");
+  }
+}
+
+// function to print DOubleVector as column vector  (transposed)
+static void dv_print_col(DoubleVector *vec) {
+  if (dv_is_row_vector(vec) == false) {
+    for (size_t i = 0; i < vec->cols; i++) {
+      printf("[ %.2lf ]\n", vec->values[i]);
+    }
+    printf("\n");
+  }
 }
 
 /*******************************/
@@ -104,7 +119,7 @@ void dm_print(DoubleMatrix *matrix) {
   for (size_t i = 0; i < matrix->rows; i++) {
     printf("[ ");
     for (size_t j = 0; j < matrix->cols; j++) {
-      printf("%f ", matrix->values[i * matrix->cols + j]);
+      printf("%.2lf ", matrix->values[i * matrix->cols + j]);
     }
     printf("]\n");
   }
