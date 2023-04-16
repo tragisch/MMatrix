@@ -9,11 +9,11 @@
 /*******************************/
 
 // read & write
-int read_dm_vector_from_file(DoubleVector *vec, const char *filepath);
-int write_dm_vector_to_file(DoubleVector *vec, const char *filepath);
+int dv_read_from_file(DoubleVector *vec, const char *filepath);
+int dv_write_to_file(DoubleVector *vec, const char *filepath);
 
 // print stdout:
-void print_dm_matrix(DoubleMatrix *matrix);
-void print_dm_vector(DoubleVector *vec);
+void dm_print_matrix(DoubleMatrix *matrix);
+void dv_print_vector(DoubleVector *vec);
 
-#endif  // DM_IO_H
+#endif // DM_IO_H
