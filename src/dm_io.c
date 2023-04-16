@@ -69,7 +69,7 @@ int dv_write_to_file(DoubleVector *vec, const char *filepath) {
  *
  * @param DoubleVector* vec
  */
-void dv_print_vector(DoubleVector *vec) {
+void dv_print(DoubleVector *vec) {
   double *array = dv_get_array(vec);
   size_t length = vec->rows;
 
@@ -99,7 +99,7 @@ void dv_print_vector(DoubleVector *vec) {
  * @param num_rows
  * @param matrix
  */
-void dm_print_matrix(DoubleMatrix *matrix) {
+void dm_print(DoubleMatrix *matrix) {
   // print to console a DoubleMatrix matrix row by row with 2 digits precision
   for (size_t i = 0; i < matrix->rows; i++) {
     printf("[ ");

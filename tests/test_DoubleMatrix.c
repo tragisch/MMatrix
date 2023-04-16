@@ -149,7 +149,7 @@ void test_dm_push_column() {
   dm_set(mat, 2, 0, 3.0);
 
   // Create a DoubleVector to push as a column
-  DoubleVector *col_vec = dv_new_vector();
+  DoubleVector *col_vec = dv_vector();
   dv_push_value(col_vec, 4.0);
   dv_push_value(col_vec, 5.0);
   dv_push_value(col_vec, 6.0);
@@ -181,7 +181,7 @@ void test_dm_push_row() {
   dm_set(mat, 2, 0, 3.0);
 
   // Create a DoubleVector to push as a row
-  DoubleVector *col_row = dv_new_vector();
+  DoubleVector *col_row = dv_vector();
   dv_push_value(col_row, 4.0);
   dv_push_value(col_row, 5.0);
   dv_push_value(col_row, 6.0);

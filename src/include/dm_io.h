@@ -13,7 +13,7 @@ int dv_read_from_file(DoubleVector *vec, const char *filepath);
 int dv_write_to_file(DoubleVector *vec, const char *filepath);
 
 // print stdout:
-void dm_print_matrix(DoubleMatrix *matrix);
-void dv_print_vector(DoubleVector *vec);
+void dm_print(DoubleMatrix *matrix);
+void dv_print(DoubleVector *vec);
 
 #endif // DM_IO_H

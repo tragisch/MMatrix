@@ -284,7 +284,7 @@ DoubleVector *dv_get_column_matrix(DoubleMatrix *mat, size_t column) {
  * @return DoubleVector*
  */
 
-DoubleVector *dv_new_vector() {
+DoubleVector *dv_vector() {
   DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
   vec->rows = 0;
   vec->cols = 1;
@@ -478,29 +478,6 @@ void dv_swap_elements(DoubleVector *vec, size_t idx_i, size_t idx_j) {
   dv_set(vec, idx_j, tmp);
 }
 
-/**
- * @brief reverse the order of elements of vec
- *
- * @param vec*
- */
-void dv_reverse(DoubleVector *vec) {
-  // reverse the order of elements of vec
-  for (size_t i = 0; i < vec->rows / 2; i++) {
-    dv_swap_elements(vec, i, vec->rows - i - 1);
-  }
-}
 
-/**
- * @brief transpose a vector
- *
- * @param vec*
- */
-void dv_transpose(DoubleVector *vec) {
-  if (vec->rows == 1) {
-    vec->rows = vec->cols;
-    vec->cols = 1;
-  } else {
-    vec->cols = vec->rows;
-    vec->rows = 1;
-  }
-}
+
+

@@ -70,13 +70,6 @@ uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max);
 /*  Double Arrays              */
 /*******************************/
 
-void printArrayStart(double firstValue, int zero);
-void printArrayEnd(double lastValue, int zero);
-void printArrayElement(double value, int zero, int index, unsigned int length);
-
-void printDoubleArray(double *p_array, unsigned int length, int method);
-void printDoubleArray_Zeros(double *p_array, unsigned int length);
-void printDoubleArray_Points(double *p_array, unsigned int length);
 double *createRandomDoubleArray(unsigned int length);
 
 #endif // MISC_UR_H

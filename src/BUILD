@@ -10,7 +10,6 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "//lib/misc",
-        "@CException",
         "@dbg-macro",
     ],
 )

@@ -22,7 +22,7 @@ void setUp(void) {
 void tearDown(void) {}
 
 void test_dv_new_vector() {
-  DoubleVector *vec = dv_new_vector();
+  DoubleVector *vec = dv_vector();
   TEST_ASSERT_NOT_NULL(vec);
   TEST_ASSERT(vec->cols == 1);
   TEST_ASSERT_EQUAL_UINT(0, vec->rows);

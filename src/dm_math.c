@@ -22,20 +22,6 @@
 /*******************************/
 
 /**
- * @brief multiply each cell of matrix with scalar
- *
- * @param mat
- * @param scalar
- */
-void dm_multiply_by_scalar(DoubleMatrix *mat, double scalar) {
-  for (size_t i = 0; i < mat->cols; i++) {
-    for (size_t j = 0; j < mat->rows; j++) {
-      dm_set(mat, i, j, dm_get(mat, i, j) * scalar);
-    }
-  }
-}
-
-/**
  * @brief dm_transpose matrix mat
  *
  * @param mat
@@ -323,16 +309,28 @@ double dv_max(DoubleVector *vec) {
 }
 
 /**
- * @brief retrun adress of row vector
+ * @brief transpose a vector
  *
- * @param mat
- * @param row
- * @return DoubleVector*
+ * @param vec*
  */
-double *dm_get_row_as_array(const DoubleMatrix *mat, size_t row) {
-  if (row < 0 || row > (mat->rows - 1)) {
-    perror("This row does not exist");
+void dv_transpose(DoubleVector *vec) {
+  if (vec->rows == 1) {
+    vec->rows = vec->cols;
+    vec->cols = 1;
+  } else {
+    vec->cols = vec->rows;
+    vec->rows = 1;
   }
-  // get row "row" of DoubleMatrix mat as array
-  return &mat->values[row * mat->cols];
+}
+
+/**
+ * @brief reverse the order of elements of vec
+ *
+ * @param vec*
+ */
+void dv_reverse(DoubleVector *vec) {
+  // reverse the order of elements of vec
+  for (size_t i = 0; i < vec->rows / 2; i++) {
+    dv_swap_elements(vec, i, vec->rows - i - 1);
+  }
 }

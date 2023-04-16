@@ -55,14 +55,6 @@ http_archive(
 )
 
 http_archive(
-    name = "CException",
-    build_file = "@//:third_party/http/ThrowTheSwitch/CException/BUILD",
-    sha256 = "fd43ca698f86f75805fc9440d814dfa11c3e72674a52bfda43344f4371e8bcd9",
-    strip_prefix = "CException-1.3.3",
-    url = "https://github.com/ThrowTheSwitch/CException/archive/refs/tags/v1.3.3.zip",
-)
-
-http_archive(
     name = "CMock",
     build_file = "@//:third_party/http/ThrowTheSwitch/CMock/BUILD",
     sha256 = "f342b8296aa934acfa3310a015938901e7df40ff7f5041c0ef3f5e6b13580207",

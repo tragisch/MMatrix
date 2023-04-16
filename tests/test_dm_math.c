@@ -30,37 +30,6 @@ void test_dm_get_row_as_array() {
   dm_destroy(result);
 }
 
-// void test_dm_multiply_by_scalar(void) {
-//   // Initialize test data
-//   DoubleMatrix *mat = dm_create(2, 2);
-//   dm_set(mat, 0, 0, 1.0);
-//   dm_set(mat, 0, 1, 2.0);
-//   dm_set(mat, 1, 0, 3.0);
-//   dm_set(mat, 1, 1, 4.0);
-
-//   double scalar = 2.0;
-
-//   DoubleMatrix *expected = dm_create(2, 2);
-//   dm_set(mat, 0, 0, 2.0);
-//   dm_set(mat, 0, 1, 4.0);
-//   dm_set(mat, 1, 0, 6.0);
-//   dm_set(mat, 1, 1, 8.0);
-
-//   // Call the function to be tested
-//   dm_multiply_by_scalar(mat, scalar);
-
-//   // Check the result against the expected
-//   // output
-//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 0, 0), dm_get(mat, 0, 0));
-//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 0, 1), dm_get(mat, 0, 1));
-//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 1, 0), dm_get(mat, 1, 0));
-//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 1, 1), dm_get(mat, 1, 1));
-
-//   // Free the memory allocated for the matrix
-//   dm_destroy(mat);
-//   dm_destroy(expected);
-// }
-
 void test_dm_transpose() {
   // Create a test matrix
   double arr[4][4] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
