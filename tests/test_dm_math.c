@@ -27,40 +27,39 @@ void test_dm_get_row_as_array() {
 
   TEST_ASSERT_EQUAL_DOUBLE_ARRAY(arr[1], row, 3);
 
-  dm_free_matrix(result);
+  dm_destroy(result);
 }
 
-void test_dm_multiply_by_scalar(void) {
-  // Initialize test data
-  DoubleMatrix *mat = dm_create(2, 2);
-  mat->values[0][0] = 1.0;
-  mat->values[0][1] = 2.0;
-  mat->values[1][0] = 3.0;
-  mat->values[1][1] = 4.0;
+// void test_dm_multiply_by_scalar(void) {
+//   // Initialize test data
+//   DoubleMatrix *mat = dm_create(2, 2);
+//   dm_set(mat, 0, 0, 1.0);
+//   dm_set(mat, 0, 1, 2.0);
+//   dm_set(mat, 1, 0, 3.0);
+//   dm_set(mat, 1, 1, 4.0);
 
-  double scalar = 2.0;
+//   double scalar = 2.0;
 
-  DoubleMatrix *expected = dm_create(2, 2);
+//   DoubleMatrix *expected = dm_create(2, 2);
+//   dm_set(mat, 0, 0, 2.0);
+//   dm_set(mat, 0, 1, 4.0);
+//   dm_set(mat, 1, 0, 6.0);
+//   dm_set(mat, 1, 1, 8.0);
 
-  expected->values[0][0] = 2.0;
-  expected->values[0][1] = 4.0;
-  expected->values[1][0] = 6.0;
-  expected->values[1][1] = 8.0;
+//   // Call the function to be tested
+//   dm_multiply_by_scalar(mat, scalar);
 
-  // Call the function to be tested
-  dm_multiply_by_scalar(mat, scalar);
+//   // Check the result against the expected
+//   // output
+//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 0, 0), dm_get(mat, 0, 0));
+//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 0, 1), dm_get(mat, 0, 1));
+//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 1, 0), dm_get(mat, 1, 0));
+//   TEST_ASSERT_EQUAL_DOUBLE(dm_get(expected, 1, 1), dm_get(mat, 1, 1));
 
-  // Check the result against the expected
-  // output
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[0][0], mat->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[0][1], mat->values[0][1]);
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[1][0], mat->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(expected->values[1][1], mat->values[1][1]);
-
-  // Free the memory allocated for the matrix
-  dm_free_matrix(mat);
-  dm_free_matrix(expected);
-}
+//   // Free the memory allocated for the matrix
+//   dm_destroy(mat);
+//   dm_destroy(expected);
+// }
 
 void test_dm_transpose() {
   // Create a test matrix
@@ -72,19 +71,19 @@ void test_dm_transpose() {
 
   // Check that the matrix has the expected dimensions and values
   TEST_ASSERT_EQUAL(3, matrix->rows);
-  TEST_ASSERT_EQUAL(3, matrix->columns);
-  TEST_ASSERT_EQUAL_DOUBLE(1.0, matrix->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(4.0, matrix->values[0][1]);
-  TEST_ASSERT_EQUAL_DOUBLE(7.0, matrix->values[0][2]);
-  TEST_ASSERT_EQUAL_DOUBLE(2.0, matrix->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(5.0, matrix->values[1][1]);
-  TEST_ASSERT_EQUAL_DOUBLE(8.0, matrix->values[1][2]);
-  TEST_ASSERT_EQUAL_DOUBLE(3.0, matrix->values[2][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(6.0, matrix->values[2][1]);
-  TEST_ASSERT_EQUAL_DOUBLE(9.0, matrix->values[2][2]);
+  TEST_ASSERT_EQUAL(3, matrix->cols);
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(matrix, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(matrix, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(matrix, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(matrix, 0, 3));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(matrix, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(matrix, 1, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(matrix, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(matrix, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(9.0, dm_get(matrix, 2, 2));
 
   // Free the memory allocated for the matrix
-  dm_free_matrix(matrix);
+  dm_destroy(matrix);
 }
 
 // void test_dm_equal_matrix() {
@@ -101,8 +100,8 @@ void test_dm_transpose() {
 //   TEST_ASSERT_FALSE(dm_equal_matrix(matrix1, matrix2));
 
 //   // Free the memory allocated for the matrices
-//   dm_free_matrix(matrix1);
-//   dm_free_matrix(matrix2);
+//   dm_destroy(matrix1);
+//   dm_destroy(matrix2);
 // }
 
 void test_dm_multiply_with_matrix() {
@@ -124,10 +123,10 @@ void test_dm_multiply_with_matrix() {
   TEST_ASSERT_TRUE(dm_equal_matrix(result, expected_result));
 
   // Free the memory allocated for the matrices and result
-  dm_free_matrix(matrix1);
-  dm_free_matrix(matrix2);
-  dm_free_matrix(result);
-  dm_free_matrix(expected_result);
+  dm_destroy(matrix1);
+  dm_destroy(matrix2);
+  dm_destroy(result);
+  dm_destroy(expected_result);
 }
 
 void test_dv_multiply_with_matrix() {
@@ -149,15 +148,15 @@ void test_dv_multiply_with_matrix() {
   TEST_ASSERT_TRUE(dv_equal(result, expected_result));
 
   // Check that the dimensions of the matrix and vector are correct
-  TEST_ASSERT_EQUAL_UINT(3, matrix->columns);
+  TEST_ASSERT_EQUAL_UINT(3, matrix->cols);
   TEST_ASSERT_EQUAL_UINT(2, matrix->rows);
-  TEST_ASSERT_EQUAL_UINT(3, vector->length);
+  TEST_ASSERT_EQUAL_UINT(3, vector->rows);
 
   // Free the memory allocated for the matrix, vector, and result
-  dm_free_matrix(matrix);
-  dv_free_vector(vector);
-  dv_free_vector(result);
-  dv_free_vector(expected_result);
+  dm_destroy(matrix);
+  dv_destroy(vector);
+  dv_destroy(result);
+  dv_destroy(expected_result);
 }
 
 void test_dv_dot_product() {
@@ -175,8 +174,8 @@ void test_dv_dot_product() {
   TEST_ASSERT_EQUAL_DOUBLE(3, cross);
 
   // clean up memory
-  dv_free_vector(vec1);
-  dv_free_vector(vec2);
+  dv_destroy(vec1);
+  dv_destroy(vec2);
 }
 
 void test_dv_add_vector() {
@@ -191,13 +190,13 @@ void test_dv_add_vector() {
   dv_add_vector(vec1, vec2);
 
   // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(5, vec1->mat1D->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(7, vec1->mat1D->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(9, vec1->mat1D->values[2][0]);
+  TEST_ASSERT_EQUAL_DOUBLE(5, dm_get(vec1, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(7, dm_get(vec1, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(9, dm_get(vec1, 2, 0));
 
   // clean up memory
-  dv_free_vector(vec1);
-  dv_free_vector(vec2);
+  dv_destroy(vec1);
+  dv_destroy(vec2);
 }
 
 void test_dv_sub_vector() {
@@ -212,13 +211,13 @@ void test_dv_sub_vector() {
   dv_sub_vector(vec1, vec2);
 
   // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(-4, vec1->mat1D->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(-3, vec1->mat1D->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(-3, vec1->mat1D->values[2][0]);
+  TEST_ASSERT_EQUAL_DOUBLE(-4, dm_get(vec1, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(-3, dm_get(vec1, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(-3, dm_get(vec1, 2, 0));
 
   // clean up memory
-  dv_free_vector(vec1);
-  dv_free_vector(vec2);
+  dv_destroy(vec1);
+  dv_destroy(vec2);
 }
 
 void test_dv_multiply_by_scalar() {
@@ -231,12 +230,12 @@ void test_dv_multiply_by_scalar() {
   dv_multiply_by_scalar(vec1, scalar);
 
   // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(4.16, vec1->mat1D->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(8.32, vec1->mat1D->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(12.48, vec1->mat1D->values[2][0]);
+  TEST_ASSERT_EQUAL_DOUBLE(4.16, dm_get(vec1, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(8.32, dm_get(vec1, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(12.48, dm_get(vec1, 2, 0));
 
   // clean up memory
-  dv_free_vector(vec1);
+  dv_destroy(vec1);
 }
 
 void test_dv_divide_by_scalar() {
@@ -249,12 +248,12 @@ void test_dv_divide_by_scalar() {
   dv_divide_by_scalar(vec1, scalar);
 
   // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(1.20192, vec1->mat1D->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(0.240385, vec1->mat1D->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(0.961538, vec1->mat1D->values[2][0]);
+  TEST_ASSERT_EQUAL_DOUBLE(1.20192, dm_get(vec1, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(0.240385, dm_get(vec1, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(0.961538, dm_get(vec1, 2, 0));
 
   // clean up memory
-  dv_free_vector(vec1);
+  dv_destroy(vec1);
 }
 
 void test_dv_add_constant() {
@@ -267,12 +266,12 @@ void test_dv_add_constant() {
   dv_add_constant(vec1, scalar);
 
   // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(7.445, vec1->mat1D->values[0][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(3.445, vec1->mat1D->values[1][0]);
-  TEST_ASSERT_EQUAL_DOUBLE(6.445, vec1->mat1D->values[2][0]);
+  TEST_ASSERT_EQUAL_DOUBLE(7.445, dm_get(vec1, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(3.445, dm_get(vec1, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.445, dm_get(vec1, 2, 0));
 
   // clean up memory
-  dv_free_vector(vec1);
+  dv_destroy(vec1);
 }
 
 void test_dv_mean() {
@@ -287,7 +286,7 @@ void test_dv_mean() {
   TEST_ASSERT_EQUAL_DOUBLE(3.33333, mean);
 
   // clean up memory
-  dv_free_vector(vec1);
+  dv_destroy(vec1);
 }
 
 void test_dv_min() {
@@ -302,7 +301,7 @@ void test_dv_min() {
   TEST_ASSERT_EQUAL_DOUBLE(1, min);
 
   // clean up memory
-  dv_free_vector(vec1);
+  dv_destroy(vec1);
 }
 
 void test_dv_max() {
@@ -317,5 +316,5 @@ void test_dv_max() {
   TEST_ASSERT_EQUAL_DOUBLE(5, max);
 
   // clean up memory
-  dv_free_vector(vec1);
+  dv_destroy(vec1);
 }

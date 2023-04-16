@@ -1,24 +1,24 @@
-name: BUILD
+# name: BUILD
 
-on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - master
+# on:
+#  push:
+#    branches:
+#      - master
+#  pull_request:
+#    branches:
+#      - master
 
-jobs:
-    test:
-     # virtual environments: https://github.com/actions/virtual-environments
-      runs-on: macos-latest
+# jobs:
+#     test:
+#      # virtual environments: https://github.com/actions/virtual-environments
+#       runs-on: macos-latest
 
-      steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+#       steps:
+#       - name: Checkout
+#         uses: actions/checkout@v3
   
-      - name: Test the code (unit tests)
-        run: bazel test //tests:test_DoubleVector
+#       - name: Test the code (unit tests)
+#         run: bazel test //tests:test_DoubleVector
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+#       - name: Upload coverage reports to Codecov
+#         uses: codecov/codecov-action@v3

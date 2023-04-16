@@ -10,7 +10,7 @@
 /*******************************/
 
 double *dm_get_row_as_array(const DoubleMatrix *mat, size_t row);
-void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar);
+void dm_multiply_by_scalar(DoubleMatrix *mat, double scalar);
 void dm_transpose(DoubleMatrix *mat);
 DoubleMatrix *dm_multiply_with_matrix(const DoubleMatrix *mat1,
                                       const DoubleMatrix *mat2);

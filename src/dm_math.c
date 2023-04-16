@@ -22,15 +22,15 @@
 /*******************************/
 
 /**
- * @brief multiply scalar with each cell of matrix
+ * @brief multiply each cell of matrix with scalar
  *
  * @param mat
  * @param scalar
  */
-void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
-  for (size_t i = 0; i < mat->columns; i++) {
+void dm_multiply_by_scalar(DoubleMatrix *mat, double scalar) {
+  for (size_t i = 0; i < mat->cols; i++) {
     for (size_t j = 0; j < mat->rows; j++) {
-      (mat->values[i])[j] *= scalar;
+      dm_set(mat, i, j, dm_get(mat, i, j) * scalar);
     }
   }
 }
@@ -42,15 +42,15 @@ void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
  * @return mat
  */
 void dm_transpose(DoubleMatrix *mat) {
-  if (mat->columns != mat->rows) {
+  if (mat->cols != mat->rows) {
     perror("the Matrix has to be square!");
   }
   double temp = 0.0;
   for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = i + 1; j < mat->columns; j++) {
-      temp = mat->values[i][j];
-      mat->values[i][j] = mat->values[j][i];
-      mat->values[j][i] = temp;
+    for (size_t j = i + 1; j < mat->cols; j++) {
+      temp = dm_get(mat, i, j);
+      dm_set(mat, i, j, dm_get(mat, j, i));
+      dm_set(mat, j, i, temp);
     }
   }
 }
@@ -67,14 +67,12 @@ bool dm_equal_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
   if (mat1 == NULL || mat2 == NULL) {
     return false;
   }
-  if (mat1->columns != mat2->columns || mat1->rows != mat2->rows) {
+  if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
     return false;
   }
-  for (size_t i = 0; i < mat1->columns; i++) {
-    for (size_t j = 0; j < mat1->rows; j++) {
-      if (mat1->values[i][j] != mat2->values[i][j]) {
-        return false;
-      }
+  for (size_t i = 0; i < mat1->cols * mat1->rows; i++) {
+    if (mat1->values[i] != mat2->values[i]) {
+      return false;
     }
   }
   return true;
@@ -94,20 +92,21 @@ DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
     return NULL;
   }
 
-  if (mat1->columns != mat2->rows) {
+  if (mat1->cols != mat2->rows) {
     perror(
         "Error: number of columns of m1 has to be euqal to number fo rows of "
         "m2!");
     return NULL;
   }
 
-  DoubleMatrix *product = dm_create(mat1->rows, mat2->columns);
+  DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
 
   // Multiplying first and second matrices and storing it in product
   for (size_t i = 0; i < mat1->rows; ++i) {
-    for (size_t j = 0; j < mat2->columns; ++j) {
-      for (size_t k = 0; k < mat1->columns; ++k) {
-        product->values[i][j] += mat1->values[i][k] * mat2->values[k][j];
+    for (size_t j = 0; j < mat2->cols; ++j) {
+      for (size_t k = 0; k < mat1->cols; ++k) {
+        dm_set(product, i, j,
+               dm_get(product, i, j) + dm_get(mat1, i, k) * dm_get(mat2, k, j));
       }
     }
   }
@@ -146,16 +145,16 @@ DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
 
 DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
                                       const DoubleMatrix *mat) {
-  if (vec->length != mat->columns) {
+  if (vec->rows != mat->cols) {
     return NULL; // dimensions are incompatible, return NULL
   }
 
   DoubleVector *vec_result = dv_create(mat->rows);
   for (size_t i = 0; i < mat->rows; i++) {
-    vec_result->mat1D->values[i][0] = 0.0;
-    for (size_t j = 0; j < vec->length; j++) {
-      vec_result->mat1D->values[i][0] +=
-          mat->values[i][j] * vec->mat1D->values[j][0];
+    dv_set(vec_result, i, 0.0);
+    for (size_t j = 0; j < vec->rows; j++) {
+      dv_set(vec_result, i,
+             dv_get(vec_result, i) + dm_get(mat, i, j) * dv_get(vec, j));
     }
   }
   return vec_result;
@@ -173,18 +172,18 @@ DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
  * @return double
  */
 double dv_dot_product(DoubleVector *vec1, DoubleVector *vec2) {
-  if (vec1->length != vec2->length) {
+  if (vec1->rows != vec2->rows) {
     perror("vectors have not same length");
     return 0;
   }
-  if (vec1->isColumnVector != vec2->isColumnVector) {
+  if (vec1->cols != vec2->cols) {
     perror("no dot product for: column-vectors * row_vector");
     return 0;
   }
 
   double sum = 0;
-  for (size_t i = 0; i < vec1->length; i++) {
-    sum += vec1->mat1D->values[i][0] * vec2->mat1D->values[i][0];
+  for (size_t i = 0; i < vec1->rows; i++) {
+    sum += dv_get(vec1, i) * dv_get(vec2, i);
   }
 
   return sum;
@@ -197,12 +196,12 @@ double dv_dot_product(DoubleVector *vec1, DoubleVector *vec2) {
  * @param vec2 (const)
  */
 void dv_add_vector(DoubleVector *vec1, const DoubleVector *vec2) {
-  if (vec1->length != vec2->length) {
+  if (vec1->rows != vec2->rows) {
     perror("vectors are not same length");
   }
 
-  for (size_t i = 0; i < vec1->length; i++) {
-    vec1->mat1D->values[i][0] += vec2->mat1D->values[i][0];
+  for (size_t i = 0; i < vec1->rows; i++) {
+    dv_set(vec1, i, dv_get(vec1, i) + dv_get(vec2, i));
   }
 }
 
@@ -213,12 +212,12 @@ void dv_add_vector(DoubleVector *vec1, const DoubleVector *vec2) {
  * @param vec2 (const)
  */
 void dv_sub_vector(DoubleVector *vec1, const DoubleVector *vec2) {
-  if (vec1->length != vec2->length) {
+  if (vec1->rows != vec2->rows) {
     perror("vectors are not same length");
   }
 
-  for (size_t i = 0; i < vec1->length; i++) {
-    vec1->mat1D->values[i][0] -= vec2->mat1D->values[i][0];
+  for (size_t i = 0; i < vec1->rows; i++) {
+    dv_set(vec1, i, dv_get(vec1, i) - dv_get(vec2, i));
   }
 }
 
@@ -229,8 +228,8 @@ void dv_sub_vector(DoubleVector *vec1, const DoubleVector *vec2) {
  * @param scalar
  */
 void dv_multiply_by_scalar(DoubleVector *vec, const double scalar) {
-  for (size_t i = 0; i < vec->length; i++) {
-    vec->mat1D->values[i][0] = vec->mat1D->values[i][0] * scalar;
+  for (size_t i = 0; i < vec->rows; i++) {
+    dv_set(vec, i, dv_get(vec, i) * scalar);
   }
 }
 
@@ -241,8 +240,8 @@ void dv_multiply_by_scalar(DoubleVector *vec, const double scalar) {
  * @param scalar
  */
 void dv_divide_by_scalar(DoubleVector *vec, const double scalar) {
-  for (size_t i = 0; i < vec->length; i++) {
-    vec->mat1D->values[i][0] = vec->mat1D->values[i][0] / scalar;
+  for (size_t i = 0; i < vec->rows; i++) {
+    dv_set(vec, i, dv_get(vec, i) / scalar);
   }
 }
 
@@ -253,8 +252,8 @@ void dv_divide_by_scalar(DoubleVector *vec, const double scalar) {
  * @param scalar
  */
 void dv_add_constant(DoubleVector *vec, const double constant) {
-  for (size_t i = 0; i < vec->length; i++) {
-    vec->mat1D->values[i][0] = vec->mat1D->values[i][0] + constant;
+  for (size_t i = 0; i < vec->rows; i++) {
+    dv_set(vec, i, dv_get(vec, i) + constant);
   }
 }
 
@@ -266,16 +265,14 @@ void dv_add_constant(DoubleVector *vec, const double constant) {
  * @return bool
  */
 bool dv_equal(DoubleVector *vec1, DoubleVector *vec2) {
-  if (vec1->length != vec2->length) {
+  if (vec1->rows != vec2->rows) {
     return false;
   }
-
-  for (size_t i = 0; i < vec1->length; i++) {
-    if (vec1->mat1D->values[i][0] != vec2->mat1D->values[i][0]) {
+  for (size_t i = 0; i < vec1->rows; i++) {
+    if (dv_get(vec1, i) != dv_get(vec2, i)) {
       return false;
     }
   }
-
   return true;
 }
 
@@ -287,11 +284,10 @@ bool dv_equal(DoubleVector *vec1, DoubleVector *vec2) {
  */
 double dv_mean(DoubleVector *vec) {
   double mean = 0.0;
-  for (size_t i = 0; i < vec->length; i++) {
-    mean += vec->mat1D->values[i][0];
+  for (size_t i = 0; i < vec->rows; i++) {
+    mean += dv_get(vec, i);
   }
-
-  return (mean / (double)vec->length);
+  return (mean / (double)vec->rows);
 }
 
 /**
@@ -301,10 +297,10 @@ double dv_mean(DoubleVector *vec) {
  * @return double
  */
 double dv_min(DoubleVector *vec) {
-  double min = vec->mat1D->values[0][0];
-  for (size_t i = 0; i < vec->length; i++) {
-    if (min > vec->mat1D->values[i][0]) {
-      min = vec->mat1D->values[i][0];
+  double min = vec->values[0];
+  for (size_t i = 1; i < vec->rows; i++) {
+    if (min > vec->values[i]) {
+      min = vec->values[i];
     }
   }
   return min;
@@ -317,10 +313,10 @@ double dv_min(DoubleVector *vec) {
  * @return double
  */
 double dv_max(DoubleVector *vec) {
-  double max = vec->mat1D->values[0][0];
-  for (size_t i = 0; i < vec->length; i++) {
-    if (max < vec->mat1D->values[i][0]) {
-      max = vec->mat1D->values[i][0];
+  double max = vec->values[0];
+  for (size_t i = 1; i < vec->rows; i++) {
+    if (max < vec->values[i]) {
+      max = vec->values[i];
     }
   }
   return max;
@@ -337,5 +333,6 @@ double *dm_get_row_as_array(const DoubleMatrix *mat, size_t row) {
   if (row < 0 || row > (mat->rows - 1)) {
     perror("This row does not exist");
   }
-  return (mat->values[row]);
+  // get row "row" of DoubleMatrix mat as array
+  return &mat->values[row * mat->cols];
 }

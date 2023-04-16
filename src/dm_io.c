@@ -36,9 +36,9 @@ int read_dm_vector_from_file(DoubleVector *vec, const char *filepath) {
     return 1;
   }
   int succ_read = 1;
-  for (size_t i = 0; i < vec->length; i++) {
+  for (size_t i = 0; i < vec->rows; i++) {
     // FIXME: insecure use of fscanf:
-    succ_read = fscanf(file, "%15lf", &vec->mat1D->values[i][0]);
+    succ_read = fscanf(file, "%15lf", &vec->values[i]);
   }
   fclose(file);
 
@@ -52,11 +52,11 @@ int write_dm_vector_to_file(DoubleVector *vec, const char *filepath) {
     return 1;
   }
 
-  for (size_t i = 0; i < vec->length; i++) {
-    if (i < vec->length - 1) {
-      fprintf(file, "%lf\n", vec->mat1D->values[i][0]);
+  for (size_t i = 0; i < vec->rows; i++) {
+    if (i < vec->rows - 1) {
+      fprintf(file, "%lf\n", vec->values[i]);
     } else {
-      fprintf(file, "%lf", vec->mat1D->values[i][0]);
+      fprintf(file, "%lf", vec->values[i]);
     }
   }
   fclose(file);
@@ -71,8 +71,8 @@ int write_dm_vector_to_file(DoubleVector *vec, const char *filepath) {
  */
 void print_dm_vector(DoubleVector *vec) {
   double *array = dv_get_array(vec);
-  size_t length = vec->mat1D->rows;
-  if (vec->isColumnVector == false) {
+  size_t length = vec->rows;
+  if (vec->rows == 1) {
     for (size_t i = 0; i < length; i++) {
       if (i == 0) {
         printf("[%.2lf ", array[i]);
@@ -92,8 +92,7 @@ void print_dm_vector(DoubleVector *vec) {
         }
       }
     }
-    printf("Vector 1x%zi, Capacity %zi\n", vec->mat1D->rows,
-           vec->mat1D->rowCapacity);
+    printf("Vector 1x%zi\n", vec->rows);
   } else {
     for (size_t i = 0; i < length; i++) {
       if ((i < MAX_COLUMN_PRINT) || (i > length - MAX_COLUMN_PRINT - 1)) {
@@ -102,8 +101,7 @@ void print_dm_vector(DoubleVector *vec) {
         printf(" ... \n");
       }
     }
-    printf("Vector 1x%zi, Capacity %zi\n", vec->mat1D->rows,
-           vec->mat1D->rowCapacity);
+    printf("Vector 1x%zi\n", vec->rows);
   }
 }
 
@@ -119,20 +117,30 @@ void print_dm_vector(DoubleVector *vec) {
  * @param matrix
  */
 void print_dm_matrix(DoubleMatrix *matrix) {
-  if (matrix->rows < MAX_ROW) {
-    for (size_t i = 0; i < matrix->rows; i++) {
-      printDoubleArray(matrix->values[i], matrix->columns, 0);
+  // print to console a DoubleMatrix matrix row by row with 2 digits precision
+  for (size_t i = 0; i < matrix->rows; i++) {
+    printf("[ ");
+    for (size_t j = 0; j < matrix->cols; j++) {
+      printf("%f ", matrix->values[i * matrix->cols + j]);
     }
-  } else {
-    for (size_t i = 0; i < 4; i++) {
-      printDoubleArray(matrix->values[i], matrix->columns, 0);
-    }
-    printf("...\n");
-    for (size_t i = matrix->rows - 4; i < matrix->rows; i++) {
-      printDoubleArray(matrix->values[i], matrix->columns, 0);
-    }
+    printf("]\n");
   }
+  printf("Matrix %zix%zi\n", matrix->rows, matrix->cols);
 
-  printf("Matrix %zix%zi, Capacity %zix%zi\n", matrix->rows, matrix->columns,
-         matrix->rowCapacity, matrix->columnCapacity);
+  // if (matrix->rows < MAX_ROW) {
+  //   for (size_t i = 0; i < matrix->rows; i++) {
+  //     printDoubleArray(matrix->values[i], matrix->cols, 0);
+  //   }
+  // } else {
+  //   for (size_t i = 0; i < 4; i++) {
+  //     printDoubleArray(matrix->values[i], matrix->cols, 0);
+  //   }
+  //   printf("...\n");
+  //   for (size_t i = matrix->rows - 4; i < matrix->rows; i++) {
+  //     printDoubleArray(matrix->values[i], matrix->cols, 0);
+  //   }
+  // }
+
+  // printf("Matrix %zix%zi, Capacity %zix%zi\n", matrix->rows, matrix->cols,
+  //        matrix->rowCapacity, matrix->columnCapacity);
 }
