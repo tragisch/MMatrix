@@ -11,8 +11,8 @@
 
 #include "dm_io.h"
 
-#include <assert.h>
 
+#include <assert.h>
 #include "dbg.h"
 
 // #define NDEBUG

@@ -2,7 +2,9 @@
 #define DM_IO_H
 
 #include "dm_matrix.h"
+#include "dv_vector.h"
 #include "misc.h"
+#include "sp_matrix.h"
 
 /*******************************/
 /*     I/O Functions           */

@@ -13,6 +13,8 @@
 
 #include "dbg.h"
 #include "dm_matrix.h"
+#include "dv_vector.h"
+#include "sp_matrix.h"
 
 // #define NDEBUG
 #define INITIAL_SIZE 4
