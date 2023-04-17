@@ -6,9 +6,7 @@ unity_test(
     file_name = "test_DoubleMatrix.c",
     deps = [
         "//lib/misc",
-        "//src:dm_io",
-        "//src:dm_math",
-        "//src:dm_matrix",
+        "//src:matrix"
     ],
 )
 
@@ -18,9 +16,7 @@ unity_test(
     file_name = "test_DoubleVector.c",
     deps = [
         "//lib/misc",
-        "//src:dm_io",
-        "//src:dm_math",
-        "//src:dm_matrix",
+        "//src:matrix"
     ],
 )
 
@@ -30,9 +26,7 @@ unity_test(
     file_name = "test_dm_math.c",
     deps = [
         "//lib/misc",
-        "//src:dm_io",
-        "//src:dm_math",
-        "//src:dm_matrix",
+        "//src:matrix",
         "@dbg-macro"
     ],
 )

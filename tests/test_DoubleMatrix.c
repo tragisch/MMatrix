@@ -223,7 +223,7 @@ void test_dv_get_row(void) {
   values[11] = 12.0;
 
   // get row vector
-  DoubleVector *vec = dv_get_row_matrix(mat, 1);
+  DoubleVector *vec = dv_get_row_vector(mat, 1);
 
   // check vector length
   TEST_ASSERT_EQUAL_INT(4, vec->rows);
@@ -247,7 +247,7 @@ void test_dv_get_column(void) {
       dm_set(mat, i, j, values[i][j]);
     }
   }
-  DoubleVector *vec = dv_get_column_matrix(mat, 1);
+  DoubleVector *vec = dv_get_column_vector(mat, 1);
   TEST_ASSERT_EQUAL_DOUBLE(2.0, dv_get(vec, 0));
   TEST_ASSERT_EQUAL_DOUBLE(4.0, dv_get(vec, 1));
   TEST_ASSERT_EQUAL_DOUBLE(6.0, dv_get(vec, 2));
@@ -285,4 +285,50 @@ void test_dm_get(void) {
 
   // Free the memory allocated for the matrix.
   dm_destroy(mat);
+}
+
+void test_sp_create_rand() {
+  size_t rows = 10;
+  size_t cols = 10;
+  double density = 0.5;
+  SparseMatrix *sp_matrix = sp_create_rand(rows, cols, density);
+
+  TEST_ASSERT_EQUAL(rows, sp_matrix->rows);
+  TEST_ASSERT_EQUAL(cols, sp_matrix->cols);
+  TEST_ASSERT_TRUE(sp_matrix->is_sparse);
+
+  size_t nnz = sp_matrix->nnz;
+  TEST_ASSERT_TRUE(nnz > 0);
+  TEST_ASSERT_TRUE(nnz <= rows * cols);
+
+  double *values = sp_matrix->values;
+  size_t *col_idx = sp_matrix->col_idx;
+  size_t *row_ptr = sp_matrix->row_ptr;
+
+  for (size_t i = 0; i < rows; i++) {
+    size_t start = row_ptr[i];
+    size_t end = row_ptr[i + 1];
+    for (size_t j = start; j < end; j++) {
+      TEST_ASSERT_TRUE(col_idx[j] < cols);
+      TEST_ASSERT_TRUE(values[j] >= 0.0);
+      TEST_ASSERT_TRUE(values[j] <= 1.0);
+    }
+  }
+
+  sp_destroy(sp_matrix);
+}
+
+void test_sp_destroy() {
+  size_t rows = 10;
+  size_t cols = 10;
+  double density = 0.5;
+  SparseMatrix *sp_matrix = sp_create_rand(rows, cols, density);
+
+  // Call the function under test
+  sp_destroy(sp_matrix);
+
+  // Check that all memory was freed
+  TEST_ASSERT_NULL(sp_matrix->row_ptr);
+  TEST_ASSERT_NULL(sp_matrix->col_idx);
+  TEST_ASSERT_NULL(sp_matrix->values);
 }
