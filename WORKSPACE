@@ -73,3 +73,14 @@ http_archive(
     url = "https://github.com/eerimoq/dbg-macro/archive/refs/tags/0.12.1.zip",
 )
 
+http_archive(
+    name = "pbPlots",
+    build_file = "@//:third_party/http/pbPlots/BUILD",
+    sha256 = "203921e5bd931cfe8bcaf0c8b7e1695c6627fe90ccafe4c233fc057a3cb6f619",
+    strip_prefix = "pbPlots-0.1.9.1",
+    url = "https://github.com/InductiveComputerScience/pbPlots/archive/refs/tags/v0.1.9.1.zip",
+)
+
+
+
+
