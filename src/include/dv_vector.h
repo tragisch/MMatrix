@@ -29,7 +29,7 @@ DoubleVector *dv_create_from_array(const double *array, const size_t length);
 DoubleVector *dv_clone(DoubleVector *vector);
 
 // Test if vector is a column or row vector:
-bool dv_is_row_vector(DoubleMatrix *vector);
+bool dv_is_row_vector(const DoubleVector *vec);
 
 // Get DoubleVector from DoubleMatrix:
 DoubleVector *dv_get_row_vector(DoubleMatrix *mat, size_t row);

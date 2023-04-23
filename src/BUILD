@@ -6,6 +6,7 @@ cc_library(
         "dm_math.c",
         "dm_io.c",
         "dv_vector.c",
+        "dv_math.c",
     ],
     hdrs = [
         "include/sp_matrix.h",
@@ -13,12 +14,14 @@ cc_library(
         "include/dm_math.h",
         "include/dm_io.h",
         "include/dv_vector.h",
+        "include/dv_math.h",
     ],
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
         "//lib/misc",
         "@dbg-macro",
+        "@pbPlots",
     ],
 )
 

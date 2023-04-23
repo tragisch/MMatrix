@@ -211,6 +211,9 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
     perror("Error: matrix index out of bounds.\n");
     return 0;
   }
+  if (mat->is_sparse) {
+    return sp_get(mat, i, j);
+  }
   return mat->values[i * mat->cols + j];
 }
 
@@ -226,7 +229,11 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value) {
     perror("Error: matrix index out of bounds.\n");
     return;
   }
-  mat->values[i * mat->cols + j] = value;
+  if (mat->is_sparse) {
+    sp_set(mat, i, j, value);
+  } else {
+    mat->values[i * mat->cols + j] = value;
+  }
 }
 
 /**
@@ -234,8 +241,19 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value) {
  *
  * @param mat
  */
-void dm_destroy(DoubleMatrix *mat) {
-  sp_destroy(mat);
-  // free(mat->values);
-  // free(mat);
+void dm_destroy(DoubleMatrix *mat) { sp_destroy(mat); }
+
+/**
+ * @brief convert sparse matrix to dense matrix
+ *
+ * @param mat
+ */
+DoubleMatrix *dm_sparse_to_dense(SparseMatrix *sp_mat) {
+  DoubleMatrix *mat = dm_create(sp_mat->rows, sp_mat->cols);
+  for (size_t i = 0; i < sp_mat->rows; i++) {
+    for (size_t j = 0; j < sp_mat->cols; j++) {
+      dm_set(mat, i, j, sp_get(sp_mat, i, j));
+    }
+  }
+  return mat;
 }

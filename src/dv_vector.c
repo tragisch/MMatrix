@@ -58,7 +58,7 @@ DoubleVector *dv_clone(DoubleVector *vector) {
   return clone;
 }
 
-bool dv_is_row_vector(DoubleMatrix *vec) {
+bool dv_is_row_vector(const DoubleVector *vec) {
   bool is_vector = false;
   if ((vec->cols == 1) && (vec->rows > 1)) {
     is_vector = true;
