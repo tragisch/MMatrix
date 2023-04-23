@@ -1,22 +1,27 @@
 #include "dbg.h"
+
 #include "dm_math.h"
 #include "dm_matrix.h"
+#include "dv_math.h"
+#include "sp_matrix.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
-
-#define UNITY_INCLUDE_DOUBLE
-#define UNITY_DOUBLE_PRECISION 10
-// #define UPPER_BOUND 100
-
-#include "unity.h"
-#include "unity_internals.h"
 
 /******************************
  ** Test preconditions:
  *******************************/
 
-enum { INIT_CAPACITY = 2U };
+#define UNITY_INCLUDE_DOUBLE
+#define UNITY_DOUBLE_PRECISION 10
+
+#include "unity.h"
+#include "unity_internals.h"
+
+/******************************
+ ** Tests
+ *******************************/
 
 void test_dm_transpose() {
   // Create a test matrix
@@ -41,49 +46,6 @@ void test_dm_transpose() {
 
   // Free the memory allocated for the matrix
   dm_destroy(matrix);
-}
-
-// void test_dm_equal_matrix() {
-//   // Create two test matrices with equal dimensions and values
-//   double array1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
-//   DoubleMatrix *matrix1 = dm_create_from_array(2, 3, array1);
-//   DoubleMatrix *matrix2 = dm_create_from_array(2, 3, array1);
-
-//   // Compare the matrices and ensure they are equal
-//   TEST_ASSERT_TRUE(dm_equal_matrix(matrix1, matrix2));
-
-//   // Modify one of the matrices and ensure they are no longer equal
-//   matrix1->values[0][0] = 7.0;
-//   TEST_ASSERT_FALSE(dm_equal_matrix(matrix1, matrix2));
-
-//   // Free the memory allocated for the matrices
-//   dm_destroy(matrix1);
-//   dm_destroy(matrix2);
-// }
-
-void test_dm_multiply_with_matrix() {
-  // Create two test matrices
-  double array1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
-  DoubleMatrix *matrix1 = dm_create_from_array(2, 3, array1);
-
-  double array2[3][2] = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
-  DoubleMatrix *matrix2 = dm_create_from_array(3, 2, array2);
-
-  // Calculate the product of the two matrices
-  DoubleMatrix *result = dm_multiply_with_matrix(matrix1, matrix2);
-
-  // Create the expected result matrix
-  double expected_array[2][2] = {{58.0, 64.0}, {139.0, 154.0}};
-  DoubleMatrix *expected_result = dm_create_from_array(2, 2, expected_array);
-
-  // Compare the result with the expected result
-  TEST_ASSERT_TRUE(dm_equal_matrix(result, expected_result));
-
-  // Free the memory allocated for the matrices and result
-  dm_destroy(matrix1);
-  dm_destroy(matrix2);
-  dm_destroy(result);
-  dm_destroy(expected_result);
 }
 
 void test_dv_multiply_with_matrix() {
@@ -116,190 +78,29 @@ void test_dv_multiply_with_matrix() {
   dv_destroy(expected_result);
 }
 
-void test_dv_dot_product() {
-  // create two vectors to compute the cross product of
-  double array1[3] = {1.0, 3.0, -5.0};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
+void test_dm_multiply_with_matrix() {
+  // Create two test matrices
+  double array1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  DoubleMatrix *matrix1 = dm_create_from_array(2, 3, array1);
 
-  double array2[3] = {4.0, -2.0, -1.0};
-  DoubleVector *vec2 = dv_create_from_array(array2, 3);
+  double array2[3][2] = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
+  DoubleMatrix *matrix2 = dm_create_from_array(3, 2, array2);
 
-  // compute the cross product
-  double cross = dv_dot_product(vec1, vec2);
+  // Calculate the product of the two matrices
+  DoubleMatrix *result = dm_multiply_with_matrix(matrix1, matrix2);
 
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(3, cross);
+  // Create the expected result matrix
+  double expected_array[2][2] = {{58.0, 64.0}, {139.0, 154.0}};
+  DoubleMatrix *expected_result = dm_create_from_array(2, 2, expected_array);
 
-  // clean up memory
-  dv_destroy(vec1);
-  dv_destroy(vec2);
-}
+  // Compare the result with the expected result
+  TEST_ASSERT_TRUE(dm_equal_matrix(result, expected_result));
 
-void test_dv_add_vector() {
-  // create two vectors to add together
-  double array1[3] = {1, 2, 3};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-
-  double array2[3] = {4, 5, 6};
-  DoubleVector *vec2 = dv_create_from_array(array2, 3);
-
-  // add vec2 to vec1
-  dv_add_vector(vec1, vec2);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(5, dm_get(vec1, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(7, dm_get(vec1, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(9, dm_get(vec1, 2, 0));
-
-  // clean up memory
-  dv_destroy(vec1);
-  dv_destroy(vec2);
-}
-
-void test_dv_sub_vector() {
-  // create two vectors to add together
-  double array1[3] = {1, 2, 3};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-
-  double array2[3] = {4, 5, 6};
-  DoubleVector *vec2 = dv_create_from_array(array2, 3);
-
-  // add vec2 to vec1
-  dv_sub_vector(vec1, vec2);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(-4, dm_get(vec1, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(-3, dm_get(vec1, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(-3, dm_get(vec1, 2, 0));
-
-  // clean up memory
-  dv_destroy(vec1);
-  dv_destroy(vec2);
-}
-
-void test_dv_multiply_by_scalar() {
-  // create two vectors to add together
-  double array1[3] = {1, 2, 3};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-  double scalar = 4.16;
-
-  // add vec2 to vec1
-  dv_multiply_by_scalar(vec1, scalar);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(4.16, dm_get(vec1, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(8.32, dm_get(vec1, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(12.48, dm_get(vec1, 2, 0));
-
-  // clean up memory
-  dv_destroy(vec1);
-}
-
-void test_dv_divide_by_scalar() {
-  // create two vectors to add together
-  double array1[3] = {5, 1, 4};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-  double scalar = 4.16;
-
-  // add vec2 to vec1
-  dv_divide_by_scalar(vec1, scalar);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(1.20192, dm_get(vec1, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(0.240385, dm_get(vec1, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(0.961538, dm_get(vec1, 2, 0));
-
-  // clean up memory
-  dv_destroy(vec1);
-}
-
-void test_dv_add_constant() {
-  // create two vectors to add together
-  double array1[3] = {5, 1, 4};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-  double scalar = 2.445;
-
-  // add constant to vec
-  dv_add_constant(vec1, scalar);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(7.445, dm_get(vec1, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(3.445, dm_get(vec1, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(6.445, dm_get(vec1, 2, 0));
-
-  // clean up memory
-  dv_destroy(vec1);
-}
-
-void test_dv_mean() {
-  // create two vectors to add together
-  double array1[3] = {5, 1, 4};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-
-  // mean of vec1
-  double mean = dv_mean(vec1);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(3.33333, mean);
-
-  // clean up memory
-  dv_destroy(vec1);
-}
-
-void test_dv_min() {
-  // create two vectors to add together
-  double array1[3] = {5, 1, 4};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-
-  // min of vec1
-  double min = dv_min(vec1);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(1, min);
-
-  // clean up memory
-  dv_destroy(vec1);
-}
-
-void test_dv_max() {
-  // create two vectors to add together
-  double array1[3] = {5, 1, 4};
-  DoubleVector *vec1 = dv_create_from_array(array1, 3);
-
-  // min of vec1
-  double max = dv_max(vec1);
-
-  // check that the resulting vector has the expected values
-  TEST_ASSERT_EQUAL_DOUBLE(5, max);
-
-  // clean up memory
-  dv_destroy(vec1);
-}
-
-void test_dv_magnitude() {
-  DoubleVector *vec = dv_create(3);
-  dv_set(vec, 0, 1.0);
-  dv_set(vec, 1, 2.0);
-  dv_set(vec, 2, 2.0);
-
-  double expected = 3.0;
-  double result = dv_magnitude(vec);
-
-  TEST_ASSERT_EQUAL_FLOAT(expected, result);
-
-  dv_destroy(vec);
-}
-
-void test_dv_normalize() {
-  double data[3] = {1.0, 2.0, 3.0};
-  DoubleVector *vec = dv_create_from_array(data, 3);
-  dv_normalize(vec);
-  TEST_ASSERT_EQUAL_DOUBLE(0.267261, dv_get(vec, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(0.534522, dv_get(vec, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(0.801783, dv_get(vec, 2));
-
-  // free memory
-  dv_destroy(vec);
+  // Free the memory allocated for the matrices and result
+  dm_destroy(matrix1);
+  dm_destroy(matrix2);
+  dm_destroy(result);
+  dm_destroy(expected_result);
 }
 
 void test_dm_determinant(void) {
@@ -362,4 +163,56 @@ void test_dm_inverse(void) {
   dm_destroy(inv1);
   dm_destroy(mat2);
   dm_destroy(inv2);
+}
+
+void test_dm_rank_dense() {
+  double values[3][3] = {{1.0, 2.0, 3.0}, {0.0, 1.0, 4.0}, {5.0, 6.0, 0.0}};
+  DoubleMatrix *mat = dm_create_from_array(3, 3, values);
+  int rank = dm_rank(mat);
+  TEST_ASSERT_EQUAL_INT(3, rank);
+}
+
+void test_dm_multiply_by_scalar() {
+  // Create a 2x2 matrix
+
+  DoubleMatrix *mat = dm_create(2, 2);
+  dm_set(mat, 0, 0, 1.0);
+  dm_set(mat, 0, 1, 2.0);
+  dm_set(mat, 1, 0, 3.0);
+  dm_set(mat, 1, 1, 4.0);
+
+  // Multiply by a scalar
+  dm_multiply_by_scalar(mat, 2.0);
+
+  // Check the result
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(mat, 1, 1));
+
+  // Clean up
+  dm_destroy(mat);
+}
+
+void test_dm_trace() {
+  // Create a 3x3 matrix
+  DoubleMatrix *mat = dm_create(3, 3);
+  dm_set(mat, 0, 0, 1.0);
+  dm_set(mat, 0, 1, 2.0);
+  dm_set(mat, 0, 2, 3.0);
+  dm_set(mat, 1, 0, 4.0);
+  dm_set(mat, 1, 1, 5.0);
+  dm_set(mat, 1, 2, 6.0);
+  dm_set(mat, 2, 0, 7.0);
+  dm_set(mat, 2, 1, 8.0);
+  dm_set(mat, 2, 2, 9.0);
+
+  // Calculate the trace
+  double trace = dm_trace(mat);
+
+  // Check the result
+  TEST_ASSERT_EQUAL_DOUBLE(15.0, trace);
+
+  // Clean up
+  dm_destroy(mat);
 }

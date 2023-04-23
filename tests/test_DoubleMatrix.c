@@ -3,18 +3,14 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-#define UNITY_INCLUDE_DOUBLE
-#define UNITY_DOUBLE_PRECISION 10
-// #define UPPER_BOUND 100
-
-#include "unity.h"
-#include "unity_internals.h"
-
 /******************************
  ** Test preconditions:
  *******************************/
+#define UNITY_INCLUDE_DOUBLE
+#define UNITY_DOUBLE_PRECISION 10
 
-enum { INIT_CAPACITY = 2U };
+#include "unity.h"
+#include "unity_internals.h"
 
 /******************************
  ** Test if precision works
@@ -302,14 +298,14 @@ void test_sp_create_rand() {
   TEST_ASSERT_TRUE(nnz <= rows * cols);
 
   double *values = sp_matrix->values;
-  size_t *col_idx = sp_matrix->col_idx;
-  size_t *row_ptr = sp_matrix->row_ptr;
+  size_t *col_indices = sp_matrix->col_indices;
+  size_t *row_indices = sp_matrix->row_indices;
 
   for (size_t i = 0; i < rows; i++) {
-    size_t start = row_ptr[i];
-    size_t end = row_ptr[i + 1];
+    size_t start = row_indices[i];
+    size_t end = row_indices[i + 1];
     for (size_t j = start; j < end; j++) {
-      TEST_ASSERT_TRUE(col_idx[j] < cols);
+      TEST_ASSERT_TRUE(col_indices[j] < cols);
       TEST_ASSERT_TRUE(values[j] >= 0.0);
       TEST_ASSERT_TRUE(values[j] <= 1.0);
     }
@@ -328,7 +324,47 @@ void test_sp_destroy() {
   sp_destroy(sp_matrix);
 
   // Check that all memory was freed
-  TEST_ASSERT_NULL(sp_matrix->row_ptr);
-  TEST_ASSERT_NULL(sp_matrix->col_idx);
+  TEST_ASSERT_NULL(sp_matrix->row_indices);
+  TEST_ASSERT_NULL(sp_matrix->col_indices);
   TEST_ASSERT_NULL(sp_matrix->values);
+}
+
+void test_convert_to_sparse() {
+  // Create a dense matrix
+
+  DoubleMatrix *dense = dm_create(3, 3);
+  double *values = dense->values;
+  values[0] = 1.0;
+  values[1] = 0.0;
+  values[2] = 0.0;
+  values[3] = 0.0;
+  values[4] = 2.0;
+  values[5] = 3.0;
+  values[6] = 0.0;
+  values[7] = 0.0;
+  values[8] = 4.0;
+
+  // Convert to sparse matrix
+  SparseMatrix *sparse = sp_convert_to_sparse(dense);
+
+  // Check that the sparse matrix has the correct values
+  TEST_ASSERT_EQUAL_UINT(3, sparse->rows);
+  TEST_ASSERT_EQUAL_UINT(3, sparse->cols);
+  TEST_ASSERT_EQUAL_UINT(4, sparse->nnz);
+  TEST_ASSERT_EQUAL_FLOAT(1.0, sparse->values[0]);
+  TEST_ASSERT_EQUAL_FLOAT(2.0, sparse->values[1]);
+  TEST_ASSERT_EQUAL_FLOAT(3.0, sparse->values[2]);
+  TEST_ASSERT_EQUAL_FLOAT(4.0, sparse->values[3]);
+  TEST_ASSERT_EQUAL_UINT(0, sparse->col_indices[0]);
+  TEST_ASSERT_EQUAL_UINT(0, sparse->row_indices[0]);
+  TEST_ASSERT_EQUAL_UINT(1, sparse->col_indices[1]);
+  TEST_ASSERT_EQUAL_UINT(1, sparse->row_indices[1]);
+  TEST_ASSERT_EQUAL_UINT(2, sparse->col_indices[2]);
+  TEST_ASSERT_EQUAL_UINT(1, sparse->row_indices[2]);
+  TEST_ASSERT_EQUAL_UINT(2, sparse->col_indices[3]);
+  TEST_ASSERT_EQUAL_UINT(2, sparse->row_indices[3]);
+
+  // Free memory
+  dm_destroy(dense);
+  sp_destroy(sparse);
 }

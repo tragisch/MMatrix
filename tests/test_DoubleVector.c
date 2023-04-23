@@ -1,19 +1,22 @@
-#include "dm_math.h"
-#include "dm_matrix.h"
+#include "dv_math.h"
+#include "dv_vector.h"
 #include "misc.h"
 
-#define UNITY_INCLUDE_DOUBLE
-#define UNITY_DOUBLE_PRECISION 10
-#define UPPER_BOUND 100
 
-#include "unity.h"
-#include "unity_internals.h"
 
 /******************************
  ** Test preconditions:
  *******************************/
 
-enum { INIT_CAPACITY = 2U };
+#define UNITY_INCLUDE_DOUBLE
+#define UNITY_DOUBLE_PRECISION 10
+
+#include "unity.h"
+#include "unity_internals.h"
+
+/******************************
+ ** Tests
+ *******************************/
 
 void setUp(void) {
   //..
