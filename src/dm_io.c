@@ -199,18 +199,28 @@ void sp_print_condensed(SparseMatrix *mat) {
 
 void sp_create_scatterplot(const SparseMatrix *mat, const char *filename) {
 
-  StringReference *errorMessage;
+  StringReference *errorMessage = NULL;
   RGBABitmapImageReference *imageReference = CreateRGBABitmapImageReference();
 
-  double *xs = (double *)mat->row_indices;
-  double *ys = (double *)mat->col_indices;
+  double *xs = malloc(sizeof(double) * mat->nnz);
+  double *ys = malloc(sizeof(double) * mat->nnz);
+
+  // convert mat->row_indices to double array
+
+  for (size_t i = 0; i < mat->nnz; i++) {
+    xs[i] = (double)mat->row_indices[i];
+    ys[i] = (double)mat->col_indices[i];
+  }
+
+  dbga(xs, mat->nnz);
+  dbga(ys, mat->nnz);
 
   // Create the plot
   ScatterPlotSeries *series = GetDefaultScatterPlotSeriesSettings();
-  series->xs = (double *)xs;
-  series->xsLength = mat->nnz / sizeof(double);
-  series->ys = (double *)ys;
-  series->ysLength = mat->rows / sizeof(double);
+  series->xs = xs;
+  series->xsLength = mat->nnz;
+  series->ys = ys;
+  series->ysLength = mat->rows;
   series->linearInterpolation = false;
   series->pointType = L"dots";
   series->pointTypeLength = wcslen(series->pointType);

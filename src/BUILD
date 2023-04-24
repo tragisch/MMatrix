@@ -23,7 +23,7 @@ cc_library(
     deps = [
         "//lib/misc",
         "@dbg-macro",
-        "@pbPlots",
+         "@pbPlots",
     ],
 )
 
