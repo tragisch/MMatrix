@@ -9,10 +9,10 @@
 /*      Double Matrix Math     */
 /*******************************/
 
-DoubleMatrix *dm_multiply_with_matrix(const DoubleMatrix *mat1,
-                                      const DoubleMatrix *mat2);
-DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
-                                      const DoubleMatrix *mat);
+DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
+                                    const DoubleMatrix *mat2);
+DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
+                                    const DoubleVector *vec);
 void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar);
 bool dm_equal_matrix(const DoubleMatrix *m1, const DoubleMatrix *m2);
 void dm_transpose(DoubleMatrix *mat);

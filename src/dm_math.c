@@ -71,7 +71,7 @@ bool dm_equal_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
  * @param m2
  * @return DoubleMatrix*
  */
-DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
+DoubleMatrix *dm_multiply_by_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
 
   if (mat1 == NULL || mat2 == NULL) {
     perror("Error: Matrices shouldn't be empty.");
@@ -116,14 +116,14 @@ void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
 }
 
 /**
- * @brief Vector Matrix
+ * @brief Matrix-Vector Multiplication (n x m) x (n x 1)
  *
  * @param vec
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
-                                      const DoubleMatrix *mat) {
+DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
+                                    const DoubleVector *vec) {
   if (vec->rows != mat->cols) {
     return NULL; // dimensions are incompatible, return NULL
   }
@@ -314,4 +314,3 @@ double dm_density(const DoubleMatrix *mat) {
   }
   return density / (mat->rows * mat->cols);
 }
-

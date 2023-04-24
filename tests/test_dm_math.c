@@ -48,7 +48,7 @@ void test_dm_transpose() {
   dm_destroy(matrix);
 }
 
-void test_dv_multiply_with_matrix() {
+void test_dm_multiply_by_vector() {
   // Create test matrix and vector
   double array[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   DoubleMatrix *matrix = dm_create_from_array(2, 3, array);
@@ -57,7 +57,7 @@ void test_dv_multiply_with_matrix() {
   DoubleVector *vector = dv_create_from_array(values, 3);
 
   // Calculate the product of the matrix and vector
-  DoubleVector *result = dv_multiply_with_matrix(vector, matrix);
+  DoubleVector *result = dm_multiply_by_vector(matrix, vector);
 
   // Create the expected result vector
   double expected_values[2] = {14.0, 32.0};
@@ -78,7 +78,7 @@ void test_dv_multiply_with_matrix() {
   dv_destroy(expected_result);
 }
 
-void test_dm_multiply_with_matrix() {
+void test_dm_multiply_by_matrix() {
   // Create two test matrices
   double array1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   DoubleMatrix *matrix1 = dm_create_from_array(2, 3, array1);
@@ -87,7 +87,7 @@ void test_dm_multiply_with_matrix() {
   DoubleMatrix *matrix2 = dm_create_from_array(3, 2, array2);
 
   // Calculate the product of the two matrices
-  DoubleMatrix *result = dm_multiply_with_matrix(matrix1, matrix2);
+  DoubleMatrix *result = dm_multiply_by_matrix(matrix1, matrix2);
 
   // Create the expected result matrix
   double expected_array[2][2] = {{58.0, 64.0}, {139.0, 154.0}};
@@ -216,3 +216,4 @@ void test_dm_trace() {
   // Clean up
   dm_destroy(mat);
 }
+
