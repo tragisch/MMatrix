@@ -38,6 +38,6 @@ void sp_destroy(SparseMatrix *sp_matrix);
 
 double sp_get(const SparseMatrix *mat, size_t i, size_t j);
 void sp_set(SparseMatrix *mat, size_t i, size_t j, double value);
-double sp_density(const SparseMatrix *mat);
+
 
 #endif // SP_MATRIX_UR_H

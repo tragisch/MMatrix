@@ -216,4 +216,3 @@ void test_dm_trace() {
   // Clean up
   dm_destroy(mat);
 }
-

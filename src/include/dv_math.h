@@ -5,6 +5,7 @@
 
 #include "dv_vector.h"
 #include "misc.h"
+#include "sp_math.h"
 
 // #define NDEBUG
 

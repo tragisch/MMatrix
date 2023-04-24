@@ -136,15 +136,7 @@ void sp_set(SparseMatrix *mat, size_t i, size_t j, double value) {
   mat->nnz++;
 }
 
-/*
- * @brief get density of sparse matrix
- *
- * @param mat
- */
 
-double sp_density(const SparseMatrix *mat) {
-  return (double)mat->nnz / (mat->rows * mat->cols);
-}
 
 /*
  * @brief resize sparse matrix
