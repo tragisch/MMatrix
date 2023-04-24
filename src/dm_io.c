@@ -168,11 +168,11 @@ void sp_print(const SparseMatrix *mat) {
   printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
   printf("values: ");
   for (size_t i = 0; i < mat->nnz; i++) {
-    printf("%lf ", mat->values[i]);
+    printf("%.2lf ", mat->values[i]);
   }
   printf("\n");
   printf("row_indices: ");
-  for (size_t i = 0; i < mat->rows + 1; i++) {
+  for (size_t i = 0; i < mat->nnz; i++) {
     printf("%zu ", mat->row_indices[i]);
   }
   printf("\n");
@@ -185,16 +185,16 @@ void sp_print(const SparseMatrix *mat) {
 
 void sp_print_condensed(SparseMatrix *mat) {
   printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
-  for (size_t i = 0; i < mat->rows; i++) {
-    size_t start = mat->row_indices[i];
-    size_t end = mat->row_indices[i + 1];
-
-    for (size_t j = start; j < end; j++) {
-      printf("(%zu,%zu): %f ", i, mat->col_indices[j], mat->values[j]);
+  size_t start = mat->row_indices[0];
+  for (size_t i = 0; i < mat->nnz; i++) {
+    if (start != mat->row_indices[i]) {
+      printf("\n");
+      start = mat->row_indices[i];
     }
-
-    printf("\n");
+    printf("(%zu,%zu): %.2lf, ", mat->row_indices[i], mat->col_indices[i],
+           mat->values[i]);
   }
+  printf("\n");
 }
 
 void sp_create_scatterplot(const SparseMatrix *mat, const char *filename) {
@@ -202,8 +202,8 @@ void sp_create_scatterplot(const SparseMatrix *mat, const char *filename) {
   StringReference *errorMessage;
   RGBABitmapImageReference *imageReference = CreateRGBABitmapImageReference();
 
-  int *xs = (int *)mat->row_indices;
-  int *ys = (int *)mat->col_indices;
+  double *xs = (double *)mat->row_indices;
+  double *ys = (double *)mat->col_indices;
 
   // Create the plot
   ScatterPlotSeries *series = GetDefaultScatterPlotSeriesSettings();
