@@ -257,3 +257,36 @@ DoubleMatrix *dm_sparse_to_dense(SparseMatrix *sp_mat) {
   }
   return mat;
 }
+
+/**
+ * @brief get sub matrix of matrix
+ *
+ * @param mat
+ * @param row_start
+ * @param row_end
+ * @param col_start
+ * @param col_end
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
+                                size_t row_end, size_t col_start,
+                                size_t col_end) {
+  if (row_start < 0 || row_start > mat->rows || row_end < 0 ||
+      row_end > mat->rows || col_start < 0 || col_start > mat->cols ||
+      col_end < 0 || col_end > mat->cols) {
+    perror("Error: matrix index out of bounds.\n");
+    return NULL;
+  }
+  if (row_start > row_end || col_start > col_end) {
+    perror("Error: matrix index out of bounds.\n");
+    return NULL;
+  }
+  DoubleMatrix *sub_mat =
+      dm_create(row_end - row_start + 1, col_end - col_start + 1);
+  for (size_t i = row_start; i <= row_end; i++) {
+    for (size_t j = col_start; j <= col_end; j++) {
+      dm_set(sub_mat, i - row_start, j - col_start, dm_get(mat, i, j));
+    }
+  }
+  return sub_mat;
+}

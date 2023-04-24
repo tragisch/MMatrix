@@ -29,6 +29,9 @@ DoubleMatrix *dm_clone(DoubleMatrix *m);
 DoubleMatrix *dm_create_identity(size_t rows);
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
                                    double array[rows][cols]);
+DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
+                                size_t row_end, size_t col_start,
+                                size_t col_end);
 
 // Test if vector or matrix (true = vector)
 bool dm_is_vector(DoubleMatrix *mat);
