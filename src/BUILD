@@ -1,7 +1,9 @@
 cc_library(
     name = "matrix",
     srcs = [
-        "sp_matrix.c",
+        "sp_coo_matrix.c",
+        "sp_csc_matrix.c",
+        "sp_csr_matrix.c",
         "dm_matrix.c",
         "dm_math.c",
         "dm_io.c",
@@ -11,14 +13,9 @@ cc_library(
         "sp_special.c",
     ],
     hdrs = [
-        "include/sp_matrix.h",
         "include/dm_matrix.h",
         "include/dm_math.h",
         "include/dm_io.h",
-        "include/dv_vector.h",
-        "include/dv_math.h",
-        "include/sp_math.h",
-        "include/sp_special.h"
     ],
     includes = ["include"],
     visibility = ["//visibility:public"],

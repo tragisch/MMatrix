@@ -1,11 +1,8 @@
 #ifndef MATRIX_UR_H
 #define MATRIX_UR_H
 
-#include <stdbool.h>
-
-#include "dv_vector.h"
 #include "misc.h"
-#include "sp_matrix.h"
+#include <stdbool.h>
 
 // #define NDEBUG
 
@@ -53,6 +50,9 @@ void sp_destroy(SparseMatrix *sp_matrix);
 
 double sp_get(const SparseMatrix *mat, size_t i, size_t j);
 void sp_set(SparseMatrix *mat, size_t i, size_t j, double value);
+static void sp_set_coo(SparseMatrix *mat, size_t i, size_t j, double value);
+static void sp_set_csr(SparseMatrix *mat, size_t i, size_t j, double value);
+static void sp_set_csc(SparseMatrix *mat, size_t i, size_t j, double value);
 
 /*******************************/
 /*        Double Matrix        */

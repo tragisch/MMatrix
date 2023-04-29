@@ -47,7 +47,7 @@ void dm_transpose(DoubleMatrix *mat) {
  * @return true
  * @return false
  */
-bool dm_equal_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
+bool dm_equal_matrix(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1 == NULL || mat2 == NULL) {
     return false;
   }
@@ -69,7 +69,8 @@ bool dm_equal_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
  * @param m2
  * @return DoubleMatrix*
  */
-DoubleMatrix *dm_multiply_by_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
+DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
+                                    const DoubleMatrix *mat2) {
 
   if (mat1 == NULL || mat2 == NULL) {
     perror("Error: Matrices shouldn't be empty.");
@@ -78,7 +79,7 @@ DoubleMatrix *dm_multiply_by_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
 
   if (mat1->cols != mat2->rows) {
     perror(
-        "Error: number of columns of m1 has to be euqal to number fo rows of "
+        "Error: number of columns of m1 has to be euqal to number of rows of "
         "m2!");
     return NULL;
   }

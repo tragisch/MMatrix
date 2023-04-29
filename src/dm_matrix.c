@@ -139,10 +139,10 @@ bool dm_is_vector(DoubleMatrix *mat) {
 
 void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols) {
   if (rows < 1 || cols < 1) {
-    perror("destroy matrix instead of setting zero sizes!");
+    perror("Matrix dimensions must be greater than 0");
   } else {
     // in case of a dense matrix:
-    if ((mat->cols != cols) || (mat->rows != rows)) {
+    if (mat->format == DENSE) {
       double *new_data = (double *)calloc(rows * cols, sizeof(double));
       size_t min_rows = mat->rows < rows ? mat->rows : rows;
       size_t min_cols = mat->cols < cols ? mat->cols : cols;

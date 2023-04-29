@@ -85,8 +85,7 @@ SparseMatrix *sp_create_format(size_t rows, size_t cols, matrix_format format) {
   case DENSE:
     mat->row_indices = NULL;
     mat->col_indices = NULL;
-    mat->values =
-        (double *)malloc((mat->rows * mat->cols) * sizeof(double));
+    mat->values = (double *)malloc((mat->rows * mat->cols) * sizeof(double));
     break;
   }
 
@@ -146,6 +145,9 @@ double sp_get(const SparseMatrix *mat, size_t i, size_t j) {
       return mat->values[k];
     }
   }
+
+  // if not found, return 0.0
+  return 0.0;
 }
 
 void sp_set(SparseMatrix *mat, size_t i, size_t j, double value) {
@@ -180,8 +182,27 @@ static void sp_set_coo(SparseMatrix *mat, size_t i, size_t j, double value) {
   }
 }
 
+static void sp_set_csr(SparseMatrix *mat, size_t i, size_t j, double value) {
+  // search for the element with row i and column j
+  for (int k = mat->row_indices[i]; k < mat->row_indices[i + 1]; k++) {
+    if (mat->col_indices[k] == j) {
+      // update the value if element is found
+      mat->values[k] = value;
+      return;
+    }
+  }
+}
 
-
+static void sp_set_csc(SparseMatrix *mat, size_t i, size_t j, double value) {
+  // search for the element with row i and column j
+  for (int k = mat->col_indices[j]; k < mat->col_indices[j + 1]; k++) {
+    if (mat->row_indices[k] == i) {
+      // update the value if element is found
+      mat->values[k] = value;
+      return;
+    }
+  }
+}
 
 /*
  * @brief resize sparse matrix
@@ -241,40 +262,6 @@ bool sp_is_valid(const SparseMatrix *a) {
     return false;
   }
   return true;
-}
-
-// convert a DoubleMatriy (dense) to a SparseMatrix
-SparseMatrix *sp_convert_to_sparse(const DoubleMatrix *dense) {
-  SparseMatrix *sparse = sp_create(dense->rows, dense->cols);
-
-  // Count the number of non-zero elements
-  for (size_t i = 0; i < dense->rows; i++) {
-    for (size_t j = 0; j < dense->cols; j++) {
-      if (dense->values[i * dense->cols + j] != 0.0) {
-        sparse->nnz++;
-      }
-    }
-  }
-
-  // Allocate memory for the COO format
-  sparse->row_indices = (size_t *)malloc((sparse->nnz + 1) * sizeof(size_t));
-  sparse->col_indices = (size_t *)malloc(sparse->nnz * sizeof(size_t));
-  sparse->values = (double *)malloc(sparse->nnz * sizeof(double));
-
-  // Fill in the COO format
-  size_t k = 0;
-  for (size_t i = 0; i < dense->rows; i++) {
-    for (size_t j = 0; j < dense->cols; j++) {
-      double val = dense->values[i * dense->cols + j];
-      if (val != 0.0) {
-        sparse->col_indices[k] = j;
-        sparse->row_indices[k] = i;
-        sparse->values[k] = val;
-        k++;
-      }
-    }
-  }
-  return sparse;
 }
 
 /*******************************/

@@ -24,7 +24,7 @@
  * @param vec2
  * @return double
  */
-double dv_dot_product(DoubleVector *vec1, DoubleVector *vec2) {
+double dv_dot_product(const DoubleVector *vec1, const DoubleVector *vec2) {
   if (vec1->rows != vec2->rows) {
     perror("vectors have not same length");
     return 0;
@@ -135,7 +135,7 @@ bool dv_equal(DoubleVector *vec1, DoubleVector *vec2) {
  * @param vec
  * @return double
  */
-double dv_mean(DoubleVector *vec) {
+double dv_mean(const DoubleVector *vec) {
   double mean = 0.0;
   for (size_t i = 0; i < vec->rows; i++) {
     mean += dv_get(vec, i);
@@ -149,7 +149,7 @@ double dv_mean(DoubleVector *vec) {
  * @param vec
  * @return double
  */
-double dv_min(DoubleVector *vec) {
+double dv_min(const DoubleVector *vec) {
   double min = vec->values[0];
   for (size_t i = 1; i < vec->rows; i++) {
     if (min > vec->values[i]) {
@@ -165,7 +165,7 @@ double dv_min(DoubleVector *vec) {
  * @param vec
  * @return double
  */
-double dv_max(DoubleVector *vec) {
+double dv_max(const DoubleVector *vec) {
   double max = vec->values[0];
   for (size_t i = 1; i < vec->rows; i++) {
     if (max < vec->values[i]) {
