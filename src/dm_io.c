@@ -10,10 +10,9 @@
  */
 
 #include "dm_io.h"
-
 #include "dbg.h"
-#include <assert.h>
-#include <ncurses.h>
+#include "dm_math.h"
+#include "dm_matrix.h"
 
 // #define NDEBUG
 #define BRAILLE_SIZE 10

@@ -9,13 +9,9 @@
  *
  */
 
-#include "dv_vector.h"
-#include "dm_matrix.h"
-#include "sp_matrix.h"
-
-// debug:
 #include "dbg.h"
-#include <assert.h>
+#include "dm_math.h"
+#include "dm_matrix.h"
 
 // #define NDEBUG
 enum { INIT_CAPACITY = 2U };

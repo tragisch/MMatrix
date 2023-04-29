@@ -8,6 +8,7 @@ cc_library(
         "dv_vector.c",
         "dv_math.c",
         "sp_math.c",
+        "sp_special.c",
     ],
     hdrs = [
         "include/sp_matrix.h",
@@ -17,6 +18,7 @@ cc_library(
         "include/dv_vector.h",
         "include/dv_math.h",
         "include/sp_math.h",
+        "include/sp_special.h"
     ],
     includes = ["include"],
     visibility = ["//visibility:public"],

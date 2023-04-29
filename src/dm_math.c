@@ -12,10 +12,8 @@
 #include <assert.h>
 
 #include "dbg.h"
+#include "dm_math.h"
 #include "dm_matrix.h"
-#include "dv_math.h"
-#include "dv_vector.h"
-#include "sp_matrix.h"
 
 /*******************************/
 /*     Double Matrix Math      */
@@ -235,7 +233,7 @@ int dm_rank(const DoubleMatrix *mat) {
   int rank = 0;
 
   // Convert to dense matrix if sparse
-  if (mat->is_sparse) {
+  if (mat->format != DENSE) {
     perror("Sparse matrices not supported yet!");
     return -1;
   }
@@ -301,7 +299,7 @@ int dm_rank(const DoubleMatrix *mat) {
 }
 
 double dm_density(const DoubleMatrix *mat) {
-  if (mat->is_sparse)
+  if (mat->format != DENSE)
     return sp_density(mat);
 
   double density = 0.0;

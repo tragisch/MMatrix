@@ -10,10 +10,8 @@
  */
 
 #include "dm_matrix.h"
-
-#include <assert.h>
-
 #include "dbg.h"
+#include "dm_math.h"
 
 // #define NDEBUG
 enum { INIT_CAPACITY = 2U };
@@ -31,7 +29,7 @@ DoubleMatrix *dm_matrix() {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->cols = 0U;
   matrix->rows = 0U;
-  matrix->is_sparse = false;
+  matrix->format = DENSE;
   matrix->values = (double *)malloc(INIT_CAPACITY * sizeof(double));
   return matrix;
 }
@@ -48,7 +46,7 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->rows = rows;
   matrix->cols = cols;
-
+  matrix->format = DENSE;
   matrix->values =
       (double *)malloc((matrix->rows * matrix->cols) * sizeof(double));
   return matrix;
@@ -211,7 +209,7 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
     perror("Error: matrix index out of bounds.\n");
     return 0;
   }
-  if (mat->is_sparse) {
+  if (mat->format != DENSE) {
     return sp_get(mat, i, j);
   }
   return mat->values[i * mat->cols + j];
@@ -229,7 +227,7 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value) {
     perror("Error: matrix index out of bounds.\n");
     return;
   }
-  if (mat->is_sparse) {
+  if (mat->format != DENSE) {
     sp_set(mat, i, j, value);
   } else {
     mat->values[i * mat->cols + j] = value;

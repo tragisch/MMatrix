@@ -9,11 +9,9 @@
  *
  */
 
-#include <assert.h>
-
 #include "dbg.h"
+#include "dm_math.h"
 #include "dm_matrix.h"
-#include "sp_matrix.h"
 
 /*******************************/
 /*     Double Matrix Math      */

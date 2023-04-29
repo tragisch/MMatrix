@@ -9,10 +9,9 @@
  *
  */
 
-#include <assert.h>
-
 #include "dbg.h"
-#include "dv_vector.h"
+#include "dm_math.h"
+#include "dm_matrix.h"
 
 /*******************************/
 /*     Double Vector Math      */
@@ -241,8 +240,3 @@ void dv_normalize(DoubleVector *vec) {
   double magnitude = dv_magnitude(vec);
   dv_divide_by_scalar(vec, magnitude);
 }
-
-
-
-
-
