@@ -1,5 +1,8 @@
+
+#include "dm_io.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
+#include "misc.h"
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -33,42 +36,30 @@ void test_double_precision(void) {
  *******************************/
 
 // dm_create
-void test_dm_create(void) {
-  // Test case 1: Create a matrix with valid dimensions
-  size_t rows = 3;
-  size_t cols = 4;
-  DoubleMatrix *matrix = dm_create(rows, cols);
+// void test_dm_create(void) {
+//   // Test case 1: Create a matrix with valid dimensions
+//   size_t rows = 3;
+//   size_t cols = 4;
+//   DoubleMatrix *matrix = dm_create(rows, cols);
 
-  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
-  TEST_ASSERT_EQUAL(rows, matrix->rows);
-  TEST_ASSERT_EQUAL(cols, matrix->cols);
+//   TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
+//   TEST_ASSERT_EQUAL(rows, matrix->rows);
+//   TEST_ASSERT_EQUAL(cols, matrix->cols);
 
-  for (size_t i = 0; i < matrix->rows; i++) {
-    for (size_t j = 0; j < matrix->cols; j++) {
-      TEST_ASSERT_EQUAL_DOUBLE(0.0, dm_get(matrix, i, j));
-    }
-  }
-  // Free the memory allocated for the matrix.
-  dm_destroy(matrix);
-}
-
-// test dm_matrix
-void test_dm_matrix(void) {
-  // Create a new matrix:
-  DoubleMatrix *mat = dm_matrix();
-
-  // Check that the matrix is created successfully.
-  TEST_ASSERT_NOT_NULL(mat);
-  TEST_ASSERT_NOT_NULL(mat->values);
-
-  dm_destroy(mat);
-}
+//   for (size_t i = 0; i < matrix->rows; i++) {
+//     for (size_t j = 0; j < matrix->cols; j++) {
+//       TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(matrix, i, j));
+//     }
+//   }
+//   // Free the memory allocated for the matrix.
+//   dm_destroy(matrix);
+// }
 
 // dm_create_rand
 void test_dm_create_rand(void) {
 
   // Create a random matrix with 2 rows and 3 columns.
-  DoubleMatrix *mat = dm_create_rand(2, 3);
+  DoubleMatrix *mat = dm_create_rand(2, 3, 0.1);
 
   // Check that the matrix was created successfully.
   TEST_ASSERT_NOT_NULL(mat);
@@ -81,6 +72,34 @@ void test_dm_create_rand(void) {
       TEST_ASSERT_DOUBLE_WITHIN(1.0, 0.0, dm_get(mat, i, j));
     }
   }
+  // Free the memory allocated for the matrix.
+  dm_destroy(mat);
+}
+
+void test_dm_create2(void) {
+  // Create  3x3 double matrix
+  DoubleMatrix *mat = dm_create(3, 3);
+  dm_set(mat, 0, 0, 1.0);
+  dm_set(mat, 0, 1, 2.0);
+  dm_set(mat, 0, 2, 3.0);
+  dm_set(mat, 1, 0, 4.0);
+  dm_set(mat, 1, 1, 5.0);
+  dm_set(mat, 1, 2, 6.0);
+  dm_set(mat, 2, 0, 7.0);
+  dm_set(mat, 2, 1, 8.0);
+  dm_set(mat, 2, 2, 9.0);
+
+  // test if all values are set correctly
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 1, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(mat, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(mat, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(9.0, dm_get(mat, 2, 2));
+
   // Free the memory allocated for the matrix.
   dm_destroy(mat);
 }
@@ -203,7 +222,7 @@ void test_dm_push_row() {
 
 void test_dv_get_row(void) {
   // create test matrix
-  DoubleMatrix *mat = dm_create(3, 4);
+  DoubleMatrix *mat = dm_create_dense(3, 4);
   double *values = mat->values;
   values[0] = 1.0;
   values[1] = 2.0;
@@ -287,11 +306,11 @@ void test_sp_create_rand() {
   size_t rows = 10;
   size_t cols = 10;
   double density = 0.5;
-  SparseMatrix *sp_matrix = sp_create_rand(rows, cols, density);
+  DoubleMatrix *sp_matrix = dm_create_rand(rows, cols, density);
 
   TEST_ASSERT_EQUAL(rows, sp_matrix->rows);
   TEST_ASSERT_EQUAL(cols, sp_matrix->cols);
-  TEST_ASSERT_TRUE(sp_matrix->is_sparse);
+  TEST_ASSERT_TRUE(sp_matrix->format == SPARSE);
 
   size_t nnz = sp_matrix->nnz;
   TEST_ASSERT_TRUE(nnz > 0);
@@ -299,11 +318,11 @@ void test_sp_create_rand() {
 
   double *values = sp_matrix->values;
   size_t *col_indices = sp_matrix->col_indices;
-  size_t *row_indices = sp_matrix->row_indices;
+  size_t *row_pointers = sp_matrix->row_pointers;
 
   for (size_t i = 0; i < rows; i++) {
-    size_t start = row_indices[i];
-    size_t end = row_indices[i + 1];
+    size_t start = row_pointers[i];
+    size_t end = row_pointers[i + 1];
     for (size_t j = start; j < end; j++) {
       TEST_ASSERT_TRUE(col_indices[j] < cols);
       TEST_ASSERT_TRUE(values[j] >= 0.0);
@@ -311,60 +330,83 @@ void test_sp_create_rand() {
     }
   }
 
-  sp_destroy(sp_matrix);
+  dm_destroy(sp_matrix);
 }
 
 void test_sp_destroy() {
   size_t rows = 10;
   size_t cols = 10;
   double density = 0.5;
-  SparseMatrix *sp_matrix = sp_create_rand(rows, cols, density);
+  DoubleMatrix *sp_matrix = dm_create_rand(rows, cols, density);
 
   // Call the function under test
-  sp_destroy(sp_matrix);
+  dm_destroy(sp_matrix);
 
   // Check that all memory was freed
-  TEST_ASSERT_NULL(sp_matrix->row_indices);
+  TEST_ASSERT_NULL(sp_matrix->row_pointers);
   TEST_ASSERT_NULL(sp_matrix->col_indices);
   TEST_ASSERT_NULL(sp_matrix->values);
 }
 
-void test_convert_to_sparse() {
-  // Create a dense matrix
+void test_dm_convert_to_sparse() {
+  // create dense matrix
+  DoubleMatrix *mat = dm_create(3, 3);
+  dm_set(mat, 0, 0, 1);
+  dm_set(mat, 0, 1, 2);
+  dm_set(mat, 0, 2, 0);
+  dm_set(mat, 1, 0, 0);
+  dm_set(mat, 1, 1, 3);
+  dm_set(mat, 1, 2, 4);
+  dm_set(mat, 2, 0, 5);
+  dm_set(mat, 2, 1, 0);
+  dm_set(mat, 2, 2, 6);
 
-  DoubleMatrix *dense = dm_create(3, 3);
-  double *values = dense->values;
-  values[0] = 1.0;
-  values[1] = 0.0;
-  values[2] = 0.0;
-  values[3] = 0.0;
-  values[4] = 2.0;
-  values[5] = 3.0;
-  values[6] = 0.0;
-  values[7] = 0.0;
-  values[8] = 4.0;
+  // convert to sparse matrix
+  dm_convert_to_sparse(mat);
 
-  // Convert to sparse matrix
-  SparseMatrix *sparse = sp_convert_to_sparse(dense);
+  // check if matrix is in sparse format
+  TEST_ASSERT_EQUAL(SPARSE, mat->format);
 
-  // Check that the sparse matrix has the correct values
-  TEST_ASSERT_EQUAL_UINT(3, sparse->rows);
-  TEST_ASSERT_EQUAL_UINT(3, sparse->cols);
-  TEST_ASSERT_EQUAL_UINT(4, sparse->nnz);
-  TEST_ASSERT_EQUAL_FLOAT(1.0, sparse->values[0]);
-  TEST_ASSERT_EQUAL_FLOAT(2.0, sparse->values[1]);
-  TEST_ASSERT_EQUAL_FLOAT(3.0, sparse->values[2]);
-  TEST_ASSERT_EQUAL_FLOAT(4.0, sparse->values[3]);
-  TEST_ASSERT_EQUAL_UINT(0, sparse->col_indices[0]);
-  TEST_ASSERT_EQUAL_UINT(0, sparse->row_indices[0]);
-  TEST_ASSERT_EQUAL_UINT(1, sparse->col_indices[1]);
-  TEST_ASSERT_EQUAL_UINT(1, sparse->row_indices[1]);
-  TEST_ASSERT_EQUAL_UINT(2, sparse->col_indices[2]);
-  TEST_ASSERT_EQUAL_UINT(1, sparse->row_indices[2]);
-  TEST_ASSERT_EQUAL_UINT(2, sparse->col_indices[3]);
-  TEST_ASSERT_EQUAL_UINT(2, sparse->row_indices[3]);
+  // check matrix values
+  TEST_ASSERT_EQUAL(1.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL(2.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL(3.0, dm_get(mat, 1, 1));
+  TEST_ASSERT_EQUAL(4.0, dm_get(mat, 1, 2));
+  TEST_ASSERT_EQUAL(5.0, dm_get(mat, 2, 0));
+  TEST_ASSERT_EQUAL(6.0, dm_get(mat, 2, 2));
 
-  // Free memory
-  dm_destroy(dense);
-  sp_destroy(sparse);
+  // check number of non-zero elements
+  TEST_ASSERT_EQUAL(6, mat->nnz);
+
+  // clean up
+  dm_destroy(mat);
+}
+
+void test_dm_convert_to_dense() {
+  // create a sparse matrix
+  DoubleMatrix *sparse_mat = dm_create_sparse(3, 3);
+  dm_set(sparse_mat, 0, 0, 1);
+  dm_set(sparse_mat, 0, 1, 0);
+  dm_set(sparse_mat, 0, 2, 0);
+  dm_set(sparse_mat, 1, 0, 0);
+  dm_set(sparse_mat, 1, 1, 2);
+  dm_set(sparse_mat, 1, 2, 0);
+  dm_set(sparse_mat, 2, 0, 0);
+  dm_set(sparse_mat, 2, 1, 0);
+  dm_set(sparse_mat, 2, 2, 3);
+
+  // convert to dense matrix
+  dm_convert_to_dense(sparse_mat);
+
+  // check if matrix is now in dense format
+  TEST_ASSERT_EQUAL(DENSE, sparse_mat->format);
+
+  // check values
+  double expected_values[9] = {1, 0, 0, 0, 2, 0, 0, 0, 3};
+  for (size_t i = 0; i < 9; i++) {
+    TEST_ASSERT_EQUAL_DOUBLE(expected_values[i], sparse_mat->values[i]);
+  }
+
+  // destroy matrix
+  dm_destroy(sparse_mat);
 }

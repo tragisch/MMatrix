@@ -14,6 +14,14 @@
 #include "dbg.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
+#include <float.h>
+
+/*******************************/
+/*     General functions       */
+/*******************************/
+
+// check if double values is zero
+bool dm_is_zero(double value) { return fabs(value) < DBL_EPSILON; }
 
 /*******************************/
 /*     Double Matrix Math      */
@@ -37,6 +45,16 @@ void dm_transpose(DoubleMatrix *mat) {
       dm_set(mat, j, i, temp);
     }
   }
+}
+
+/*
+ * @brief get density of sparse matrix
+ *
+ * @param mat
+ */
+
+double sp_density(const DoubleMatrix *mat) {
+  return (double)(mat->nnz / (mat->rows * mat->cols));
 }
 
 /**
@@ -218,7 +236,7 @@ DoubleMatrix *dm_inverse(DoubleMatrix *mat) {
 double dm_trace(const DoubleMatrix *mat) {
   double trace = 0;
   for (size_t i = 0; i < mat->rows; i++) {
-    trace += sp_get(mat, i, i);
+    trace += dm_get(mat, i, i);
   }
   return trace;
 }

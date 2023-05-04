@@ -11,57 +11,74 @@
 /*******************************/
 
 // sparse matrix formats
-typedef enum { COO, CSR, CSC, DENSE } matrix_format;
+typedef enum { DENSE, SPARSE } matrix_format;
 
 // Standard is of SparseMatrix (COO-Format)
-typedef struct SparseMatrix {
+typedef struct DoubleMatrix {
   size_t rows;
   size_t cols;
+  size_t row_capacity;  // Capacity of row pointers
+  size_t col_capacity;  // Capacity of column indices
   size_t nnz;           // Number of non-zero elements
-  size_t *row_indices;  // Array of row pointers
+  size_t *row_pointers; // Array of row pointers
   size_t *col_indices;  // Array of column indices of non-zero elements
   matrix_format format; // COO, CSC, CSR
   double *values;       // Values
-} SparseMatrix;
+} DoubleMatrix;
 
 // Definition of DoubleVector
-typedef SparseMatrix DoubleMatrix;
-typedef SparseMatrix DoubleVector;
+typedef DoubleMatrix DoubleVector;
 
 /*******************************/
-/*      Sparse Matrix          */
-/*******************************/
-
-SparseMatrix *sp_create(size_t rows, size_t cols);
-SparseMatrix *sp_create_format(size_t rows, size_t cols, matrix_format format);
-SparseMatrix *sp_create_rand(size_t rows, size_t cols, double density);
-SparseMatrix *sp_create_from_array(size_t rows, size_t cols, size_t nnz,
-                                   size_t *row_indices, size_t *col_indices,
-                                   double *values);
-
-void sp_convert_to_csc(SparseMatrix *mat);
-void sp_convert_to_csr(SparseMatrix *mat);
-void sp_convert_to_coo(SparseMatrix *mat);
-void sp_convert_to_dense(SparseMatrix *mat);
-void sp_convert_to_sparse(DoubleMatrix *mat);
-
-bool sp_is_valid(const SparseMatrix *a);
-void sp_destroy(SparseMatrix *sp_matrix);
-
-double sp_get(const SparseMatrix *mat, size_t i, size_t j);
-void sp_set(SparseMatrix *mat, size_t i, size_t j, double value);
-static void sp_set_coo(SparseMatrix *mat, size_t i, size_t j, double value);
-static void sp_set_csr(SparseMatrix *mat, size_t i, size_t j, double value);
-static void sp_set_csc(SparseMatrix *mat, size_t i, size_t j, double value);
-
-/*******************************/
-/*        Double Matrix        */
+/*     Create  & convert       */
 /*******************************/
 
 // Create, Clone, Destroy
-DoubleMatrix *dm_matrix();
-DoubleMatrix *dm_create(size_t rows, size_t cols);
-DoubleMatrix *dm_create_rand(size_t rows, size_t cols);
+DoubleMatrix *dm_create(size_t rows, size_t cols); // empty sparse matrix
+DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format);
+
+DoubleMatrix *dm_create_sparse(size_t rows, size_t cols);
+DoubleMatrix *dm_create_dense(size_t rows, size_t cols);
+
+// convert:
+void dm_convert(DoubleMatrix *mat, matrix_format format);
+void dm_convert_to_sparse(DoubleMatrix *mat);
+void dm_convert_to_dense(DoubleMatrix *mat);
+
+/*******************************/
+/*        Getter & Setter      */
+/*******************************/
+
+double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
+double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j);
+double dm_get_sparse(const DoubleMatrix *mat, size_t i, size_t j);
+
+void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
+void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
+void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
+
+double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
+void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value);
+
+/*******************************/
+/*       Resize / Parts        */
+/*******************************/
+
+// shrink, push, pop, expand
+void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols);
+void dm_resize_dense(DoubleMatrix *mat, size_t rows, size_t cols);
+void dm_resize_sparse(DoubleMatrix *mat, size_t new_rows, size_t new_cols);
+static void compute_new_row_pointers_and_nnz(DoubleMatrix *mat, size_t new_rows,
+                                             size_t *new_nnz,
+                                             size_t *new_row_capacity);
+static size_t compute_new_col_capacity(DoubleMatrix *mat, size_t new_cols);
+static void resize_col_arrays(DoubleMatrix *mat, size_t new_col_capacity);
+
+/*******************************/
+/*    Rand, Clone, Identity    */
+/*******************************/
+
+DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density);
 DoubleMatrix *dm_clone(DoubleMatrix *m);
 DoubleMatrix *dm_create_identity(size_t rows);
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
@@ -70,18 +87,14 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
                                 size_t row_end, size_t col_start,
                                 size_t col_end);
 
+// static getter
+
 // Test if vector or matrix (true = vector)
 bool dm_is_vector(DoubleMatrix *mat);
-
-// shrink, push, pop, expand
-void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols);
 
 // Getters and Setters
 void dm_push_column(DoubleMatrix *mat, DoubleVector *col_vec);
 void dm_push_row(DoubleMatrix *mat, DoubleVector *row_vec);
-
-double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
-void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value);
 
 // free
 void dm_destroy(DoubleMatrix *mat);
@@ -126,21 +139,21 @@ void dv_destroy(DoubleVector *vec);
 // help from github copilot
 
 // standards
-SparseMatrix *sp_laplace(size_t n);
-SparseMatrix *sp_hilbert(size_t n);
-SparseMatrix *sp_vandermonde(size_t n);
-SparseMatrix *sp_toeplitz(size_t n);
-SparseMatrix *sp_circulant(size_t n);
-SparseMatrix *sp_hankel(size_t n);
-SparseMatrix *sp_dft(size_t n);
-SparseMatrix *sp_dct(size_t n);
-SparseMatrix *sp_dst(size_t n);
-SparseMatrix *sp_hadamard(size_t n);
-SparseMatrix *sp_kronecker(size_t n);
-SparseMatrix *sp_toeplitz(size_t n);
-SparseMatrix *sp_adjacent(size_t n);
+DoubleMatrix *sp_laplace(size_t n);
+DoubleMatrix *sp_hilbert(size_t n);
+DoubleMatrix *sp_vandermonde(size_t n);
+DoubleMatrix *sp_toeplitz(size_t n);
+DoubleMatrix *sp_circulant(size_t n);
+DoubleMatrix *sp_hankel(size_t n);
+DoubleMatrix *sp_dft(size_t n);
+DoubleMatrix *sp_dct(size_t n);
+DoubleMatrix *sp_dst(size_t n);
+DoubleMatrix *sp_hadamard(size_t n);
+DoubleMatrix *sp_kronecker(size_t n);
+DoubleMatrix *sp_toeplitz(size_t n);
+DoubleMatrix *sp_adjacent(size_t n);
 
 // transformations
-void sp_to_laplace(SparseMatrix *A);
+void sp_to_laplace(DoubleMatrix *A);
 
 #endif // !MATRIX_H

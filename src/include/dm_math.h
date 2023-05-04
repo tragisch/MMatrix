@@ -6,6 +6,12 @@
 #include "misc.h"
 
 /*******************************/
+/*      General stuff     */
+/*******************************/
+
+bool dm_is_zero(double value);
+
+/*******************************/
 /*      Double Matrix Math     */
 /*******************************/
 
@@ -28,7 +34,7 @@ int dm_rank(const DoubleMatrix *mat);
 /*      Sparse Matrix Math     */
 /*******************************/
 
-double sp_density(const SparseMatrix *mat);
+double sp_density(const DoubleMatrix *mat);
 
 /*******************************/
 /*      Double Vector Math     */

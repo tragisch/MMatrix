@@ -121,7 +121,7 @@ void dm_print(const DoubleMatrix *matrix) {
     }
     printf("]\n");
   }
-  printf("Matrix %zix%zi\n", matrix->rows, matrix->cols);
+  print_matrix_dimension(matrix);
 }
 
 /**
@@ -129,7 +129,7 @@ void dm_print(const DoubleMatrix *matrix) {
  *
  * @param matrix
  */
-void sp_print_braille(const SparseMatrix *mat) {
+void sp_print_braille(const DoubleMatrix *mat) {
   printf("--Braille-Form: \n");
   // Define Braille characters for matrix elements
   const char *braille[] = {
@@ -159,44 +159,50 @@ void sp_print_braille(const SparseMatrix *mat) {
 
     printf("\n");
   }
-  printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
+  print_matrix_dimension(mat);
 }
 
 // print all fields of a SparseMatrix *mat
-void sp_print(const SparseMatrix *mat) {
-  printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
+void sp_print(const DoubleMatrix *mat) {
+  print_matrix_dimension(mat);
   printf("values: ");
   for (size_t i = 0; i < mat->nnz; i++) {
     printf("%.2lf ", mat->values[i]);
   }
+
   printf("\n");
-  printf("row_indices: ");
-  for (size_t i = 0; i < mat->nnz; i++) {
-    printf("%zu ", mat->row_indices[i]);
+  printf("row_pointers: ");
+  if (mat->row_pointers != NULL) {
+    for (size_t i = 0; i < mat->rows + 1; i++) {
+      printf("%zu ", mat->row_pointers[i]);
+    }
   }
+
   printf("\n");
   printf("col_indices: ");
-  for (size_t i = 0; i < mat->nnz; i++) {
-    printf("%zu ", mat->col_indices[i]);
+  if (mat->col_indices != NULL) {
+    for (size_t i = 0; i < mat->nnz; i++) {
+      printf("%zu ", mat->col_indices[i]);
+    }
   }
   printf("\n");
 }
 
-void sp_print_condensed(SparseMatrix *mat) {
-  printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
-  size_t start = mat->row_indices[0];
+void sp_print_condensed(DoubleMatrix *mat) {
+  print_matrix_dimension(mat);
+  size_t start = mat->row_pointers[0];
   for (size_t i = 0; i < mat->nnz; i++) {
-    if (start != mat->row_indices[i]) {
+    if (start != mat->row_pointers[i]) {
       printf("\n");
-      start = mat->row_indices[i];
+      start = mat->row_pointers[i];
     }
-    printf("(%zu,%zu): %.2lf, ", mat->row_indices[i], mat->col_indices[i],
+    printf("(%zu,%zu): %.2lf, ", mat->row_pointers[i], mat->col_indices[i],
            mat->values[i]);
   }
   printf("\n");
 }
 
-void sp_create_scatterplot(const SparseMatrix *mat, const char *filename) {
+void sp_create_scatterplot(const DoubleMatrix *mat, const char *filename) {
 
   StringReference *errorMessage = NULL;
   RGBABitmapImageReference *imageReference = CreateRGBABitmapImageReference();
@@ -204,10 +210,10 @@ void sp_create_scatterplot(const SparseMatrix *mat, const char *filename) {
   double *xs = malloc(sizeof(double) * mat->nnz);
   double *ys = malloc(sizeof(double) * mat->nnz);
 
-  // convert mat->row_indices to double array
+  // convert mat->row_pointers to double array
 
   for (size_t i = 0; i < mat->nnz; i++) {
-    xs[i] = (double)mat->row_indices[i];
+    xs[i] = (double)mat->row_pointers[i];
     ys[i] = (double)mat->col_indices[i];
   }
 
@@ -256,5 +262,16 @@ void sp_create_scatterplot(const SparseMatrix *mat, const char *filename) {
       fprintf(stderr, "%c", errorMessage->string[i]);
     }
     fprintf(stderr, "\n");
+  }
+}
+
+static void print_matrix_dimension(const DoubleMatrix *mat) {
+  switch (mat->format) {
+  case SPARSE:
+    printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
+    break;
+  case DENSE:
+    printf("DenseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
+    break;
   }
 }

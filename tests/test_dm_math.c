@@ -1,9 +1,9 @@
 #include "dbg.h"
 
+#include "dm_io.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
-#include "dv_math.h"
-#include "sp_matrix.h"
+#include "misc.h"
 
 #include <stdbool.h>
 #include <stddef.h>
