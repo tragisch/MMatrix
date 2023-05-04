@@ -12,10 +12,16 @@
 #include <assert.h>
 
 #include "dbg.h"
+#include "dm_math.h"
 #include "dm_matrix.h"
+#include <float.h>
 
-// #define NDEBUG
-#define INITIAL_SIZE 4
+/*******************************/
+/*     General functions       */
+/*******************************/
+
+// check if double values is zero
+bool dm_is_zero(double value) { return fabs(value) < DBL_EPSILON; }
 
 /*******************************/
 /*     Double Matrix Math      */
@@ -41,6 +47,16 @@ void dm_transpose(DoubleMatrix *mat) {
   }
 }
 
+/*
+ * @brief get density of sparse matrix
+ *
+ * @param mat
+ */
+
+double sp_density(const DoubleMatrix *mat) {
+  return (double)(mat->nnz / (mat->rows * mat->cols));
+}
+
 /**
  * @brief check if two matrices are equal
  *
@@ -49,7 +65,7 @@ void dm_transpose(DoubleMatrix *mat) {
  * @return true
  * @return false
  */
-bool dm_equal_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
+bool dm_equal_matrix(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1 == NULL || mat2 == NULL) {
     return false;
   }
@@ -71,7 +87,8 @@ bool dm_equal_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
  * @param m2
  * @return DoubleMatrix*
  */
-DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
+DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
+                                    const DoubleMatrix *mat2) {
 
   if (mat1 == NULL || mat2 == NULL) {
     perror("Error: Matrices shouldn't be empty.");
@@ -80,7 +97,7 @@ DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
 
   if (mat1->cols != mat2->rows) {
     perror(
-        "Error: number of columns of m1 has to be euqal to number fo rows of "
+        "Error: number of columns of m1 has to be euqal to number of rows of "
         "m2!");
     return NULL;
   }
@@ -107,26 +124,23 @@ DoubleMatrix *dm_multiply_with_matrix(DoubleMatrix *mat1, DoubleMatrix *mat2) {
  * @param scalar
  * @return DoubleMatrix
  */
-DoubleMatrix dm_multiply_by_scalar(const DoubleMatrix *mat,
-                                   const double scalar) {
-  DoubleMatrix *result = dm_create(mat->rows, mat->cols);
+void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
-      dm_set(result, i, j, dm_get(mat, i, j) * scalar);
+      dm_set(mat, i, j, dm_get(mat, i, j) * scalar);
     }
   }
-  return *result;
 }
 
 /**
- * @brief Vector Matrix
+ * @brief Matrix-Vector Multiplication (n x m) x (n x 1)
  *
  * @param vec
  * @param mat
  * @return DoubleVector*
  */
-DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
-                                      const DoubleMatrix *mat) {
+DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
+                                    const DoubleVector *vec) {
   if (vec->rows != mat->cols) {
     return NULL; // dimensions are incompatible, return NULL
   }
@@ -149,7 +163,7 @@ DoubleVector *dv_multiply_with_matrix(const DoubleVector *vec,
  * @param vec
  * @return DoubleVector*
  */
-double dm_determinant(DoubleMatrix *mat) {
+double dm_determinant(const DoubleMatrix *mat) {
   if (mat->cols != mat->rows) {
     perror("the Matrix has to be square!");
   }
@@ -218,230 +232,102 @@ DoubleMatrix *dm_inverse(DoubleMatrix *mat) {
   return inverse;
 }
 
-/*******************************/
-/*     Double Vector Math      */
-/*******************************/
-
-/**
- * @brief Multiply Vector v1 with Vectot v2  -- dot product!
- *
- * @param vec1
- * @param vec2
- * @return double
- */
-double dv_dot_product(DoubleVector *vec1, DoubleVector *vec2) {
-  if (vec1->rows != vec2->rows) {
-    perror("vectors have not same length");
-    return 0;
+// trace of a matrix
+double dm_trace(const DoubleMatrix *mat) {
+  double trace = 0;
+  for (size_t i = 0; i < mat->rows; i++) {
+    trace += dm_get(mat, i, i);
   }
-  if (vec1->cols != vec2->cols) {
-    perror("no dot product for: column-vectors * row_vector");
-    return 0;
-  }
-
-  double sum = 0;
-  for (size_t i = 0; i < vec1->rows; i++) {
-    sum += dv_get(vec1, i) * dv_get(vec2, i);
-  }
-
-  return sum;
+  return trace;
 }
 
 /**
- * @brief add Vector vec1 with Vector vec2
+ * @brief dm_rank. Get Rank of Matrix
  *
- * @param vec1
- * @param vec2 (const)
+ * @param mat
+ * @return int
  */
-void dv_add_vector(DoubleVector *vec1, const DoubleVector *vec2) {
-  if (vec1->rows != vec2->rows) {
-    perror("vectors are not same length");
+
+int dm_rank(const DoubleMatrix *mat) {
+  int rank = 0;
+
+  // Convert to dense matrix if sparse
+  if (mat->format != DENSE) {
+    perror("Sparse matrices not supported yet!");
+    return -1;
   }
 
-  for (size_t i = 0; i < vec1->rows; i++) {
-    dv_set(vec1, i, dv_get(vec1, i) + dv_get(vec2, i));
-  }
-}
+  size_t m = mat->rows;
+  size_t n = mat->cols;
 
-/**
- * @brief sub Vector vec1 from Vector vec2 (vec1 - vec2)
- *
- * @param vec1
- * @param vec2 (const)
- */
-void dv_sub_vector(DoubleVector *vec1, const DoubleVector *vec2) {
-  if (vec1->rows != vec2->rows) {
-    perror("vectors are not same length");
-  }
-
-  for (size_t i = 0; i < vec1->rows; i++) {
-    dv_set(vec1, i, dv_get(vec1, i) - dv_get(vec2, i));
-  }
-}
-
-/**
- * @brief multiply each element of Vector vec1 with a scalar
- *
- * @param vec
- * @param scalar
- */
-void dv_multiply_by_scalar(DoubleVector *vec, const double scalar) {
-  for (size_t i = 0; i < vec->rows; i++) {
-    dv_set(vec, i, dv_get(vec, i) * scalar);
-  }
-}
-
-/**
- * @brief divied each element of Vector vec1 with a scalar
- *
- * @param vec
- * @param scalar
- */
-void dv_divide_by_scalar(DoubleVector *vec, const double scalar) {
-  for (size_t i = 0; i < vec->rows; i++) {
-    dv_set(vec, i, dv_get(vec, i) / scalar);
-  }
-}
-
-/**
- * @brief add constant to vector
- *
- * @param vec
- * @param scalar
- */
-void dv_add_constant(DoubleVector *vec, const double constant) {
-  for (size_t i = 0; i < vec->rows; i++) {
-    dv_set(vec, i, dv_get(vec, i) + constant);
-  }
-}
-
-/**
- * @brief test if two DoubleVectors are equal
- *
- * @param vec1
- * @param vec2
- * @return bool
- */
-bool dv_equal(DoubleVector *vec1, DoubleVector *vec2) {
-  if (vec1->rows != vec2->rows) {
-    return false;
-  }
-  for (size_t i = 0; i < vec1->rows; i++) {
-    if (dv_get(vec1, i) != dv_get(vec2, i)) {
-      return false;
+  // Create a copy of the matrix
+  double *A = malloc(m * n * sizeof(double));
+  for (size_t i = 0; i < m; i++) {
+    for (size_t j = 0; j < n; j++) {
+      A[i * n + j] = dm_get(mat, i, j);
     }
   }
-  return true;
-}
 
-/**
- * @brief return mean of Vector vec
- *
- * @param vec
- * @return double
- */
-double dv_mean(DoubleVector *vec) {
-  double mean = 0.0;
-  for (size_t i = 0; i < vec->rows; i++) {
-    mean += dv_get(vec, i);
-  }
-  return (mean / (double)vec->rows);
-}
-
-/**
- * @brief return min of Vector vec
- *
- * @param vec
- * @return double
- */
-double dv_min(DoubleVector *vec) {
-  double min = vec->values[0];
-  for (size_t i = 1; i < vec->rows; i++) {
-    if (min > vec->values[i]) {
-      min = vec->values[i];
+  // Compute row echelon form
+  size_t pivot = 0;
+  for (size_t j = 0; j < n; j++) {
+    bool found_pivot = false;
+    for (size_t i = pivot; i < m; i++) {
+      if (A[i * n + j] != 0.0) {
+        found_pivot = true;
+        // Swap rows i and pivot
+        if (i != pivot) {
+          for (size_t k = j; k < n; k++) {
+            double tmp = A[i * n + k];
+            A[i * n + k] = A[pivot * n + k];
+            A[pivot * n + k] = tmp;
+          }
+        }
+        // Eliminate column j
+        for (size_t k = pivot + 1; k < m; k++) {
+          double factor = A[k * n + j] / A[pivot * n + j];
+          for (size_t l = j; l < n; l++) {
+            A[k * n + l] -= factor * A[pivot * n + l];
+          }
+        }
+        pivot++;
+        break;
+      }
+    }
+    if (!found_pivot) {
+      break;
     }
   }
-  return min;
-}
 
-/**
- * @brief return max of Vector vec
- *
- * @param vec
- * @return double
- */
-double dv_max(DoubleVector *vec) {
-  double max = vec->values[0];
-  for (size_t i = 1; i < vec->rows; i++) {
-    if (max < vec->values[i]) {
-      max = vec->values[i];
+  // Count non-zero rows in REF
+  for (size_t i = 0; i < m; i++) {
+    bool is_zero_row = true;
+    for (size_t j = 0; j < n; j++) {
+      if (A[i * n + j] != 0.0) {
+        is_zero_row = false;
+        break;
+      }
+    }
+    if (!is_zero_row) {
+      rank++;
     }
   }
-  return max;
+
+  free(A);
+  return rank;
 }
 
-/**
- * @brief transpose a vector
- *
- * @param vec*
- */
-void dv_transpose(DoubleVector *vec) {
-  if (vec->rows == 1) {
-    vec->rows = vec->cols;
-    vec->cols = 1;
-  } else {
-    vec->cols = vec->rows;
-    vec->rows = 1;
+double dm_density(const DoubleMatrix *mat) {
+  if (mat->format != DENSE)
+    return sp_density(mat);
+
+  double density = 0.0;
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      if (dm_get(mat, i, j) != 0.0) {
+        density += 1.0;
+      }
+    }
   }
-}
-
-/**
- * @brief swap two elements of an vector
- *
- * @param vec*
- * @param i
- * @param j
- */
-void dv_swap_elements(DoubleVector *vec, size_t idx_i, size_t idx_j) {
-  double tmp = dv_get(vec, idx_i);
-  dv_set(vec, idx_i, dv_get(vec, idx_j));
-  dv_set(vec, idx_j, tmp);
-}
-
-/**
- * @brief reverse the order of elements of vec
- *
- * @param vec*
- */
-void dv_reverse(DoubleVector *vec) {
-  // reverse the order of elements of vec
-  for (size_t i = 0; i < vec->rows / 2; i++) {
-    dv_swap_elements(vec, i, vec->rows - i - 1);
-  }
-}
-
-/**
- * @brief return the magnitude of a vector
- *
- * @param vec
- * @return double
- */
-double dv_magnitude(DoubleVector *vec) {
-  double sum_of_squares = 0.0;
-  for (size_t i = 0; i < vec->rows; i++) {
-    double component = dv_get(vec, i);
-    sum_of_squares += component * component;
-  }
-  double magnitude = sqrt(sum_of_squares);
-  return magnitude;
-}
-
-/**
- * @brief normalize a vector
- *
- * @param vec
- */
-void dv_normalize(DoubleVector *vec) {
-  double magnitude = dv_magnitude(vec);
-  dv_divide_by_scalar(vec, magnitude);
+  return density / (mat->rows * mat->cols);
 }

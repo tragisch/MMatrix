@@ -10,10 +10,8 @@
  */
 
 #include "dm_matrix.h"
-
-#include <assert.h>
-
 #include "dbg.h"
+#include "dm_math.h"
 
 // #define NDEBUG
 enum { INIT_CAPACITY = 2U };
@@ -23,49 +21,67 @@ enum { INIT_CAPACITY = 2U };
 /*******************************/
 
 /**
- * @brief create an empty Double Matrix Object
- *
- * @return DoubleMatrix*
- */
-DoubleMatrix *dm_matrix() {
-  DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
-  matrix->cols = 0U;
-  matrix->rows = 0U;
-  matrix->values = (double *)malloc(INIT_CAPACITY * sizeof(double));
-  return matrix;
-}
-
-/**
- * @brief Create a zero Double Matrix object
+ * @brief create a Double Matrix Object
  *
  * @param rows
  * @param cols
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create(size_t rows, size_t cols) {
+  return dm_create_sparse(rows, cols);
+}
 
-  DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
-  matrix->rows = rows;
-  matrix->cols = cols;
-  matrix->values =
-      (double *)malloc((matrix->rows * matrix->cols) * sizeof(double));
-  return matrix;
+// create sparse matrix with given format:
+DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
+  DoubleMatrix *mat = NULL;
+
+  switch (format) {
+  case SPARSE:
+    mat = dm_create_sparse(rows, cols);
+    break;
+  case DENSE:
+    mat = dm_create_dense(rows, cols);
+    break;
+  default:
+    perror("Error: invalid matrix format.\n");
+    return NULL;
+  }
+
+  return mat;
 }
 
 /**
- * @brief Create a Random Double Matrix object
+ * @brief create a Double Matrix Object
  *
- * @param num_rows
- * @param num_cols
- * @return double**
+ * @param rows
+ * @param cols
+ * @param density
+ * @return DoubleMatrix*
  */
-DoubleMatrix *dm_create_rand(size_t rows, size_t cols) {
+DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
   DoubleMatrix *mat = dm_create(rows, cols);
 
+  // Loop over each element in the matrix
   for (size_t i = 0; i < rows; i++) {
+    // size_t nnz_start = mat->row_pointers[i];
     for (size_t j = 0; j < cols; j++) {
-      dm_set(mat, i, j, randomDouble());
+      if (randomDouble() <= density) {
+        double value = randomDouble();
+        if (!dm_is_zero(value)) {
+          // Resize col_indices and values arrays if needed
+          if (mat->nnz >= mat->col_capacity) {
+            mat->col_capacity *= 2;
+            mat->col_indices = (size_t *)realloc(
+                mat->col_indices, mat->col_capacity * sizeof(size_t));
+            mat->values = (double *)realloc(mat->values,
+                                            mat->col_capacity * sizeof(double));
+          }
+          dm_set(mat, i, j, value);
+        }
+      }
     }
+    // Update the row pointer for the next row
+    mat->row_pointers[i + 1] = mat->nnz;
   }
 
   return mat;
@@ -80,8 +96,9 @@ DoubleMatrix *dm_create_rand(size_t rows, size_t cols) {
 DoubleMatrix *dm_create_identity(size_t rows) {
   DoubleMatrix *mat = dm_create(rows, rows);
   for (size_t i = 0; i < rows; i++) {
-    dm_set(mat, i, i, 1);
+    dm_set(mat, i, i, 1.0);
   }
+
   return mat;
 }
 
@@ -95,7 +112,7 @@ DoubleMatrix *dm_create_identity(size_t rows) {
  */
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
                                    double array[rows][cols]) {
-  DoubleMatrix *mat = dm_create(rows, cols);
+  DoubleMatrix *mat = dm_create_dense(rows, cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
@@ -123,7 +140,7 @@ DoubleMatrix *dm_clone(DoubleMatrix *mat) {
 }
 
 bool dm_is_vector(DoubleMatrix *mat) {
-  if (mat->rows == 1 || mat->cols == 1) {
+  if ((mat->rows == 1 || mat->cols == 1) && (mat->rows != mat->cols)) {
     return true; // Matrix is a vector
   }
   return false; // Matrix is not a vector
@@ -139,23 +156,35 @@ bool dm_is_vector(DoubleMatrix *mat) {
 
 void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols) {
   if (rows < 1 || cols < 1) {
-    perror("destroy matrix instead of setting zero sizes!");
-  } else {
-    // in case of a dense matrix:
-    if ((mat->cols != cols) || (mat->rows != rows)) {
-      double *new_data = (double *)calloc(rows * cols, sizeof(double));
-      size_t min_rows = mat->rows < rows ? mat->rows : rows;
-      size_t min_cols = mat->cols < cols ? mat->cols : cols;
-      for (size_t i = 0; i < min_rows; i++) {
-        for (size_t j = 0; j < min_cols; j++) {
-          new_data[i * cols + j] = mat->values[i * mat->cols + j];
-        }
-      }
-      free(mat->values);
-      mat->values = new_data;
-      mat->rows = rows;
-      mat->cols = cols;
-    }
+    perror("Matrix dimensions must be greater than 0");
+    return;
+  }
+  switch (mat->format) {
+  case DENSE:
+    dm_resize_dense(mat, rows, cols);
+    break;
+  case SPARSE:
+    dm_resize_sparse(mat, rows, cols);
+    break;
+  default:
+    break;
+  }
+}
+
+void dm_convert(DoubleMatrix *mat, matrix_format format) {
+  if (mat->format == format) {
+    return;
+  }
+  switch (format) {
+  case DENSE:
+    dm_convert_to_dense(mat);
+
+    break;
+  case SPARSE:
+    dm_convert_to_sparse(mat);
+    break;
+  default:
+    break;
   }
 }
 
@@ -204,263 +233,86 @@ void dm_push_row(DoubleMatrix *mat, DoubleVector *row_vec) {
  * @return double
  */
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
-
-  if (i < 0 || i > mat->rows || j < 0 || j > mat->cols) {
-    perror("Error: matrix index out of bounds.\n");
-    return 0;
+  // perror if boundaries are exceeded
+  if (i >= mat->rows || j >= mat->cols) {
+    perror("Error: index out of bounds.\n");
+    return 0.0;
   }
-  return mat->values[i * mat->cols + j];
+  switch (mat->format) {
+  case DENSE:
+    return dm_get_dense(mat, i, j);
+    break;
+  case SPARSE:
+    return dm_get_sparse(mat, i, j);
+    break;
+  }
 }
 
-/**
- * @brief set value of index i, j
- *
- * @param mat
- * @param i,j
- * @param value
- */
-void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value) {
-  if (i < 0 || i > mat->rows || j < 0 || j > mat->cols) {
-    perror("Error: matrix index out of bounds.\n");
+void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
+  // perror if boundaries are exceeded
+  if (i >= mat->rows || j >= mat->cols) {
+    perror("Error: index out of bounds.\n");
     return;
   }
-  mat->values[i * mat->cols + j] = value;
+  switch (mat->format) {
+  case SPARSE:
+    dm_set_sparse(mat, i, j, value);
+    break;
+  case DENSE:
+    dm_set_dense(mat, i, j, value);
+    break;
+  }
+}
+
+// free sparse matrix
+void dm_destroy(DoubleMatrix *dm_matrix) {
+  if (dm_matrix == NULL) {
+    return;
+  }
+  if (dm_matrix->col_indices != NULL) {
+    free(dm_matrix->col_indices);
+    dm_matrix->col_indices = NULL;
+  }
+  if (dm_matrix->values != NULL) {
+    free(dm_matrix->values);
+    dm_matrix->values = NULL;
+  }
+  if (dm_matrix->row_pointers != NULL) {
+    free(dm_matrix->row_pointers);
+    dm_matrix->row_pointers = NULL;
+  }
+  free(dm_matrix);
 }
 
 /**
- * @brief free memory of DoubleMatrix
+ * @brief get sub matrix of matrix
  *
  * @param mat
+ * @param row_start
+ * @param row_end
+ * @param col_start
+ * @param col_end
+ * @return DoubleMatrix*
  */
-void dm_destroy(DoubleMatrix *mat) {
-  free(mat->values);
-  free(mat);
-}
-
-/**
- * @brief Get the Row Vector object of Row row
- *
- * @param mat
- * @param row
- * @return DoubleVector
- */
-DoubleVector *dv_get_row_matrix(DoubleMatrix *mat, size_t row) {
-  if (row < 0 || row > (mat->rows - 1)) {
-    perror("This row does not exist");
+DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
+                                size_t row_end, size_t col_start,
+                                size_t col_end) {
+  if (row_start < 0 || row_start > mat->rows || row_end < 0 ||
+      row_end > mat->rows || col_start < 0 || col_start > mat->cols ||
+      col_end < 0 || col_end > mat->cols) {
+    perror("Error: matrix index out of bounds.\n");
+    return NULL;
   }
-  DoubleVector *vec = dv_create(mat->cols);
-  for (size_t i = 0; i < vec->rows; i++) {
-    dv_set(vec, i, dm_get(mat, row, i));
+  if (row_start > row_end || col_start > col_end) {
+    perror("Error: matrix index out of bounds.\n");
+    return NULL;
   }
-
-  return vec;
-}
-
-/**
- * @brief Get the Column Vector object
- *
- * @param mat
- * @param column
- * @return DoubleVector
- */
-DoubleVector *dv_get_column_matrix(DoubleMatrix *mat, size_t column) {
-  if (column < 0 || column > (mat->cols) - 1) {
-    perror("This column does not exist");
+  DoubleMatrix *sub_mat =
+      dm_create(row_end - row_start + 1, col_end - col_start + 1);
+  for (size_t i = row_start; i <= row_end; i++) {
+    for (size_t j = col_start; j <= col_end; j++) {
+      dm_set(sub_mat, i - row_start, j - col_start, dm_get(mat, i, j));
+    }
   }
-  DoubleVector *vec = dv_create(mat->rows);
-  for (size_t i = 0; i < mat->rows; i++) {
-    dv_set(vec, i, dm_get(mat, i, column));
-  }
-
-  return vec;
-}
-
-/*******************************/
-/*  Double Vector (Dynamic)    */
-/*******************************/
-
-/**
- * @brief Create a DoubleVector object (HEAP INIT_CAPACITY)
- * @return DoubleVector*
- */
-
-DoubleVector *dv_vector() {
-  DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
-  vec->rows = 0;
-  vec->cols = 1;
-  vec->values = (double *)malloc(1 * sizeof(double));
-  return vec;
-}
-
-DoubleVector *dv_create_from_array(const double *array, const size_t length) {
-  DoubleVector *vec = dv_create(length);
-  for (size_t i = 0; i < length; i++) {
-    dv_set(vec, i, array[i]);
-  }
-
-  return vec;
-}
-
-/**
- * @brief Clone a DoubleVector object
- * @return DoubleVector*
- */
-DoubleVector *dv_clone(DoubleVector *vector) {
-  DoubleVector *clone = dv_create(vector->rows);
-  for (size_t i = 0; i < vector->rows; i++) {
-    dv_set(clone, i, dv_get(vector, i));
-  }
-  return clone;
-}
-
-bool dv_is_row_vector(DoubleMatrix *vec) {
-  bool is_vector = false;
-  if ((vec->cols == 1) && (vec->rows > 1)) {
-    is_vector = true;
-  }
-  return is_vector;
-}
-
-/**
- * @brief Create a Double Vector Of Length object
- *
- * @param length
- * @param value
- * @return DoubleVector*
- */
-DoubleVector *dv_create(size_t length) {
-  DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
-  vec->rows = length;
-  vec->cols = 1;
-  vec->values = (double *)malloc(length * sizeof(double));
-  return vec;
-}
-
-/**
- * @brief Create a Random Double Vector object
- *
- * @param length
- * @return DoubleVector
- */
-DoubleVector *dv_create_rand(size_t length) {
-  DoubleVector *vec = dv_create(length);
-
-  for (size_t i = 0; i < length; i++) {
-    dv_set(vec, i, randomDouble());
-  }
-
-  return vec;
-}
-
-/**
- * @brief get value of index
- *
- * @param vec
- * @param idx
- * @return double
- */
-double dv_get(const DoubleVector *vec, size_t idx) {
-  if (idx < 0 || idx > (vec->rows)) {
-    perror("This index does not exist");
-  }
-  double value = dm_get(vec, idx, 0);
-
-  if (vec->rows == 1) { // only if colum-vector
-    value = dm_get(vec, 0, idx);
-  }
-
-  return value;
-}
-
-/**
- * @brief set value of index
- *
- * @param vec
- * @param idx
- * @param double
- */
-void dv_set(DoubleVector *vec, size_t idx, double value) {
-  if (idx < 0 || idx > (vec->rows - 1)) {
-    perror("This index does not exist");
-  }
-  if (vec->rows == 1) {
-    dm_set(vec, 0, idx, value);
-  }
-
-  dm_set(vec, idx, 0, value);
-}
-
-void dv_resize(DoubleVector *vec, size_t rows) {
-  if (rows < 1) {
-    perror("destroy matrix instead of setting zero sizes!");
-  } else {
-    // in case of a dense matrix:
-    dm_resize(vec, rows, vec->cols);
-  }
-}
-
-/**
- * @brief pop last column of Matrix mat
- *
- * @param mat
- * @return DoubleVector*
- */
-DoubleVector *dm_pop_column_matrix(DoubleMatrix *mat) {
-  DoubleVector *column_vec = dv_get_column_matrix(mat, mat->cols - 1);
-  dm_resize(mat, mat->cols - 1, mat->rows);
-  return column_vec;
-}
-
-/**
- * @brief pop last row of Matrix mat
- *
- * @param mat
- * @return DoubleVector*
- */
-DoubleVector *dm_pop_row_matrix(DoubleMatrix *mat) {
-  DoubleVector *row_vec = dv_get_row_matrix(mat, mat->rows - 1);
-  dm_resize(mat, mat->rows - 1, mat->cols);
-  return row_vec;
-}
-
-/**
- * @brief get double array from values
- *
- * @param vec
- * @return double*
- */
-double *dv_get_array(const DoubleVector *vec) { return vec->values; }
-
-/**
- * @brief push (add) new value to vector vec
- *
- * @param vec
- * @param value
- */
-void dv_push_value(DoubleVector *vec, double value) {
-  dv_resize(vec, vec->rows + 1);
-  dv_set(vec, vec->rows - 1, value);
-}
-
-/**
- * @brief pop (get) last element if DoubleVector vec
- *
- * @param vec
- * @return double
- */
-double dv_pop_value(DoubleVector *vec) {
-  double value = dv_get(vec, vec->rows - 1);
-  dv_resize(vec, vec->rows - 1);
-  return value;
-}
-
-/**
- * @brief free memory of DoubleVector
- *
- * @param vec
- * @return DoubleVector*
- */
-void dv_destroy(DoubleVector *vec) {
-  // in case of a dense matrix:
-  dm_destroy(vec);
+  return sub_mat;
 }
