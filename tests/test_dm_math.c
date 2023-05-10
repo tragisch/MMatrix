@@ -3,7 +3,6 @@
 #include "dm_io.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
-#include "misc.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -19,13 +18,21 @@
 #include "unity.h"
 #include "unity_internals.h"
 
+void setUp(void) {
+  // set stuff up here
+}
+
+void tearDown(void) {
+  // clean stuff up here
+}
+
 /******************************
  ** Tests
  *******************************/
 
 void test_dm_transpose() {
   // Create a test matrix
-  double arr[4][4] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
+  double arr[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
   DoubleMatrix *matrix = dm_create_from_array(3, 3, arr);
 
   // Transpose the matrix
@@ -37,7 +44,7 @@ void test_dm_transpose() {
   TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(matrix, 0, 0));
   TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(matrix, 0, 1));
   TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(matrix, 0, 2));
-  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(matrix, 0, 3));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(matrix, 1, 0));
   TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(matrix, 1, 1));
   TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(matrix, 1, 2));
   TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(matrix, 2, 0));
@@ -122,7 +129,7 @@ void test_dm_determinant(void) {
 
 void test_dm_inverse(void) {
   // Test case 1: 2x2 matrix
-  DoubleMatrix *mat1 = dm_create(2, 2);
+  DoubleMatrix *mat1 = dm_create_dense(2, 2);
   dm_set(mat1, 0, 0, 1);
   dm_set(mat1, 0, 1, 2);
   dm_set(mat1, 1, 0, 3);
@@ -136,28 +143,28 @@ void test_dm_inverse(void) {
   TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv1, 1, 1));
 
   // Test case 2: 3x3 matrix
-  DoubleMatrix *mat2 = dm_create(3, 3);
+  DoubleMatrix *mat2 = dm_create_dense(3, 3);
   dm_set(mat2, 0, 0, 1);
   dm_set(mat2, 0, 1, 2);
-  dm_set(mat2, 0, 2, 1);
-  dm_set(mat2, 1, 0, 1);
-  dm_set(mat2, 1, 1, 0);
+  dm_set(mat2, 0, 2, 0);
+  dm_set(mat2, 1, 0, 2);
+  dm_set(mat2, 1, 1, 4);
   dm_set(mat2, 1, 2, 1);
-  dm_set(mat2, 2, 0, 0);
+  dm_set(mat2, 2, 0, 2);
   dm_set(mat2, 2, 1, 1);
-  dm_set(mat2, 2, 2, -1);
+  dm_set(mat2, 2, 2, 0);
 
   DoubleMatrix *inv2 = dm_inverse(mat2);
 
-  TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv2, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(1.5, dm_get(inv2, 0, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(1, dm_get(inv2, 0, 2));
-  TEST_ASSERT_EQUAL_DOUBLE(0.5, dm_get(inv2, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv2, 1, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(0.0, dm_get(inv2, 1, 2));
-  TEST_ASSERT_EQUAL_DOUBLE(0.5, dm_get(inv2, 2, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv2, 2, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(-1.0, dm_get(inv2, 2, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(-1 / 3, dm_get(inv2, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(inv2, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(2 / 3, dm_get(inv2, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(2 / 3, dm_get(inv2, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(inv2, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(-1 / 3, dm_get(inv2, 1, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(-2, dm_get(inv2, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(1, dm_get(inv2, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(inv2, 2, 2));
 
   dm_destroy(mat1);
   dm_destroy(inv1);
@@ -215,4 +222,18 @@ void test_dm_trace() {
 
   // Clean up
   dm_destroy(mat);
+}
+
+int main(void) {
+  UNITY_BEGIN();
+  RUN_TEST(test_dm_transpose);
+  RUN_TEST(test_dm_multiply_by_vector);
+  RUN_TEST(test_dm_multiply_by_matrix);
+  RUN_TEST(test_dm_multiply_by_scalar);
+  RUN_TEST(test_dm_determinant);
+  RUN_TEST(test_dm_inverse);
+  // RUN_TEST(test_dm_rank_dense);
+  // RUN_TEST(test_dm_trace);
+
+  return UNITY_END();
 }

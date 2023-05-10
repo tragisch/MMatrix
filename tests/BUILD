@@ -1,43 +1,61 @@
-load("//third_party/http/ThrowTheSwitch/Unity:unity.bzl", "unity_test")
 
-unity_test(
-    size = "small",
-    cexception = False,
-    file_name = "test_DoubleMatrix.c",
-    deps = [
-        "//lib/misc",
-        "//src:matrix"
+cc_test(
+    name = "test_DoubleMatrix",
+    srcs = [
+        "test_DoubleMatrix.c",
     ],
-)
-
-unity_test(
-    size = "small",
-    cexception = False,
-    file_name = "test_DoubleVector.c",
     deps = [
-        "//lib/misc",
-        "//src:matrix"
-    ],
-)
-
-unity_test(
-    size = "small",
-    cexception = False,
-    file_name = "test_dm_math.c",
-    deps = [
-        "//lib/misc",
         "//src:matrix",
-        "@dbg-macro"
+        "@Unity//:Unity"
     ],
+    size="small",
 )
 
-unity_test(
-    size = "small",
-    cexception = False,
-    file_name = "test_dv_math.c",
-    deps = [
-        "//lib/misc",
-        "//src:matrix",
-        "@dbg-macro"
+cc_test(
+    name = "test_DoubleVector",
+    srcs = [
+        "test_DoubleVector.c",
     ],
+    deps = [
+        "//src:matrix",
+        "@Unity//:Unity"
+    ],
+    size="small",
+)
+
+cc_test(
+    name = "test_SparseMatrix",
+    srcs = [
+        "test_SparseMatrix.c",
+    ],
+    deps = [
+        "//src:matrix",
+        "@Unity//:Unity"
+    ],
+    size="small",
+)
+  
+
+cc_test(
+    name ="test_dm_math",
+    srcs= [
+        "test_dm_math.c",
+    ],
+    deps = [
+        "//src:matrix",
+        "@Unity//:Unity"
+    ],
+    size="small",
+)
+
+cc_test(
+    name ="test_dv_math",
+    srcs= [
+        "test_dv_math.c",
+    ],
+    deps = [
+        "//src:matrix",
+        "@Unity//:Unity"
+    ],
+    size="small",
 )

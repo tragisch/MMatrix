@@ -1,7 +1,7 @@
 #include "dm_io.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
-#include "misc.h"
+
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -14,6 +14,20 @@
 #include "unity.h"
 #include "unity_internals.h"
 
+void setUp(void) {
+  // set stuff up here
+}
+
+void tearDown(void) {
+  // clean stuff up here
+}
+
 /******************************
  ** Tests
  *******************************/
+
+int main(void) {
+  UNITY_BEGIN();
+
+  return UNITY_END();
+}

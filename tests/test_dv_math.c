@@ -2,7 +2,6 @@
 #include "dm_io.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
-#include "misc.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -17,6 +16,14 @@
 
 #include "unity.h"
 #include "unity_internals.h"
+
+void setUp(void) {
+  // set stuff up here
+}
+
+void tearDown(void) {
+  // clean stuff up here
+}
 
 /******************************
  ** Tests
@@ -206,4 +213,21 @@ void test_dv_normalize() {
 
   // free memory
   dv_destroy(vec);
+}
+
+int main(void) {
+  UNITY_BEGIN();
+  RUN_TEST(test_dv_dot_product);
+  RUN_TEST(test_dv_add_vector);
+  RUN_TEST(test_dv_sub_vector);
+  RUN_TEST(test_dv_multiply_by_scalar);
+  RUN_TEST(test_dv_divide_by_scalar);
+  RUN_TEST(test_dv_add_constant);
+  RUN_TEST(test_dv_mean);
+  RUN_TEST(test_dv_min);
+  RUN_TEST(test_dv_max);
+  RUN_TEST(test_dv_magnitude);
+  RUN_TEST(test_dv_normalize);
+
+  return UNITY_END();
 }

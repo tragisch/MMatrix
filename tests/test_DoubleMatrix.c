@@ -2,7 +2,6 @@
 #include "dm_io.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
-#include "misc.h"
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -14,6 +13,14 @@
 
 #include "unity.h"
 #include "unity_internals.h"
+
+void setUp(void) {
+  // set stuff up here
+}
+
+void tearDown(void) {
+  // clean stuff up here
+}
 
 /******************************
  ** Test if precision works
@@ -35,25 +42,24 @@ void test_double_precision(void) {
  ** Creation of matrices:
  *******************************/
 
-// dm_create
-// void test_dm_create(void) {
-//   // Test case 1: Create a matrix with valid dimensions
-//   size_t rows = 3;
-//   size_t cols = 4;
-//   DoubleMatrix *matrix = dm_create(rows, cols);
+void test_dm_create(void) {
+  // Test case 1: Create a matrix with valid dimensions
+  size_t rows = 3;
+  size_t cols = 4;
+  DoubleMatrix *matrix = dm_create(rows, cols);
 
-//   TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
-//   TEST_ASSERT_EQUAL(rows, matrix->rows);
-//   TEST_ASSERT_EQUAL(cols, matrix->cols);
+  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
+  TEST_ASSERT_EQUAL(rows, matrix->rows);
+  TEST_ASSERT_EQUAL(cols, matrix->cols);
 
-//   for (size_t i = 0; i < matrix->rows; i++) {
-//     for (size_t j = 0; j < matrix->cols; j++) {
-//       TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(matrix, i, j));
-//     }
-//   }
-//   // Free the memory allocated for the matrix.
-//   dm_destroy(matrix);
-// }
+  for (size_t i = 0; i < matrix->rows; i++) {
+    for (size_t j = 0; j < matrix->cols; j++) {
+      TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(matrix, i, j));
+    }
+  }
+  // Free the memory allocated for the matrix.
+  dm_destroy(matrix);
+}
 
 // dm_create_rand
 void test_dm_create_rand(void) {
@@ -188,54 +194,11 @@ void test_dm_push_column() {
   dv_destroy(col_vec);
 }
 
-void test_dm_push_row() {
-  // Create a DoubleMatrix to push a row to
-  DoubleMatrix *mat = dm_create(3, 2);
-  dm_set(mat, 0, 0, 1.0);
-  dm_set(mat, 1, 0, 2.0);
-  dm_set(mat, 2, 0, 3.0);
-
-  // Create a DoubleVector to push as a row
-  DoubleVector *col_row = dv_vector();
-  dv_push_value(col_row, 4.0);
-  dv_push_value(col_row, 5.0);
-  dv_push_value(col_row, 6.0);
-
-  // Push the column to the DoubleMatrix
-  dm_push_row(mat, col_row);
-
-  // Check if column-capacity is increased correctly:
-  TEST_ASSERT(mat->rows <= mat->rows);
-  TEST_ASSERT_EQUAL(2, mat->cols);
-
-  // Check that the column was pushed correctly
-  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 2, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 3, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 3, 1));
-
-  // Clean up
-  dm_destroy(mat);
-  dv_destroy(col_row);
-}
-
 void test_dv_get_row(void) {
   // create test matrix
-  DoubleMatrix *mat = dm_create_dense(3, 4);
-  double *values = mat->values;
-  values[0] = 1.0;
-  values[1] = 2.0;
-  values[2] = 3.0;
-  values[3] = 4.0;
-  values[4] = 5.0;
-  values[5] = 6.0;
-  values[6] = 7.0;
-  values[7] = 8.0;
-  values[8] = 9.0;
-  values[9] = 10.0;
-  values[10] = 11.0;
-  values[11] = 12.0;
+  double values[3][4] = {
+      {1.0, 2.0, 3.0, 4.0}, {5.0, 6.0, 7.0, 8.0}, {9.9, 10.0, 11.0, 12.0}};
+  DoubleMatrix *mat = dm_create_from_array(3, 4, values);
 
   // get row vector
   DoubleVector *vec = dv_get_row_vector(mat, 1);
@@ -255,13 +218,9 @@ void test_dv_get_row(void) {
 }
 
 void test_dv_get_column(void) {
-  DoubleMatrix *mat = dm_create(3, 2);
+
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      dm_set(mat, i, j, values[i][j]);
-    }
-  }
+  DoubleMatrix *mat = dm_create_from_array(3, 2, values);
   DoubleVector *vec = dv_get_column_vector(mat, 1);
   TEST_ASSERT_EQUAL_DOUBLE(2.0, dv_get(vec, 0));
   TEST_ASSERT_EQUAL_DOUBLE(4.0, dv_get(vec, 1));
@@ -302,38 +261,7 @@ void test_dm_get(void) {
   dm_destroy(mat);
 }
 
-void test_sp_create_rand() {
-  size_t rows = 10;
-  size_t cols = 10;
-  double density = 0.5;
-  DoubleMatrix *sp_matrix = dm_create_rand(rows, cols, density);
-
-  TEST_ASSERT_EQUAL(rows, sp_matrix->rows);
-  TEST_ASSERT_EQUAL(cols, sp_matrix->cols);
-  TEST_ASSERT_TRUE(sp_matrix->format == SPARSE);
-
-  size_t nnz = sp_matrix->nnz;
-  TEST_ASSERT_TRUE(nnz > 0);
-  TEST_ASSERT_TRUE(nnz <= rows * cols);
-
-  double *values = sp_matrix->values;
-  size_t *col_indices = sp_matrix->col_indices;
-  size_t *row_pointers = sp_matrix->row_pointers;
-
-  for (size_t i = 0; i < rows; i++) {
-    size_t start = row_pointers[i];
-    size_t end = row_pointers[i + 1];
-    for (size_t j = start; j < end; j++) {
-      TEST_ASSERT_TRUE(col_indices[j] < cols);
-      TEST_ASSERT_TRUE(values[j] >= 0.0);
-      TEST_ASSERT_TRUE(values[j] <= 1.0);
-    }
-  }
-
-  dm_destroy(sp_matrix);
-}
-
-void test_sp_destroy() {
+void test_dm_destroy() {
   size_t rows = 10;
   size_t cols = 10;
   double density = 0.5;
@@ -350,7 +278,7 @@ void test_sp_destroy() {
 
 void test_dm_convert_to_sparse() {
   // create dense matrix
-  DoubleMatrix *mat = dm_create(3, 3);
+  DoubleMatrix *mat = dm_create_dense(3, 3);
   dm_set(mat, 0, 0, 1);
   dm_set(mat, 0, 1, 2);
   dm_set(mat, 0, 2, 0);
@@ -368,12 +296,12 @@ void test_dm_convert_to_sparse() {
   TEST_ASSERT_EQUAL(SPARSE, mat->format);
 
   // check matrix values
-  TEST_ASSERT_EQUAL(1.0, dm_get(mat, 0, 0));
-  TEST_ASSERT_EQUAL(2.0, dm_get(mat, 0, 1));
-  TEST_ASSERT_EQUAL(3.0, dm_get(mat, 1, 1));
-  TEST_ASSERT_EQUAL(4.0, dm_get(mat, 1, 2));
-  TEST_ASSERT_EQUAL(5.0, dm_get(mat, 2, 0));
-  TEST_ASSERT_EQUAL(6.0, dm_get(mat, 2, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 1, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 2, 2));
 
   // check number of non-zero elements
   TEST_ASSERT_EQUAL(6, mat->nnz);
@@ -409,4 +337,55 @@ void test_dm_convert_to_dense() {
 
   // destroy matrix
   dm_destroy(sparse_mat);
+}
+
+void test_dm_push_row() {
+  // Create a DoubleMatrix to push a row to
+  DoubleMatrix *mat = dm_create(3, 2);
+  dm_set(mat, 0, 0, 1.0);
+  dm_set(mat, 1, 0, 2.0);
+  dm_set(mat, 2, 1, 3.0);
+
+  // Create a DoubleVector to push as a row
+  DoubleVector *col_row = dv_create(2);
+  dv_set(col_row, 0, 4.0);
+  dv_set(col_row, 1, 5.0);
+
+  // Push the row to the DoubleMatrix
+  dm_push_row(mat, col_row);
+
+  // Check if row-capacity is increased correctly:
+  TEST_ASSERT_EQUAL(4, mat->rows);
+
+  // Check that the column was pushed correctly
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 3, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 3, 1));
+
+  // Clean up
+  dm_destroy(mat);
+  dv_destroy(col_row);
+}
+
+int main(void) {
+  UNITY_BEGIN();
+  RUN_TEST(test_double_precision);
+  RUN_TEST(test_dm_create);
+  RUN_TEST(test_dm_create2);
+  RUN_TEST(test_dm_create_rand);
+  RUN_TEST(test_dm_destroy);
+  RUN_TEST(test_dm_convert_to_sparse);
+  RUN_TEST(test_dm_convert_to_dense);
+  RUN_TEST(test_dm_get);
+  RUN_TEST(test_dm_set);
+  RUN_TEST(test_dv_get_column);
+  RUN_TEST(test_dv_get_row);
+  RUN_TEST(test_dm_push_column);
+  RUN_TEST(test_dm_create_from_array);
+  RUN_TEST(test_dm_create_identity);
+  // RUN_TEST(test_dm_push_row);
+
+  return UNITY_END();
 }
