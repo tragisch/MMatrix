@@ -18,7 +18,6 @@ cc_library(
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
-        "//lib/misc",
         "@dbg-macro",
          "@pbPlots",
     ],
