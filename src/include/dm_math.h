@@ -1,15 +1,39 @@
-
 #ifndef DM_MATH_H
 #define DM_MATH_H
 
+#ifdef __APPLE__
+#include <stdlib.h>
+#define random_number_generator arc4random
+#else
+#include <stdlib.h>
+#include <time.h>
+#define random_number_generator rand
+#endif
+
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+
+
 #include "dm_matrix.h"
-#include "misc.h"
 
 /*******************************/
 /*      General stuff     */
 /*******************************/
 
 bool dm_is_zero(double value);
+int max_int(int a, int b);
+double max_double(double a, double b);
+
+/*******************************/
+/*  Random Functions           */
+/*******************************/
+
+double randomDouble();
+double randomDouble_betweenBounds(uint32_t min, uint32_t max);
+uint32_t randomInt();
+uint32_t randomInt_upperBound(uint32_t limit);
+uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max);
 
 /*******************************/
 /*      Double Matrix Math     */

@@ -1,8 +1,10 @@
 #ifndef MATRIX_UR_H
 #define MATRIX_UR_H
 
-#include "misc.h"
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // #define NDEBUG
 
@@ -11,9 +13,9 @@
 /*******************************/
 
 // sparse matrix formats
-typedef enum { DENSE, SPARSE } matrix_format;
+typedef enum { DENSE, SPARSE, VECTOR } matrix_format;
 
-// Standard is of SparseMatrix (COO-Format)
+// Standard is of SparseMatrix (CSR-Format)
 typedef struct DoubleMatrix {
   size_t rows;
   size_t cols;
@@ -22,7 +24,7 @@ typedef struct DoubleMatrix {
   size_t nnz;           // Number of non-zero elements
   size_t *row_pointers; // Array of row pointers
   size_t *col_indices;  // Array of column indices of non-zero elements
-  matrix_format format; // COO, CSC, CSR
+  matrix_format format; // SPARSE or DENSE or VECTOR
   double *values;       // Values
 } DoubleMatrix;
 
