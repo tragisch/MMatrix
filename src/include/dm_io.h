@@ -2,7 +2,6 @@
 #define DM_IO_H
 
 #include "dm_matrix.h"
-#include "misc.h"
 #include "pbPlots.h"
 #include "supportLib.h"
 #include <math.h>
@@ -15,10 +14,10 @@
 /*******************************/
 
 // read & write
-int dv_read_from_file(DoubleVector *vec, const char *filepath);
-int dv_write_to_file(DoubleVector *vec, const char *filepath);
+DoubleMatrix *dm_read_matrix_market(const char *filename);
 
 // print stdout:
+void dm_brief(const DoubleMatrix *mat);
 void dm_print(const DoubleMatrix *matrix);
 
 void sp_print(const DoubleMatrix *mat);

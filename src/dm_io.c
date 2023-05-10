@@ -13,9 +13,13 @@
 #include "dbg.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 // #define NDEBUG
 #define BRAILLE_SIZE 10
+enum { INIT_CAPACITY = 2U };
 
 /*******************************/
 /*         I/O Functions       */
@@ -26,43 +30,65 @@
 #define MAX_COLUMN_PRINT 4
 
 /*******************************/
-/*            Vector           */
+/*     Matrix Market Format    */
 /*******************************/
 
-/* read in DoubleVector data from file */
-int dv_read_from_file(DoubleVector *vec, const char *filepath) {
-  FILE *file = fopen(filepath, "r");
-  if (file == NULL) {
-    return 1;
-  }
-  int succ_read = 1;
-  for (size_t i = 0; i < vec->rows; i++) {
-    // FIXME: insecure use of fscanf:
-    succ_read = fscanf(file, "%15lf", &vec->values[i]);
-  }
-  fclose(file);
+DoubleMatrix *dm_read_matrix_market(const char *filename) {
+  FILE *fp = NULL;
+  size_t nrows = 0;
+  size_t ncols = 0;
+  size_t nnz = 0;
 
-  return succ_read;
-}
-
-/* write data from DoubleVector to file */
-int dv_write_to_file(DoubleVector *vec, const char *filepath) {
-  FILE *file = fopen(filepath, "w");
-  if (file == NULL) {
-    return 1;
+  // Open the Matrix Market file for reading
+  fp = fopen(filename, "r");
+  if (fp == NULL) {
+    printf("Error: Unable to open file.\n");
+    exit(1);
   }
 
-  for (size_t i = 0; i < vec->rows; i++) {
-    if (i < vec->rows - 1) {
-      fprintf(file, "%lf\n", vec->values[i]);
-    } else {
-      fprintf(file, "%lf", vec->values[i]);
+  // define a buffer for reading lines
+  char line[1024];
+
+  // Read header
+  fgets(line, 1024, fp);
+  if (strcmp(line, "%%MatrixMarket matrix coordinate real") != 0) {
+    perror("Error: invalid header. No MatrixMarket matrix coordinate real.\n");
+  }
+  // Skip all comment lines in the file
+  while (fgets(line, 1024, fp) != NULL) {
+    if (line[0] != '%') {
+      break;
     }
   }
-  fclose(file);
 
-  return 0;
+  // Read dimensions and number of non-zero values
+  sscanf(line, "%zu %zu %zu", &nrows, &ncols, &nnz);
+  printf("nrows: %zu, ncols: %zu, nnz: %zu\n", nrows, ncols, nnz);
+
+  // Create DoubleMatrix
+  DoubleMatrix *mat = dm_create(nrows, ncols);
+
+  // Read non-zero values
+  for (size_t i = 0; i < (nnz); i++) {
+    size_t row_idx = 0;
+    size_t col_idx = 0;
+    double val = NAN;
+
+    fscanf(fp, "%zu %zu %lf", &row_idx, &col_idx, &val);
+
+    if (val != 0.0) {
+      dm_set(mat, row_idx - 1, col_idx - 1, val);
+    }
+  }
+
+  // Close the file
+  fclose(fp);
+  return mat;
 }
+
+/*******************************/
+/*   Pretty print  Vector      */
+/*******************************/
 
 /**
  * @brief printf DoubleArray pretty
@@ -81,6 +107,7 @@ void dv_print(const DoubleVector *vec) {
 
 // function to print DOubleVector as row vector
 static void dv_print_row(const DoubleVector *vec) {
+
   if (dv_is_row_vector(vec)) {
     printf("[ ");
     for (size_t i = 0; i < vec->rows; i++) {
@@ -91,21 +118,30 @@ static void dv_print_row(const DoubleVector *vec) {
     }
     printf(" ]\n");
   }
+  printf("Vector: %zu x %zu\n", vec->rows, vec->cols);
 }
 
 // function to print DOubleVector as column vector  (transposed)
 static void dv_print_col(const DoubleVector *vec) {
+
   if (dv_is_row_vector(vec) == false) {
     for (size_t i = 0; i < vec->cols; i++) {
       printf("[ %.2lf ]\n", vec->values[i]);
     }
     printf("\n");
   }
+  printf("Vector: %zu x %zu\n", vec->rows, vec->cols);
 }
 
 /*******************************/
-/*            Matrix           */
+/*   Pretty print  Matrix      */
 /*******************************/
+
+void dm_brief(const DoubleMatrix *mat) {
+  printf("Matrix: %zu x %zu\n", mat->rows, mat->cols);
+  printf("Non-zero elements: %zu\n", mat->nnz);
+  printf("Density: %.2lf\n", dm_density(mat));
+}
 
 /**
  * @brief printf DoubleMatrix pretty
@@ -252,7 +288,7 @@ void sp_create_scatterplot(const DoubleMatrix *mat, const char *filename) {
       DrawScatterPlotFromSettings(imageReference, settings, errorMessage);
 
   if (success) {
-    size_t length;
+    size_t length = 0;
     double *pngdata = ConvertToPNG(&length, imageReference->image);
     WriteToFile(pngdata, length, "matrix_scatterplot.png");
     DeleteImage(imageReference->image);
@@ -272,6 +308,9 @@ static void print_matrix_dimension(const DoubleMatrix *mat) {
     break;
   case DENSE:
     printf("DenseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
+    break;
+  case VECTOR:
+    printf("Vector (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   }
 }
