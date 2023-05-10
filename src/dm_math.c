@@ -24,6 +24,54 @@
 bool dm_is_zero(double value) { return fabs(value) < DBL_EPSILON; }
 
 /*******************************/
+/*   Random functions          */
+/*******************************/
+
+int max_int(int a, int b) { return a > b ? a : b; }
+double max_double(double a, double b) { return a > b ? a : b; }
+
+double randomDouble() {
+  uint32_t random_uint32 = randomInt();
+  double random_double = (double)random_uint32 / (double)UINT32_MAX;
+  return random_double;
+}
+double randomDouble_betweenBounds(uint32_t min, uint32_t max) {
+  return (randomInt_betweenBounds(min, max - 1) + randomDouble());
+}
+
+uint32_t randomInt() { return random_number_generator(); }
+
+#ifdef __APPLE__
+
+uint32_t randomInt_upperBound(uint32_t limit) {
+  return arc4random_uniform(limit);
+}
+
+#else
+
+uint32_t randomInt_upperBound(uint32_t limit) {
+  static int initialized = 0;
+  if (!initialized) {
+    srand(time(NULL));
+    initialized = 1;
+  }
+  int r;
+  do {
+    r = rand();
+  } while (r >= RAND_MAX - RAND_MAX % limit);
+  return r % limit;
+}
+
+#endif
+
+uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max) {
+  if (max < min) {
+    return min;
+  }
+  return randomInt_upperBound((max - min) + 1) + min;
+}
+
+/*******************************/
 /*     Double Matrix Math      */
 /*******************************/
 
@@ -54,7 +102,7 @@ void dm_transpose(DoubleMatrix *mat) {
  */
 
 double sp_density(const DoubleMatrix *mat) {
-  return (double)(mat->nnz / (mat->rows * mat->cols));
+  return ((double)mat->nnz / (double)(mat->rows * mat->cols));
 }
 
 /**
@@ -186,7 +234,7 @@ double dm_determinant(const DoubleMatrix *mat) {
         }
       }
     }
-    det += pow(-1, i) * dm_get(mat, 0, i) * dm_determinant(sub_mat);
+    det += pow(-1, (double)i) * dm_get(mat, 0, i) * dm_determinant(sub_mat);
     dm_destroy(sub_mat);
   }
   return det;
@@ -205,6 +253,7 @@ DoubleMatrix *dm_inverse(DoubleMatrix *mat) {
   double det = dm_determinant(mat);
   if (det == 0) {
     perror("the Matrix has no inverse!");
+    return NULL;
   }
   DoubleMatrix *inverse = dm_create(mat->cols, mat->cols);
   for (size_t i = 0; i < mat->cols; i++) {
@@ -223,7 +272,7 @@ DoubleMatrix *dm_inverse(DoubleMatrix *mat) {
           }
         }
       }
-      dm_set(inverse, i, j, pow(-1, i + j) * dm_determinant(sub_mat));
+      dm_set(inverse, i, j, pow(-1, (double)(i + j)) * dm_determinant(sub_mat));
       dm_destroy(sub_mat);
     }
   }
@@ -318,8 +367,9 @@ int dm_rank(const DoubleMatrix *mat) {
 }
 
 double dm_density(const DoubleMatrix *mat) {
-  if (mat->format != DENSE)
+  if (mat->format != DENSE) {
     return sp_density(mat);
+  }
 
   double density = 0.0;
   for (size_t i = 0; i < mat->rows; i++) {
@@ -329,5 +379,5 @@ double dm_density(const DoubleMatrix *mat) {
       }
     }
   }
-  return density / (mat->rows * mat->cols);
+  return (density / (double)(mat->rows * mat->cols));
 }
