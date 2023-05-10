@@ -250,7 +250,6 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   // perror if boundaries are exceeded
   if (i >= mat->rows || j >= mat->cols) {
     perror("Error: index out of bounds.\n");
-    return -1;
   }
   switch (mat->format) {
   case DENSE:
@@ -312,11 +311,11 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
       row_end > mat->rows || col_start < 0 || col_start > mat->cols ||
       col_end < 0 || col_end > mat->cols) {
     perror("Error: matrix index out of bounds.\n");
-    return NULL;
+    exit(EXIT_FAILURE);
   }
   if (row_start > row_end || col_start > col_end) {
     perror("Error: matrix index out of bounds.\n");
-    return NULL;
+    exit(EXIT_FAILURE);
   }
   DoubleMatrix *sub_mat =
       dm_create(row_end - row_start + 1, col_end - col_start + 1);

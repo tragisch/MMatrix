@@ -20,12 +20,12 @@
 // Laplace Matrix
 DoubleMatrix *sp_laplace(size_t n) {
   DoubleMatrix *mat = dm_create(n, n);
-  mat->nnz = 2 * n - 1;
+  mat->nnz = 5 * n - 4;
   mat->values = malloc(mat->nnz * sizeof(double));
   mat->row_pointers = malloc(mat->nnz * sizeof(size_t));
   mat->col_indices = malloc(mat->nnz * sizeof(size_t));
   for (int i = 0; i < n; i++) {
-    mat->values[i] = 2;
+    mat->values[i] = 4;
     mat->row_pointers[i] = i;
     mat->col_indices[i] = i;
   }
@@ -36,6 +36,14 @@ DoubleMatrix *sp_laplace(size_t n) {
     mat->values[i + n + 1] = -1;
     mat->row_pointers[i + n + 1] = i + 1;
     mat->col_indices[i + n + 1] = i;
+  }
+  for (int i = 0; i < n - 2; i++) {
+    mat->values[i + 2 * n] = -1;
+    mat->row_pointers[i + 2 * n] = i;
+    mat->col_indices[i + 2 * n] = i + 2;
+    mat->values[i + 2 * n + 1] = -1;
+    mat->row_pointers[i + 2 * n + 1] = i + 2;
+    mat->col_indices[i + 2 * n + 1] = i;
   }
   return mat;
 }
@@ -218,31 +226,28 @@ DoubleMatrix *sp_hadamard(size_t n) {
   mat->values = malloc(mat->nnz * sizeof(double));
   mat->row_pointers = malloc(mat->nnz * sizeof(size_t));
   mat->col_indices = malloc(mat->nnz * sizeof(size_t));
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
-      mat->values[i * n + j] = 1;
+  mat->values[0] = 1;
+  mat->row_pointers[0] = 0;
+  mat->col_indices[0] = 0;
+  for (int i = 1; i < n; i++) {
+    for (int j = 0; j < i; j++) {
+      mat->values[i * n + j] = mat->values[j * n + i] = mat->values[j * n + j];
       mat->row_pointers[i * n + j] = i;
       mat->col_indices[i * n + j] = j;
+      mat->row_pointers[j * n + i] = j;
+      mat->col_indices[j * n + i] = i;
+      mat->row_pointers[j * n + j] = j;
+      mat->col_indices[j * n + j] = j;
     }
+    mat->values[i * n + i] = -mat->values[(i - 1) * n + (i - 1)];
+    mat->row_pointers[i * n + i] = i;
+    mat->col_indices[i * n + i] = i;
   }
   return mat;
 }
 
-DoubleMatrix *sp_kronecker(size_t n) {
-  DoubleMatrix *mat = dm_create(n, n);
-  mat->nnz = n * n;
-  mat->values = malloc(mat->nnz * sizeof(double));
-  mat->row_pointers = malloc(mat->nnz * sizeof(size_t));
-  mat->col_indices = malloc(mat->nnz * sizeof(size_t));
-  for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
-      mat->values[i * n + j] = 1;
-      mat->row_pointers[i * n + j] = i;
-      mat->col_indices[i * n + j] = j;
-    }
-  }
-  return mat;
-}
+
+
 
 DoubleMatrix *sp_diagonal_matrix(DoubleMatrix *adj) {
   DoubleMatrix *mat = dm_create(adj->rows, adj->cols);
