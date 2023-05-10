@@ -26,32 +26,50 @@ DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->rows = rows;
   matrix->cols = cols;
+  matrix->nnz = 0;
   matrix->format = DENSE;
-  matrix->values =
-      (double *)malloc((matrix->rows * matrix->cols) * sizeof(double));
+  matrix->col_capacity = 0;
+  matrix->row_capacity = 0;
+  matrix->row_pointers = NULL;
+  matrix->col_indices = NULL;
+  double *values = (double *)calloc(rows * cols, sizeof(double));
+  if (values == NULL) {
+    perror("Failed to allocate memory");
+    exit(EXIT_FAILURE);
+  }
+
+  matrix->values = values;
   return matrix;
 }
 
 // change size of dense matrix:
 void dm_resize_dense(DoubleMatrix *mat, size_t rows, size_t cols) {
+  if (rows == mat->rows && cols == mat->cols) {
+    // Nothing to do, matrix is already the right size
+    return;
+  }
   if (rows < 1 || cols < 1) {
     perror("Matrix dimensions must be greater than 0");
-  } else {
-    // in case of a dense matrix:
-    if (mat->format == DENSE) {
-      double *new_data = (double *)calloc(rows * cols, sizeof(double));
-      size_t min_rows = mat->rows < rows ? mat->rows : rows;
-      size_t min_cols = mat->cols < cols ? mat->cols : cols;
-      for (size_t i = 0; i < min_rows; i++) {
-        for (size_t j = 0; j < min_cols; j++) {
-          new_data[i * cols + j] = mat->values[i * mat->cols + j];
-        }
-      }
-      free(mat->values);
-      mat->values = new_data;
-      mat->rows = rows;
-      mat->cols = cols;
+    return;
+  }
+  // in case of a dense matrix:
+  if (mat->format == DENSE || mat->format == VECTOR) {
+    double *new_data = (double *)calloc(rows * cols, sizeof(double));
+    if (new_data == NULL) {
+      perror("Failed to allocate memory");
+      exit(EXIT_FAILURE);
     }
+    size_t min_rows = mat->rows < rows ? mat->rows : rows;
+    size_t min_cols = mat->cols < cols ? mat->cols : cols;
+    for (size_t i = 0; i < min_rows; i++) {
+      for (size_t j = 0; j < min_cols; j++) {
+        new_data[i * cols + j] = mat->values[i * mat->cols + j];
+      }
+    }
+    free(mat->values);
+    mat->values = new_data;
+    mat->rows = rows;
+    mat->cols = cols;
   }
 }
 
@@ -87,6 +105,7 @@ void dm_convert_to_dense(DoubleMatrix *mat) {
       for (size_t i = 0; i < mat->rows; i++) {
         for (size_t j = 0; j < mat->cols; j++) {
           new_mat->values[i * mat->cols + j] = dm_get_sparse(mat, i, j);
+          new_mat->nnz++;
         }
       }
       // free sparse matrix:
