@@ -29,7 +29,13 @@ DoubleVector *dv_vector() {
   DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
   vec->rows = 0;
   vec->cols = 1;
-  vec->values = (double *)malloc(1 * sizeof(double));
+  vec->nnz = 0;
+  vec->col_capacity = 1;
+  vec->row_capacity = INIT_CAPACITY;
+  vec->row_pointers = NULL;
+  vec->col_indices = NULL;
+  vec->format = VECTOR;
+  vec->values = (double *)malloc(vec->row_capacity * sizeof(double));
   return vec;
 }
 
@@ -56,7 +62,7 @@ DoubleVector *dv_clone(DoubleVector *vector) {
 
 bool dv_is_row_vector(const DoubleVector *vec) {
   bool is_vector = false;
-  if ((vec->cols == 1) && (vec->rows > 1)) {
+  if ((vec->col_capacity == 1) && (vec->row_capacity >= 1)) {
     is_vector = true;
   }
   return is_vector;
@@ -70,10 +76,20 @@ bool dv_is_row_vector(const DoubleVector *vec) {
  * @return DoubleVector*
  */
 DoubleVector *dv_create(size_t length) {
-  DoubleVector *vec = (DoubleVector *)malloc(sizeof(DoubleVector));
+  if (length < 1) {
+    perror("Vector length must be greater than 0");
+  }
+  DoubleVector *vec = dv_vector();
   vec->rows = length;
-  vec->cols = 1;
-  vec->values = (double *)malloc(length * sizeof(double));
+  vec->row_capacity = length + INIT_CAPACITY;
+
+  double *values = (double *)malloc(vec->row_capacity * sizeof(double));
+  if (values == NULL) {
+    perror("Could not allocate memory for vector");
+    exit(EXIT_FAILURE);
+  }
+
+  vec->values = values;
   return vec;
 }
 
@@ -104,11 +120,7 @@ double dv_get(const DoubleVector *vec, size_t idx) {
   if (idx < 0 || idx > (vec->rows)) {
     perror("This index does not exist");
   }
-  double value = dm_get(vec, idx, 0);
-
-  if (vec->rows == 1) { // only if colum-vector
-    value = dm_get(vec, 0, idx);
-  }
+  double value = vec->values[idx];
 
   return value;
 }
@@ -121,14 +133,11 @@ double dv_get(const DoubleVector *vec, size_t idx) {
  * @param double
  */
 void dv_set(DoubleVector *vec, size_t idx, double value) {
-  if (idx < 0 || idx > (vec->rows - 1)) {
+  if ((idx < 0) || (idx > (vec->rows))) {
     perror("This index does not exist");
   }
-  if (vec->rows == 1) {
-    dm_set(vec, 0, idx, value);
-  }
-
-  dm_set(vec, idx, 0, value);
+  // set value
+  vec->values[idx] = value;
 }
 
 void dv_resize(DoubleVector *vec, size_t rows) {
@@ -136,7 +145,7 @@ void dv_resize(DoubleVector *vec, size_t rows) {
     perror("destroy matrix instead of setting zero sizes!");
   } else {
     // in case of a dense matrix:
-    dm_resize(vec, rows, vec->cols);
+    dm_resize(vec, rows, 1);
   }
 }
 
