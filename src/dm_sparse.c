@@ -29,13 +29,14 @@ DoubleMatrix *dm_create_sparse(size_t rows, size_t cols) {
   DoubleMatrix *mat = malloc(sizeof(DoubleMatrix));
   mat->rows = rows;
   mat->cols = cols;
-  mat->row_capacity = INIT_CAPACITY;
-  mat->col_capacity = INIT_CAPACITY;
+  mat->row_capacity = rows + INIT_CAPACITY;
+  mat->col_capacity = rows + INIT_CAPACITY;
   mat->nnz = 0;
   mat->row_pointers = calloc(mat->row_capacity, sizeof(size_t));
-  mat->col_indices = calloc(mat->col_capacity, sizeof(size_t));
+  mat->col_indices =
+      calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
   mat->format = SPARSE;
-  mat->values = calloc(mat->col_capacity, sizeof(double));
+  mat->values = calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(double));
   return mat;
 }
 
@@ -96,18 +97,20 @@ void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
       }
     }
   } else {
-    // check if row_capacity is sufficient:
-    if (mat->row_capacity < mat->rows + 1) {
-      mat->row_capacity *= RESIZE_FACTOR;
-      mat->row_pointers =
-          realloc(mat->row_pointers, (mat->row_capacity + 1) * sizeof(size_t));
-    }
     // check if col_capacity is sufficient:
-    if (mat->col_capacity < mat->nnz + 1) {
-      mat->col_capacity *= RESIZE_FACTOR;
-      mat->col_indices =
-          realloc(mat->col_indices, mat->col_capacity * sizeof(size_t));
-      mat->values = realloc(mat->values, mat->col_capacity * sizeof(double));
+    if (mat->col_capacity < (mat->nnz + INIT_CAPACITY)) {
+      size_t *col_ind_tmp =
+          realloc(mat->col_indices,
+                  (mat->col_capacity + INIT_CAPACITY) * sizeof(size_t));
+      double *values_tmp = realloc(
+          mat->values, (mat->col_capacity + INIT_CAPACITY) * sizeof(double));
+      if (col_ind_tmp == NULL || values_tmp == NULL) {
+        perror("Error: memory allocation failed.\n");
+        exit(EXIT_FAILURE);
+      }
+      mat->col_capacity += INIT_CAPACITY;
+      mat->col_indices = col_ind_tmp;
+      mat->values = values_tmp;
     }
 
     size_t row_start = mat->row_pointers[i];
@@ -137,6 +140,8 @@ void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
       mat->row_pointers[k]++;
     }
   }
+  // print to console: value und i, j
+  // printf("value: %f, i: %zu, j: %zu\n", dm_get(mat, i, j), i, j);
 }
 
 double dm_get_sparse(const DoubleMatrix *mat, size_t i, size_t j) {
@@ -233,7 +238,7 @@ static size_t compute_new_col_capacity(DoubleMatrix *mat, size_t new_cols) {
     return mat->col_capacity;
   }
 
-  size_t new_col_capacity = (size_t)(mat->col_capacity * (1.0 + INIT_CAPACITY));
+  size_t new_col_capacity = (size_t)(mat->col_capacity * (1 + INIT_CAPACITY));
   if (new_col_capacity < new_cols) {
     new_col_capacity = new_cols;
   }
@@ -243,16 +248,18 @@ static size_t compute_new_col_capacity(DoubleMatrix *mat, size_t new_cols) {
 
 // Helper function to resize the column indices and values arrays
 static void resize_col_arrays(DoubleMatrix *mat, size_t new_col_capacity) {
-  mat->col_indices =
+  size_t *new_col_indices =
       (size_t *)realloc(mat->col_indices, new_col_capacity * sizeof(size_t));
-  mat->values =
+  double *new_values =
       (double *)realloc(mat->values, new_col_capacity * sizeof(double));
-  if (mat->col_indices == NULL || mat->values == NULL) {
+  if (new_col_indices == NULL || new_values == NULL) {
     fprintf(stderr,
             "Error: Failed to allocate memory for column indices or values\n");
     exit(EXIT_FAILURE);
   }
 
+  mat->col_indices = new_col_indices;
+  mat->values = new_values;
   mat->col_capacity = new_col_capacity;
 }
 
@@ -261,24 +268,29 @@ void dm_resize_sparse(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
   if (new_rows == mat->rows && new_cols == mat->cols) {
     return;
   }
-
-  size_t new_nnz, new_row_capacity;
+  // Compute the new row pointers and nnz
+  size_t new_nnz = 0;
+  size_t new_row_capacity = 0;
   compute_new_row_pointers_and_nnz(mat, new_rows, &new_nnz, &new_row_capacity);
 
+  // Compute the new column capacity
   size_t new_col_capacity = compute_new_col_capacity(mat, new_cols);
   resize_col_arrays(mat, new_col_capacity);
 
-  mat->row_pointers =
+  // Resize the row pointers
+  size_t *new_row_pointers =
       (size_t *)realloc(mat->row_pointers, new_row_capacity * sizeof(size_t));
-  if (mat->row_pointers == NULL) {
+  if (new_row_pointers == NULL) {
     fprintf(stderr, "Error: Failed to allocate memory for row pointers\n");
     exit(EXIT_FAILURE);
   }
+  mat->row_pointers = new_row_pointers;
 
+  // Update the row pointers
   for (size_t i = mat->rows; i <= new_rows; i++) {
     mat->row_pointers[i] = new_nnz;
   }
-
+  // Update the dimensions
   mat->rows = new_rows;
   mat->cols = new_cols;
   mat->nnz = new_nnz;

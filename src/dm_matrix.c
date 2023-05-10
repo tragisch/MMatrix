@@ -42,6 +42,9 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
   case DENSE:
     mat = dm_create_dense(rows, cols);
     break;
+  case VECTOR:
+    mat = dv_create(rows);
+    break;
   default:
     perror("Error: invalid matrix format.\n");
     return NULL;
@@ -69,12 +72,20 @@ DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
         double value = randomDouble();
         if (!dm_is_zero(value)) {
           // Resize col_indices and values arrays if needed
-          if (mat->nnz >= mat->col_capacity) {
-            mat->col_capacity *= 2;
-            mat->col_indices = (size_t *)realloc(
+          if (mat->nnz >= (mat->col_capacity + INIT_CAPACITY)) {
+
+            mat->col_capacity += INIT_CAPACITY;
+            size_t *tmp_col_indices = (size_t *)realloc(
                 mat->col_indices, mat->col_capacity * sizeof(size_t));
-            mat->values = (double *)realloc(mat->values,
-                                            mat->col_capacity * sizeof(double));
+            double *tmp_values = (double *)realloc(
+                mat->values, mat->col_capacity * sizeof(double));
+            if ((tmp_col_indices == NULL) || (tmp_values == NULL)) {
+              perror("Error: could not allocate memory for col_indices.\n");
+              exit(EXIT_FAILURE);
+            }
+
+            mat->col_indices = tmp_col_indices;
+            mat->values = tmp_values;
           }
           dm_set(mat, i, j, value);
         }
@@ -166,6 +177,8 @@ void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols) {
   case SPARSE:
     dm_resize_sparse(mat, rows, cols);
     break;
+  case VECTOR:
+    dm_resize_dense(mat, rows, 1);
   default:
     break;
   }
@@ -183,7 +196,8 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
   case SPARSE:
     dm_convert_to_sparse(mat);
     break;
-  default:
+
+  case VECTOR:
     break;
   }
 }
@@ -236,7 +250,7 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   // perror if boundaries are exceeded
   if (i >= mat->rows || j >= mat->cols) {
     perror("Error: index out of bounds.\n");
-    return 0.0;
+    return -1;
   }
   switch (mat->format) {
   case DENSE:
@@ -245,15 +259,20 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   case SPARSE:
     return dm_get_sparse(mat, i, j);
     break;
+  case VECTOR:
+    return dv_get(mat, i);
+    break;
   }
 }
 
+/**
+ * @brief set value of index i, j
+ *
+ * @param mat
+ * @param i,j
+ * @param value
+ */
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
-  // perror if boundaries are exceeded
-  if (i >= mat->rows || j >= mat->cols) {
-    perror("Error: index out of bounds.\n");
-    return;
-  }
   switch (mat->format) {
   case SPARSE:
     dm_set_sparse(mat, i, j, value);
@@ -261,27 +280,19 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   case DENSE:
     dm_set_dense(mat, i, j, value);
     break;
+  case VECTOR:
+    dv_set(mat, i, value);
+    break;
   }
 }
 
 // free sparse matrix
-void dm_destroy(DoubleMatrix *dm_matrix) {
-  if (dm_matrix == NULL) {
-    return;
-  }
-  if (dm_matrix->col_indices != NULL) {
-    free(dm_matrix->col_indices);
-    dm_matrix->col_indices = NULL;
-  }
-  if (dm_matrix->values != NULL) {
-    free(dm_matrix->values);
-    dm_matrix->values = NULL;
-  }
-  if (dm_matrix->row_pointers != NULL) {
-    free(dm_matrix->row_pointers);
-    dm_matrix->row_pointers = NULL;
-  }
-  free(dm_matrix);
+void dm_destroy(DoubleMatrix *mat) {
+  free(mat->col_indices);
+  free(mat->values);
+  free(mat->row_pointers);
+  free(mat);
+  mat = NULL;
 }
 
 /**
