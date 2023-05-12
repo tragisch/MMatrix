@@ -233,69 +233,6 @@ void sp_print_condensed(DoubleMatrix *mat) {
   printf("\n");
 }
 
-void sp_create_scatterplot(const DoubleMatrix *mat, const char *filename) {
-
-  StringReference *errorMessage = NULL;
-  RGBABitmapImageReference *imageReference = CreateRGBABitmapImageReference();
-
-  double *xs = malloc(sizeof(double) * mat->nnz);
-  double *ys = malloc(sizeof(double) * mat->nnz);
-
-  // convert mat->row_pointers to double array
-
-  for (size_t i = 0; i < mat->nnz; i++) {
-    xs[i] = (double)mat->row_indices[i];
-    ys[i] = (double)mat->col_indices[i];
-  }
-
-  dbga(xs, mat->nnz);
-  dbga(ys, mat->nnz);
-
-  // Create the plot
-  ScatterPlotSeries *series = GetDefaultScatterPlotSeriesSettings();
-  series->xs = xs;
-  series->xsLength = mat->nnz;
-  series->ys = ys;
-  series->ysLength = mat->rows;
-  series->linearInterpolation = false;
-  series->pointType = L"dots";
-  series->pointTypeLength = wcslen(series->pointType);
-  series->color = CreateRGBColor(1, 0, 0);
-
-  ScatterPlotSettings *settings = GetDefaultScatterPlotSettings();
-  settings->width = 600;
-  settings->height = 400;
-  settings->autoBoundaries = true;
-  settings->autoPadding = true;
-  settings->title = L"";
-  settings->titleLength = wcslen(settings->title);
-  settings->xLabel = L"";
-  settings->xLabelLength = wcslen(settings->xLabel);
-  settings->yLabel = L"";
-  settings->yLabelLength = wcslen(settings->yLabel);
-
-  ScatterPlotSeries *s[] = {series};
-  settings->scatterPlotSeries = s;
-  settings->scatterPlotSeriesLength = 1;
-
-  errorMessage = (StringReference *)malloc(sizeof(StringReference));
-  bool success =
-      DrawScatterPlotFromSettings(imageReference, settings, errorMessage);
-
-  if (success) {
-    size_t length = 0;
-    double *pngdata = ConvertToPNG(&length, imageReference->image);
-    WriteToFile(pngdata, length, "matrix_scatterplot.png");
-    DeleteImage(imageReference->image);
-  } else {
-    fprintf(stderr, "Error: ");
-    for (int i = 0; i < errorMessage->stringLength; i++) {
-      fprintf(stderr, "%c", errorMessage->string[i]);
-    }
-    fprintf(stderr, "\n");
-  }
-}
-
 static void print_matrix_dimension(const DoubleMatrix *mat) {
   switch (mat->format) {
   case SPARSE:
