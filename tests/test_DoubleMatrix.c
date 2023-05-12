@@ -271,7 +271,7 @@ void test_dm_destroy() {
   dm_destroy(sp_matrix);
 
   // Check that all memory was freed
-  TEST_ASSERT_NULL(sp_matrix->row_pointers);
+  TEST_ASSERT_NULL(sp_matrix->row_indices);
   TEST_ASSERT_NULL(sp_matrix->col_indices);
   TEST_ASSERT_NULL(sp_matrix->values);
 }
@@ -385,7 +385,7 @@ int main(void) {
   RUN_TEST(test_dm_push_column);
   RUN_TEST(test_dm_create_from_array);
   RUN_TEST(test_dm_create_identity);
-  // RUN_TEST(test_dm_push_row);
+  RUN_TEST(test_dm_push_row);
 
   return UNITY_END();
 }

@@ -46,14 +46,12 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
     exit(1);
   }
 
-  // define a buffer for reading lines
   char line[1024];
-
-  // Read header
-  fgets(line, 1024, fp);
-  if (strcmp(line, "%%MatrixMarket matrix coordinate real") != 0) {
-    perror("Error: invalid header. No MatrixMarket matrix coordinate real.\n");
+  fgets(line, sizeof(line), fp);
+  if (strstr(line, "%%MatrixMarket matrix coordinate") == NULL) {
+    perror("Error: invalid header. No MatrixMarket matrix coordinate.\n");
   }
+
   // Skip all comment lines in the file
   while (fgets(line, 1024, fp) != NULL) {
     if (line[0] != '%') {
@@ -63,7 +61,6 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
 
   // Read dimensions and number of non-zero values
   sscanf(line, "%zu %zu %zu", &nrows, &ncols, &nnz);
-  printf("nrows: %zu, ncols: %zu, nnz: %zu\n", nrows, ncols, nnz);
 
   // Create DoubleMatrix
   DoubleMatrix *mat = dm_create(nrows, ncols);
@@ -96,19 +93,17 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
  * @param DoubleVector* vec
  */
 void dv_print(const DoubleVector *vec) {
-  if (dv_is_row_vector(vec)) {
+  if (vec->rows >= vec->cols) {
     dv_print_row(vec);
-  } else if (dv_is_row_vector(vec) == false) {
-    dv_print_col(vec);
   } else {
-    printf("not a vector!\n");
+    dv_print_col(vec);
   }
 }
 
 // function to print DOubleVector as row vector
 static void dv_print_row(const DoubleVector *vec) {
 
-  if (dv_is_row_vector(vec)) {
+  if (vec->rows >= vec->cols) {
     printf("[ ");
     for (size_t i = 0; i < vec->rows; i++) {
       if (i > 0) {
@@ -124,7 +119,7 @@ static void dv_print_row(const DoubleVector *vec) {
 // function to print DOubleVector as column vector  (transposed)
 static void dv_print_col(const DoubleVector *vec) {
 
-  if (dv_is_row_vector(vec) == false) {
+  if (vec->cols > vec->rows) {
     for (size_t i = 0; i < vec->cols; i++) {
       printf("[ %.2lf ]\n", vec->values[i]);
     }
@@ -140,7 +135,7 @@ static void dv_print_col(const DoubleVector *vec) {
 void dm_brief(const DoubleMatrix *mat) {
   printf("Matrix: %zu x %zu\n", mat->rows, mat->cols);
   printf("Non-zero elements: %zu\n", mat->nnz);
-  printf("Density: %.2lf\n", dm_density(mat));
+  printf("Density: %lf\n", dm_density(mat));
 }
 
 /**
@@ -207,10 +202,10 @@ void sp_print(const DoubleMatrix *mat) {
   }
 
   printf("\n");
-  printf("row_pointers: ");
-  if (mat->row_pointers != NULL) {
-    for (size_t i = 0; i < mat->rows + 1; i++) {
-      printf("%zu ", mat->row_pointers[i]);
+  printf("row_indices: ");
+  if (mat->row_indices != NULL) {
+    for (size_t i = 0; i < mat->nnz; i++) {
+      printf("%zu ", mat->row_indices[i]);
     }
   }
 
@@ -226,13 +221,13 @@ void sp_print(const DoubleMatrix *mat) {
 
 void sp_print_condensed(DoubleMatrix *mat) {
   print_matrix_dimension(mat);
-  size_t start = mat->row_pointers[0];
+  size_t start = mat->row_indices[0];
   for (size_t i = 0; i < mat->nnz; i++) {
-    if (start != mat->row_pointers[i]) {
+    if (start != mat->row_indices[i]) {
       printf("\n");
-      start = mat->row_pointers[i];
+      start = mat->row_indices[i];
     }
-    printf("(%zu,%zu): %.2lf, ", mat->row_pointers[i], mat->col_indices[i],
+    printf("(%zu,%zu): %.2lf, ", mat->row_indices[i], mat->col_indices[i],
            mat->values[i]);
   }
   printf("\n");
@@ -249,7 +244,7 @@ void sp_create_scatterplot(const DoubleMatrix *mat, const char *filename) {
   // convert mat->row_pointers to double array
 
   for (size_t i = 0; i < mat->nnz; i++) {
-    xs[i] = (double)mat->row_pointers[i];
+    xs[i] = (double)mat->row_indices[i];
     ys[i] = (double)mat->col_indices[i];
   }
 

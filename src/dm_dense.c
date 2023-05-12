@@ -28,49 +28,56 @@ DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
   matrix->cols = cols;
   matrix->nnz = 0;
   matrix->format = DENSE;
-  matrix->col_capacity = 0;
-  matrix->row_capacity = 0;
-  matrix->row_pointers = NULL;
+  matrix->capacity = 0;
+  matrix->row_indices = NULL;
   matrix->col_indices = NULL;
-  double *values = (double *)calloc(rows * cols, sizeof(double));
-  if (values == NULL) {
-    perror("Failed to allocate memory");
-    exit(EXIT_FAILURE);
-  }
-
-  matrix->values = values;
+  matrix->values = (double *)calloc(rows * cols, sizeof(double));
   return matrix;
 }
 
 // change size of dense matrix:
-void dm_resize_dense(DoubleMatrix *mat, size_t rows, size_t cols) {
-  if (rows == mat->rows && cols == mat->cols) {
-    // Nothing to do, matrix is already the right size
-    return;
+void dm_realloc_dense(DoubleMatrix *mat, size_t new_capacity) {
+  // exit if not DENSE format
+  if (mat->format != DENSE) {
+    perror("Error: matrix format is not dense.\n");
+    exit(EXIT_FAILURE);
   }
-  if (rows < 1 || cols < 1) {
-    perror("Matrix dimensions must be greater than 0");
-    return;
+
+  double *new_values = (double *)realloc(
+      mat->values, (mat->capacity + new_capacity) * sizeof(double));
+
+  if (new_values == NULL) {
+    perror("Error: could not reallocate memory for dense matrix.\n");
+    exit(EXIT_FAILURE);
   }
-  // in case of a dense matrix:
-  if (mat->format == DENSE || mat->format == VECTOR) {
-    double *new_data = (double *)calloc(rows * cols, sizeof(double));
-    if (new_data == NULL) {
-      perror("Failed to allocate memory");
-      exit(EXIT_FAILURE);
+
+  // update matrix:
+  mat->values = new_values;
+  mat->capacity += new_capacity;
+}
+
+void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col) {
+
+  // allocate new memory for dense matrix:
+  double *new_values = (double *)calloc(new_row * new_col, sizeof(double));
+
+  if (new_values == NULL) {
+    perror("Error: could not reallocate memory for dense matrix.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // copy values from old matrix to new matrix:
+  for (int i = 0; i < new_row; i++) {
+    for (int j = 0; j < new_col; j++) {
+      new_values[i * new_col + j] = mat->values[i * mat->cols + j];
     }
-    size_t min_rows = mat->rows < rows ? mat->rows : rows;
-    size_t min_cols = mat->cols < cols ? mat->cols : cols;
-    for (size_t i = 0; i < min_rows; i++) {
-      for (size_t j = 0; j < min_cols; j++) {
-        new_data[i * cols + j] = mat->values[i * mat->cols + j];
-      }
-    }
-    free(mat->values);
-    mat->values = new_data;
-    mat->rows = rows;
-    mat->cols = cols;
   }
+
+  // update matrix:
+  mat->values = new_values;
+  mat->rows = new_row;
+  mat->cols = new_col;
+  mat->capacity = new_row * new_col;
 }
 
 // get value from dense matrix:
@@ -95,33 +102,26 @@ double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j) {
 // convert SparseMatrix of CSR format to Dense format
 void dm_convert_to_dense(DoubleMatrix *mat) {
   if (mat->format == SPARSE) {
-    // create new dense matrix:
-    DoubleMatrix *new_mat = dm_create_dense(mat->rows, mat->cols);
-    if (new_mat == NULL) {
-      perror("Error: could not create new dense matrix.\n");
-      dm_destroy(mat);
-    } else {
-      // fill new dense matrix with values from sparse matrix:
-      for (size_t i = 0; i < mat->rows; i++) {
-        for (size_t j = 0; j < mat->cols; j++) {
-          new_mat->values[i * mat->cols + j] = dm_get_sparse(mat, i, j);
-          new_mat->nnz++;
-        }
-      }
-      // free sparse matrix:
-      free(mat->values);
 
-      // copy new dense matrix to old sparse matrix:
-      mat->rows = new_mat->rows;
-      mat->cols = new_mat->cols;
-      mat->format = new_mat->format;
-      mat->values = new_mat->values;
-      mat->nnz = new_mat->nnz;
-      mat->row_pointers = new_mat->row_pointers;
-      mat->col_indices = new_mat->col_indices;
-      free(new_mat);
+    // allocate memory for dense matrix:
+    double *new_values =
+        (double *)calloc(mat->rows * mat->cols, sizeof(double));
+    size_t new_capacity = mat->rows * mat->cols;
+
+    // fill dense matrix with values from sparse matrix:
+    for (int i = 0; i < mat->nnz; i++) {
+      new_values[mat->row_indices[i] * mat->cols + mat->col_indices[i]] =
+          mat->values[i];
     }
-  } else {
-    perror("Error: matrix format is not sparse (CSR).\n");
+
+    mat->format = DENSE;
+    mat->values = new_values;
+    mat->capacity = new_capacity;
+
+    // free memory of sparse matrix:
+    free(mat->row_indices);
+    free(mat->col_indices);
+    mat->row_indices = NULL;
+    mat->col_indices = NULL;
   }
 }

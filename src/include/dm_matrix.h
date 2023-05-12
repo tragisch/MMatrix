@@ -15,14 +15,13 @@
 // sparse matrix formats
 typedef enum { DENSE, SPARSE, VECTOR } matrix_format;
 
-// Standard is of SparseMatrix (CSR-Format)
+// Standard is of SparseMatrix (COO-Format)
 typedef struct DoubleMatrix {
   size_t rows;
   size_t cols;
-  size_t row_capacity;  // Capacity of row pointers
-  size_t col_capacity;  // Capacity of column indices
+  size_t capacity;      // Capacity of row_indices and col_indices
   size_t nnz;           // Number of non-zero elements
-  size_t *row_pointers; // Array of row pointers
+  size_t *row_indices;  // Array of row indices of non-zero elements
   size_t *col_indices;  // Array of column indices of non-zero elements
   matrix_format format; // SPARSE or DENSE or VECTOR
   double *values;       // Values
@@ -34,6 +33,8 @@ typedef DoubleMatrix DoubleVector;
 /*******************************/
 /*     Create  & convert       */
 /*******************************/
+
+static bool is_zero(double value);
 
 // Create, Clone, Destroy
 DoubleMatrix *dm_create(size_t rows, size_t cols); // empty sparse matrix
@@ -62,24 +63,18 @@ void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value);
 static void dm_remove_zero(DoubleMatrix *mat, size_t i, size_t j);
-static void dm_realloc_col_ind_val(DoubleMatrix *mat);
-static void dm_set_non_zero(DoubleMatrix *mat, size_t i, size_t j,
-                            double value);
-static void setL(DoubleMatrix *mat, size_t i, size_t j, double value);
+static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 /*******************************/
 /*       Resize / Parts        */
 /*******************************/
 
 // shrink, push, pop, expand
-void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols);
-void dm_resize_dense(DoubleMatrix *mat, size_t rows, size_t cols);
-void dm_resize_sparse(DoubleMatrix *mat, size_t new_rows, size_t new_cols);
-static void compute_new_row_pointers_and_nnz(DoubleMatrix *mat, size_t new_rows,
-                                             size_t *new_nnz,
-                                             size_t *new_row_capacity);
-static size_t compute_new_col_capacity(DoubleMatrix *mat, size_t new_cols);
-static void resize_col_arrays(DoubleMatrix *mat, size_t new_col_capacity);
+static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
+static void dm_realloc_dense(DoubleMatrix *mat, size_t new_capacity);
+void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
+void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
+void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
 
 /*******************************/
 /*    Rand, Clone, Identity    */
@@ -116,9 +111,6 @@ DoubleVector *dv_create(size_t length);
 DoubleVector *dv_create_rand(size_t length);
 DoubleVector *dv_create_from_array(const double *array, const size_t length);
 DoubleVector *dv_clone(DoubleVector *vector);
-
-// Test if vector is a column or row vector:
-bool dv_is_row_vector(const DoubleVector *vec);
 
 // Get DoubleVector from DoubleMatrix:
 DoubleVector *dv_get_row_vector(DoubleMatrix *mat, size_t row);

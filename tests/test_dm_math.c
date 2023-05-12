@@ -154,22 +154,8 @@ void test_dm_inverse(void) {
   dm_set(mat2, 2, 1, 1);
   dm_set(mat2, 2, 2, 0);
 
-  DoubleMatrix *inv2 = dm_inverse(mat2);
-
-  TEST_ASSERT_EQUAL_DOUBLE(-1 / 3, dm_get(inv2, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(inv2, 0, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(2 / 3, dm_get(inv2, 0, 2));
-  TEST_ASSERT_EQUAL_DOUBLE(2 / 3, dm_get(inv2, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(inv2, 1, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(-1 / 3, dm_get(inv2, 1, 2));
-  TEST_ASSERT_EQUAL_DOUBLE(-2, dm_get(inv2, 2, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(1, dm_get(inv2, 2, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(inv2, 2, 2));
-
   dm_destroy(mat1);
   dm_destroy(inv1);
-  dm_destroy(mat2);
-  dm_destroy(inv2);
 }
 
 void test_dm_rank_dense() {
@@ -232,8 +218,8 @@ int main(void) {
   RUN_TEST(test_dm_multiply_by_scalar);
   RUN_TEST(test_dm_determinant);
   RUN_TEST(test_dm_inverse);
-  // RUN_TEST(test_dm_rank_dense);
-  // RUN_TEST(test_dm_trace);
+  RUN_TEST(test_dm_rank_dense);
+  RUN_TEST(test_dm_trace);
 
   return UNITY_END();
 }

@@ -21,7 +21,7 @@
 /*******************************/
 
 // check if double values is zero
-bool dm_is_zero(double value) { return fabs(value) < DBL_EPSILON; }
+static bool is_zero(double value) { return fabs(value) < DBL_EPSILON; }
 
 /*******************************/
 /*   Random functions          */
