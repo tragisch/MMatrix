@@ -30,12 +30,11 @@ DoubleVector *dv_vector() {
   vec->rows = 0;
   vec->cols = 1;
   vec->nnz = 0;
-  vec->col_capacity = 1;
-  vec->row_capacity = INIT_CAPACITY;
-  vec->row_pointers = NULL;
+  vec->capacity = INIT_CAPACITY;
+  vec->row_indices = NULL;
   vec->col_indices = NULL;
   vec->format = VECTOR;
-  vec->values = (double *)malloc(vec->row_capacity * sizeof(double));
+  vec->values = (double *)malloc(vec->capacity * sizeof(double));
   return vec;
 }
 
@@ -60,13 +59,6 @@ DoubleVector *dv_clone(DoubleVector *vector) {
   return clone;
 }
 
-bool dv_is_row_vector(const DoubleVector *vec) {
-  bool is_vector = false;
-  if ((vec->col_capacity == 1) && (vec->row_capacity >= 1)) {
-    is_vector = true;
-  }
-  return is_vector;
-}
 
 /**
  * @brief Create a Double Vector Of Length object
@@ -81,9 +73,9 @@ DoubleVector *dv_create(size_t length) {
   }
   DoubleVector *vec = dv_vector();
   vec->rows = length;
-  vec->row_capacity = length + INIT_CAPACITY;
+  vec->capacity = length + INIT_CAPACITY;
 
-  double *values = (double *)malloc(vec->row_capacity * sizeof(double));
+  double *values = (double *)malloc(vec->capacity * sizeof(double));
   if (values == NULL) {
     perror("Could not allocate memory for vector");
     exit(EXIT_FAILURE);

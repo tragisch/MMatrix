@@ -63,38 +63,14 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
  */
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
   DoubleMatrix *mat = dm_create(rows, cols);
-
-  // Loop over each element in the matrix
-  for (size_t i = 0; i < rows; i++) {
-    // size_t nnz_start = mat->row_pointers[i];
-    for (size_t j = 0; j < cols; j++) {
+  for (int i = 0; i < mat->rows; i++) {
+    for (int j = 0; j < mat->cols; j++) {
       if (randomDouble() <= density) {
         double value = randomDouble();
-        if (!dm_is_zero(value)) {
-          // Resize col_indices and values arrays if needed
-          if (mat->nnz >= (mat->col_capacity + INIT_CAPACITY)) {
-
-            mat->col_capacity += INIT_CAPACITY;
-            size_t *tmp_col_indices = (size_t *)realloc(
-                mat->col_indices, mat->col_capacity * sizeof(size_t));
-            double *tmp_values = (double *)realloc(
-                mat->values, mat->col_capacity * sizeof(double));
-            if ((tmp_col_indices == NULL) || (tmp_values == NULL)) {
-              perror("Error: could not allocate memory for col_indices.\n");
-              exit(EXIT_FAILURE);
-            }
-
-            mat->col_indices = tmp_col_indices;
-            mat->values = tmp_values;
-          }
-          dm_set(mat, i, j, value);
-        }
+        dm_set(mat, i, j, value);
       }
     }
-    // Update the row pointer for the next row
-    mat->row_pointers[i + 1] = mat->nnz;
   }
-
   return mat;
 }
 
@@ -150,40 +126,6 @@ DoubleMatrix *dm_clone(DoubleMatrix *mat) {
   return copy;
 }
 
-bool dm_is_vector(DoubleMatrix *mat) {
-  if ((mat->rows == 1 || mat->cols == 1) && (mat->rows != mat->cols)) {
-    return true; // Matrix is a vector
-  }
-  return false; // Matrix is not a vector
-}
-
-/**
- * @brief Resize the matrix
- *
- * @param rows
- * @param cols
- * @param mat
- */
-
-void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols) {
-  if (rows < 1 || cols < 1) {
-    perror("Matrix dimensions must be greater than 0");
-    return;
-  }
-  switch (mat->format) {
-  case DENSE:
-    dm_resize_dense(mat, rows, cols);
-    break;
-  case SPARSE:
-    dm_resize_sparse(mat, rows, cols);
-    break;
-  case VECTOR:
-    dm_resize_dense(mat, rows, 1);
-  default:
-    break;
-  }
-}
-
 void dm_convert(DoubleMatrix *mat, matrix_format format) {
   if (mat->format == format) {
     return;
@@ -220,6 +162,22 @@ void dm_push_column(DoubleMatrix *mat, DoubleVector *col_vec) {
   }
 }
 
+void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols) {
+  switch (mat->format) {
+  case DENSE:
+    dm_resize_dense(mat, rows, cols);
+    break;
+  case SPARSE:
+    dm_resize_sparse(mat, rows, cols);
+    break;
+  case VECTOR:
+    dm_resize_dense(mat, rows, 1);
+    break;
+  default:
+    break;
+  }
+}
+
 /**
  * @brief push (add) a row vector to matrix
  *
@@ -232,9 +190,11 @@ void dm_push_row(DoubleMatrix *mat, DoubleVector *row_vec) {
 
   } else {
     // resize the matrix:
-    dm_resize(mat, mat->rows + 1, mat->cols);
+    size_t new_rows = mat->rows + 1;
+    dm_resize(mat, new_rows, mat->cols);
+  
     for (size_t i = 0; i < mat->cols; i++) {
-      dm_set(mat, mat->rows - 1, i, dv_get(row_vec, i));
+      dm_set(mat, new_rows - 1, i, dv_get(row_vec, i));
     }
   }
 }
@@ -289,7 +249,7 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
 void dm_destroy(DoubleMatrix *mat) {
   free(mat->col_indices);
   free(mat->values);
-  free(mat->row_pointers);
+  free(mat->row_indices);
   free(mat);
   mat = NULL;
 }
