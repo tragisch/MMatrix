@@ -69,7 +69,12 @@ int mystring_cat(myString *pms, const char *src) {
   // if (pms == NULL) return 1;
   pms->len += (int)strlen(src + 1);
   pms->capacity = pms->len;
-  pms->str = (char *)realloc(pms->str, pms->capacity + 1);
+  char *tmp = (char *)malloc(pms->capacity + 1);
+  if (tmp == NULL) {
+    perror("malloc failed");
+    exit(EXIT_FAILURE);
+  }
+  pms->str = tmp;
   strcat(pms->str, src);
   return 0;
 }
@@ -85,7 +90,6 @@ int mystring_destroy(myString *pms) {
   free(pms);
   return 0;
 }
-
 
 /*******************************/
 /*        Double Array       */
