@@ -86,62 +86,122 @@ void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
   }
   // check if value is zero:
   if (dm_is_zero(value)) {
-    // remove existing non-zero value:
-    for (size_t k = mat->row_pointers[i]; k < mat->row_pointers[i + 1]; k++) {
-      if (mat->col_indices[k] == j) {
-        mat->col_indices[k] = mat->col_indices[mat->nnz - 1];
-        mat->values[k] = mat->values[mat->nnz - 1];
-        mat->row_pointers[i + 1]--;
-        mat->nnz--;
-        break;
-      }
-    }
+    dm_remove_zero(mat, i, j);
   } else {
     // check if col_capacity is sufficient:
-    if (mat->col_capacity < (mat->nnz + INIT_CAPACITY)) {
-      size_t *col_ind_tmp =
-          realloc(mat->col_indices,
-                  (mat->col_capacity + INIT_CAPACITY) * sizeof(size_t));
-      double *values_tmp = realloc(
-          mat->values, (mat->col_capacity + INIT_CAPACITY) * sizeof(double));
-      if (col_ind_tmp == NULL || values_tmp == NULL) {
-        perror("Error: memory allocation failed.\n");
-        exit(EXIT_FAILURE);
-      }
-      mat->col_capacity += INIT_CAPACITY;
-      mat->col_indices = col_ind_tmp;
-      mat->values = values_tmp;
-    }
-
-    size_t row_start = mat->row_pointers[i];
-    size_t row_end = mat->row_pointers[i + 1];
-
-    // check if the entry (i,j) already exists
-    for (size_t k = row_start; k < row_end; k++) {
-      if (mat->col_indices[k] == j) {
-        mat->values[k] = value;
-        return;
-      }
-    }
-
-    // entry (i,j) does not exist, so add it
-    size_t nnz = mat->nnz;
-
-    for (size_t k = nnz; k > row_end; k--) {
-      mat->col_indices[k] = mat->col_indices[k - 1];
-      mat->values[k] = mat->values[k - 1];
-    }
-    mat->col_indices[row_end] = j;
-    mat->values[row_end] = value;
-    mat->nnz++;
-
-    // update nnz counts for all subsequent rows
-    for (size_t k = i + 1; k <= mat->rows; k++) {
-      mat->row_pointers[k]++;
-    }
+    dm_realloc_col_ind_val(mat);
+    // insert non-zero value:
+    setL(mat, i, j, value);
   }
   // print to console: value und i, j
   // printf("value: %f, i: %zu, j: %zu\n", dm_get(mat, i, j), i, j);
+}
+
+// static function to remove a zero value from a sparse matrix:
+static void dm_remove_zero(DoubleMatrix *mat, size_t i, size_t j) {
+  // check if indices are valid:
+  if (i >= mat->rows || j >= mat->cols) {
+    perror("Error: invalid matrix indices.\n");
+    return;
+  }
+  // remove existing non-zero value:
+  for (size_t k = mat->row_pointers[i]; k < mat->row_pointers[i + 1]; k++) {
+    if (mat->col_indices[k] == j) {
+      mat->col_indices[k] = mat->col_indices[mat->nnz - 1];
+      mat->values[k] = mat->values[mat->nnz - 1];
+      mat->row_pointers[i + 1]--;
+      mat->nnz--;
+      break;
+    }
+  }
+}
+
+static void dm_set_non_zero(DoubleMatrix *mat, size_t i, size_t j,
+                            double value) {
+  size_t row_start = mat->row_pointers[i];
+  size_t row_end = mat->row_pointers[i + 1];
+
+  // check if the entry j already exists
+  for (size_t k = row_start; k < row_end; k++) {
+    if (mat->col_indices[k] == j) {
+      mat->values[k] = value;
+      return;
+    }
+  }
+
+  // entry (i,j) does not exist, so add it
+  size_t nnz = mat->nnz;
+
+  for (size_t k = nnz; k > row_end; k--) {
+    mat->col_indices[k] = mat->col_indices[k - 1];
+    mat->values[k] = mat->values[k - 1];
+  }
+  mat->col_indices[row_end] = j;
+  mat->values[row_end] = value;
+  mat->nnz++;
+
+  // update nnz counts for all subsequent rows
+  for (size_t k = i + 1; k < mat->rows; k++) {
+    mat->row_pointers[k]++;
+  }
+}
+
+static void setL(DoubleMatrix *mat, size_t i, size_t j, double value) {
+  if (i >= mat->rows || j >= mat->cols) {
+    // Indices out of range, handle the error
+    return;
+  }
+
+  size_t row_start = mat->row_pointers[i];
+  size_t row_end = mat->row_pointers[i + 1];
+
+  // Find the appropriate position to insert the new element
+  size_t insert_pos = row_start;
+  while (insert_pos < row_end && mat->col_indices[insert_pos] < j) {
+    insert_pos++;
+  }
+
+  if (insert_pos < row_end && mat->col_indices[insert_pos] == j) {
+    // Element already exists, update its value
+    mat->values[insert_pos] = value;
+  } else {
+
+    // Shift elements to the right to make space for the new element
+    for (size_t k = row_end; k > insert_pos; k--) {
+      mat->col_indices[k] = mat->col_indices[k - 1];
+      mat->values[k] = mat->values[k - 1];
+    }
+
+    // Insert the new element at the appropriate position
+    mat->col_indices[insert_pos] = j;
+
+    mat->values[insert_pos] = value;
+
+    // Update the row pointers for subsequent rows
+    for (size_t k = i + 1; k <= mat->rows; k++) {
+      mat->row_pointers[k]++;
+    }
+
+    // Update the number of non-zero elements
+    mat->nnz++;
+  }
+}
+
+// static function the reallocs col_indes and values if necessary:
+static void dm_realloc_col_ind_val(DoubleMatrix *mat) {
+  if (mat->col_capacity < (mat->nnz + INIT_CAPACITY)) {
+    size_t *col_ind_tmp = realloc(
+        mat->col_indices, (mat->col_capacity + INIT_CAPACITY) * sizeof(size_t));
+    double *values_tmp = realloc(
+        mat->values, (mat->col_capacity + INIT_CAPACITY) * sizeof(double));
+    if (col_ind_tmp == NULL || values_tmp == NULL) {
+      perror("Error: memory allocation failed.\n");
+      exit(EXIT_FAILURE);
+    }
+    mat->col_capacity += INIT_CAPACITY;
+    mat->col_indices = col_ind_tmp;
+    mat->values = values_tmp;
+  }
 }
 
 double dm_get_sparse(const DoubleMatrix *mat, size_t i, size_t j) {

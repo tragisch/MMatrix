@@ -61,6 +61,11 @@ void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value);
+static void dm_remove_zero(DoubleMatrix *mat, size_t i, size_t j);
+static void dm_realloc_col_ind_val(DoubleMatrix *mat);
+static void dm_set_non_zero(DoubleMatrix *mat, size_t i, size_t j,
+                            double value);
+static void setL(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 /*******************************/
 /*       Resize / Parts        */
