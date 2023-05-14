@@ -1,14 +1,10 @@
 digraph mygraph {
   node [shape=box];
   "//src:matrix"
-  "//src:matrix" -> "//src:include/dv_vector.h\n//src:include/sp_matrix.h\n//src:dv_vector.c\n//src:include/dm_matrix.h\n//src:include/dm_io.h\n//src:sp_matrix.c\n//src:dm_io.c\n//src:include/dm_math.h\n//src:dm_math.c\n//src:dm_matrix.c"
-  "//src:matrix" -> "//lib/misc:misc"
+  "//src:matrix" -> "//src:dv_math.c\n//src:dm_manipulate.c\n//src:dm_special.c\n//src:include/dm_matrix.h\n//src:dm_io.c\n//src:dm_matrix.c\n//src:dv_vector.c\n//src:include/dm_io.h\n//src:include/dm_plot.h\n//src:include/dm_math.h\n//src:dm_math.c\n//src:dm_plot.c"
   "//src:matrix" -> "@dbg-macro//:dbg-macro"
-  "//src:include/dv_vector.h\n//src:include/sp_matrix.h\n//src:dv_vector.c\n//src:include/dm_matrix.h\n//src:include/dm_io.h\n//src:sp_matrix.c\n//src:dm_io.c\n//src:include/dm_math.h\n//src:dm_math.c\n//src:dm_matrix.c"
-  "//lib/misc:misc"
-  "//lib/misc:misc" -> "//lib/misc:misc.h\n//lib/misc:misc.c"
-  "//lib/misc:misc.h\n//lib/misc:misc.c"
   "@dbg-macro//:dbg-macro"
   "@dbg-macro//:dbg-macro" -> "@dbg-macro//:include/dbg.h"
   "@dbg-macro//:include/dbg.h"
+  "//src:dv_math.c\n//src:dm_manipulate.c\n//src:dm_special.c\n//src:include/dm_matrix.h\n//src:dm_io.c\n//src:dm_matrix.c\n//src:dv_vector.c\n//src:include/dm_io.h\n//src:include/dm_plot.h\n//src:include/dm_math.h\n//src:dm_math.c\n//src:dm_plot.c"
 }
