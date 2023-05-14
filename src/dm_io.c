@@ -11,14 +11,10 @@
 
 #include "dm_io.h"
 #include "dbg.h"
+#include "dm.h"
+#include "dm_internals.h"
 #include "dm_math.h"
-#include "dm_matrix.h"
-#include "dm_plot.h"
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 
-// #define NDEBUG
 #define BRAILLE_SIZE 10
 enum { INIT_CAPACITY = 2U };
 

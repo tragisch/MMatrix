@@ -10,8 +10,8 @@
  */
 
 #include "dbg.h"
+#include "dm.h"
 #include "dm_math.h"
-#include "dm_matrix.h"
 
 /*******************************/
 /*        Special Matrix        */
@@ -68,6 +68,30 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
       dm_set(mat, i, j, array[i][j]);
+    }
+  }
+
+  return mat;
+}
+
+/**
+ * @brief Create a Diagonal object
+ *
+ * @param rows
+ * @param cols
+ * @param array
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
+  DoubleMatrix *mat = dm_create(rows, cols);
+
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      if (i == j) {
+        dm_set(mat, i, j, array[i]);
+      } else {
+        dm_set(mat, i, j, 0.0);
+      }
     }
   }
 

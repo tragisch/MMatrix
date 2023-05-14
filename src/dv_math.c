@@ -10,8 +10,9 @@
  */
 
 #include "dbg.h"
+#include "dm.h"
 #include "dm_math.h"
-#include "dm_matrix.h"
+#include "dv_vector.h"
 
 /*******************************/
 /*     Double Vector Math      */

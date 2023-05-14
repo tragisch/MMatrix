@@ -1,9 +1,7 @@
-#include "dm_plot.h"
+#include "dm_io.h"
 
 #include "dbg.h"
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 /*******************************/
 /*          Intials            */

@@ -9,10 +9,12 @@
  *
  */
 
-#include "dm_matrix.h"
 #include "dbg.h"
+#include "dm.h"
+#include "dm_internals.h"
 #include "dm_math.h"
-#include <float.h>
+#include "dv_vector.h"
+
 
 // #define NDEBUG
 enum { INIT_CAPACITY = 2U };

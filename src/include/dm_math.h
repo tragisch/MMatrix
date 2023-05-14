@@ -10,11 +10,8 @@
 #define random_number_generator rand
 #endif
 
+#include "dm.h"
 #include <math.h>
-#include <stdint.h>
-#include <stdio.h>
-
-#include "dm_matrix.h"
 
 /*******************************/
 /*      General stuff     */
@@ -57,7 +54,8 @@ int dm_rank(const DoubleMatrix *mat);
 /*      Sparse Matrix Math     */
 /*******************************/
 
-double sp_density(const DoubleMatrix *mat);
+static double sp_density(const DoubleMatrix *mat);
+double dm_density(const DoubleMatrix *mat);
 
 /*******************************/
 /*      Double Vector Math     */

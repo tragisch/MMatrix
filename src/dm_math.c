@@ -12,8 +12,9 @@
 #include <assert.h>
 
 #include "dbg.h"
+#include "dm.h"
 #include "dm_math.h"
-#include "dm_matrix.h"
+#include "dv_vector.h"
 #include <float.h>
 
 /*******************************/
@@ -90,13 +91,7 @@ void dm_transpose(DoubleMatrix *mat) {
   }
 }
 
-/*
- * @brief get density of sparse matrix
- *
- * @param mat
- */
-
-double sp_density(const DoubleMatrix *mat) {
+static double sp_density(const DoubleMatrix *mat) {
   return ((double)mat->nnz / (double)(mat->rows * mat->cols));
 }
 

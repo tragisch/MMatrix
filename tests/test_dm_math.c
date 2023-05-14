@@ -1,8 +1,10 @@
 #include "dbg.h"
 
+#include "dm.h"
+#include "dm_internals.h"
 #include "dm_io.h"
 #include "dm_math.h"
-#include "dm_matrix.h"
+#include "dv_vector.h"
 
 #include <stdbool.h>
 #include <stddef.h>
