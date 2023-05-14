@@ -11,8 +11,9 @@ void show_grid(void) {
   int x = 0;
   int y = 0;
   for (y = 0; y < HEIGHT; y++) {
-    for (x = 0; x < WIDTH; x++)
+    for (x = 0; x < WIDTH; x++) {
       putchar(grid[y][x]);
+    }
     putchar('\n');
   }
 }
@@ -21,19 +22,25 @@ void init_grid(void) {
   /* Initialize grid */
   int x = 0;
   int y = 0;
-  for (y = 0; y < HEIGHT; y++)
-    for (x = 0; x < WIDTH; x++)
+  for (y = 0; y < HEIGHT; y++) {
+    for (x = 0; x < WIDTH; x++) {
       grid[y][x] = ' ';
+    }
+  }
 
   /* draw the axis */
-  for (y = 0; y < HEIGHT; y++)
+  for (y = 0; y < HEIGHT; y++) {
     grid[y][X - 1] = '|';
-  for (y = 0; y < HEIGHT; y++)
+  }
+  for (y = 0; y < HEIGHT; y++) {
     grid[y][WIDTH - 1] = '|';
-  for (x = 0; x < WIDTH; x++)
+  }
+  for (x = 0; x < WIDTH; x++) {
     grid[Y - 1][x] = '-';
-  for (x = 0; x < WIDTH; x++)
+  }
+  for (x = 0; x < WIDTH; x++) {
     grid[HEIGHT - 1][x] = '-';
+  }
 
   /* set corners */
   grid[Y - 1][X - 1] = '+';
