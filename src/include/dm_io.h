@@ -19,6 +19,8 @@
 
 // read & write
 DoubleMatrix *dm_read_matrix_market(const char *filename);
+void dm_write_matrix_market(const DoubleMatrix *mat, const char *filename);
+static void printProgressBar(size_t progress, size_t total, int barWidth);
 
 // print stdout:
 void dm_brief(const DoubleMatrix *mat);

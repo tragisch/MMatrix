@@ -30,6 +30,13 @@ enum { INIT_CAPACITY = 2U };
 /*     Matrix Market Format    */
 /*******************************/
 
+/**
+ * @brief Read a Matrix Market file and return a DoubleMatrix
+ *
+ * @param filename
+ * @return DoubleMatrix*
+ *
+ * */
 DoubleMatrix *dm_read_matrix_market(const char *filename) {
   FILE *fp = NULL;
   size_t nrows = 0;
@@ -62,8 +69,15 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
   // Create DoubleMatrix
   DoubleMatrix *mat = dm_create(nrows, ncols);
 
+  if (nnz > 500) {
+    printf("Reading Matrix Market file: %s\n", filename);
+  }
+
   // Read non-zero values
   for (size_t i = 0; i < (nnz); i++) {
+    if (nnz > 500) {
+      printProgressBar(i, nnz, 50);
+    }
     size_t row_idx = 0;
     size_t col_idx = 0;
     double val = NAN;
@@ -78,6 +92,32 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
   // Close the file
   fclose(fp);
   return mat;
+}
+
+/**
+ * @brief Write a DoubleMatrix to a Matrix Market file
+ *
+ * @param mat
+ * @param filename
+ */
+void dm_write_matrix_market(const DoubleMatrix *mat, const char *filename) {
+  FILE *fp = NULL;
+  fp = fopen(filename, "w");
+  if (fp == NULL) {
+    printf("Error: Unable to open file.\n");
+    exit(1);
+  }
+
+  fprintf(fp, "%%%%MatrixMarket matrix coordinate real general\n");
+  fprintf(fp, "%zu %zu %zu\n", mat->rows, mat->cols, mat->rows * mat->cols);
+
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      fprintf(fp, "%zu %zu %lf\n", i + 1, j + 1, dm_get(mat, i, j));
+    }
+  }
+
+  fclose(fp);
 }
 
 /*******************************/
@@ -269,4 +309,20 @@ static void print_matrix_dimension(const DoubleMatrix *mat) {
     printf("Vector (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   }
+}
+
+static void printProgressBar(size_t progress, size_t total, int barWidth) {
+  float percentage = (float)progress / total;
+  int filledWidth = (int)(percentage * barWidth);
+
+  printf("[");
+  for (int i = 0; i < barWidth; i++) {
+    if (i < filledWidth) {
+      printf("=");
+    } else {
+      printf(" ");
+    }
+  }
+  printf("] %d%%\r", (int)(percentage * 100));
+  fflush(stdout);
 }
