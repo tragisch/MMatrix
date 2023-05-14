@@ -1,13 +1,14 @@
-#include "dm_io.h"
-
 #include "dbg.h"
+#include "dm.h"
+#include "dm_io.h"
 #include <math.h>
 
 /*******************************/
 /*          Intials            */
 /*******************************/
+#define NUM_COLORS 10
 
-void show_grid(void) {
+void show_grid(DoubleMatrix *count) {
   int x = 0;
   int y = 0;
   for (y = 0; y < HEIGHT; y++) {

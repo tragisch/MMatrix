@@ -67,5 +67,6 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
 DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
                                 size_t row_end, size_t col_start,
                                 size_t col_end);
+DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]);
 
 #endif // DM_H

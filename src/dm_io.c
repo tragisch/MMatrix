@@ -76,7 +76,7 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
   // Read non-zero values
   for (size_t i = 0; i < (nnz); i++) {
     if (nnz > 500) {
-      printProgressBar(i, nnz, 50);
+      print_progress_bar(i, nnz, 50);
     }
     size_t row_idx = 0;
     size_t col_idx = 0;
@@ -280,21 +280,33 @@ void sp_print_condensed(DoubleMatrix *mat) {
 }
 
 void dm_print_structure(DoubleMatrix *mat) {
+
+  // set up grid
   init_grid();
+
   double density = dm_density(mat);
+  // information about the matrix
   printf("Matrix (%zu x %zu, %zu), density: %lf\n", mat->rows, mat->cols,
          mat->nnz, density);
+
+  // increase density for better visualization:
   density *= 5;
+
+  // setup a small dense matrix to count the appearance of each element
+  DoubleMatrix *count = dm_create_format(44, 22, DENSE);
+
   for (size_t i = 0; i < mat->nnz; i++) {
+
     if (randomDouble() < density) {
 
       int x = get_x_coord(mat->row_indices[i], mat->rows);
       int y = get_y_coord(mat->col_indices[i], mat->cols);
-
+      count->values[x * count->cols + y] += 1;
       plot(x, y, '*');
     }
   }
-  show_grid();
+
+  show_grid(count);
 }
 
 /*******************************/
@@ -315,7 +327,7 @@ static void print_matrix_dimension(const DoubleMatrix *mat) {
   }
 }
 
-static void printProgressBar(size_t progress, size_t total, int barWidth) {
+static void print_progress_bar(size_t progress, size_t total, int barWidth) {
   float percentage = (float)progress / total;
   int filledWidth = (int)(percentage * barWidth);
 
@@ -330,3 +342,5 @@ static void printProgressBar(size_t progress, size_t total, int barWidth) {
   printf("] %d%%\r", (int)(percentage * 100));
   fflush(stdout);
 }
+
+

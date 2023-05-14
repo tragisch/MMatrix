@@ -9,7 +9,7 @@
 #define X (1)
 #define Y (1)
 #define XMAX (WIDTH - X - 1)
-#define XMIN (1= // -(WIDTH - X)
+#define XMIN (1) // -(WIDTH - X)
 #define YMAX (HEIGHT - Y - 1)
 #define YMIN (1) // -(HEIGHT - Y) + 1
 
@@ -20,7 +20,7 @@
 // read & write
 DoubleMatrix *dm_read_matrix_market(const char *filename);
 void dm_write_matrix_market(const DoubleMatrix *mat, const char *filename);
-static void printProgressBar(size_t progress, size_t total, int barWidth);
+static void print_progress_bar(size_t progress, size_t total, int barWidth);
 
 // print stdout:
 void dm_brief(const DoubleMatrix *mat);
@@ -43,7 +43,7 @@ static void print_matrix_dimension(const DoubleMatrix *mat);
 int plot(int x, int y, char c);
 char grid[HEIGHT][WIDTH];
 void init_grid(void);
-void show_grid(void);
+void show_grid(DoubleMatrix *count);
 int get_x_coord(size_t x, size_t rows);
 int get_y_coord(size_t y, size_t cols);
 

@@ -316,6 +316,28 @@ void test_dm_get_sub_matrix(void) {
   dm_destroy(sub_mat);
 }
 
+void test_dm_create_diagonal(void) {
+  // Create a sample diagonal matrix
+  size_t rows = 4;
+  size_t cols = 4;
+  double array[4] = {1.0, 2.0, 3.0, 4.0};
+  DoubleMatrix *diagonal_mat = dm_create_diagonal(rows, cols, array);
+
+  // Verify the properties of the diagonal matrix
+  TEST_ASSERT_EQUAL(rows, diagonal_mat->rows);
+  TEST_ASSERT_EQUAL(cols, diagonal_mat->cols);
+  TEST_ASSERT_EQUAL(rows, diagonal_mat->nnz);
+
+  // Verify the values in the diagonal matrix
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(diagonal_mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(diagonal_mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(diagonal_mat, 2, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(diagonal_mat, 3, 3));
+
+  // Clean up resources
+  dm_destroy(diagonal_mat);
+}
+
 void test_dm_destroy() {
   size_t rows = 10;
   size_t cols = 10;
@@ -439,6 +461,7 @@ int main(void) {
   RUN_TEST(test_dv_get_column);
   RUN_TEST(test_dv_get_row);
   RUN_TEST(test_dm_get_sub_matrix);
+  RUN_TEST(test_dm_create_diagonal);
   RUN_TEST(test_dm_push_column);
   RUN_TEST(test_dm_create_from_array);
   RUN_TEST(test_dm_create_identity);
