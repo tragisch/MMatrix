@@ -286,6 +286,36 @@ void test_dm_get(void) {
   dm_destroy(mat);
 }
 
+void test_dm_get_sub_matrix(void) {
+  // Create a sample matrix
+  DoubleMatrix *mat = dm_create(5, 5);
+
+  // Set values in the matrix
+  dm_set(mat, 0, 0, 1.0);
+  dm_set(mat, 0, 1, 2.0);
+  dm_set(mat, 1, 1, 3.0);
+  dm_set(mat, 2, 2, 4.0);
+  dm_set(mat, 3, 3, 5.0);
+  dm_set(mat, 4, 4, 6.0);
+
+  // Get the sub-matrix
+  DoubleMatrix *sub_mat = dm_get_sub_matrix(mat, 1, 3, 1, 3);
+
+  // Verify the properties of the sub-matrix
+  TEST_ASSERT_EQUAL(3, sub_mat->rows);
+  TEST_ASSERT_EQUAL(3, sub_mat->cols);
+  TEST_ASSERT_EQUAL(3, sub_mat->nnz);
+
+  // Verify the values in the sub-matrix
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(sub_mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(sub_mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(sub_mat, 2, 2));
+
+  // Clean up resources
+  dm_destroy(mat);
+  dm_destroy(sub_mat);
+}
+
 void test_dm_destroy() {
   size_t rows = 10;
   size_t cols = 10;
@@ -408,6 +438,7 @@ int main(void) {
   RUN_TEST(test_dm_set_sparse);
   RUN_TEST(test_dv_get_column);
   RUN_TEST(test_dv_get_row);
+  RUN_TEST(test_dm_get_sub_matrix);
   RUN_TEST(test_dm_push_column);
   RUN_TEST(test_dm_create_from_array);
   RUN_TEST(test_dm_create_identity);

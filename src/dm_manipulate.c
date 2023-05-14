@@ -60,6 +60,11 @@ void dm_push_row(DoubleMatrix *mat, DoubleVector *row_vec) {
   }
 }
 
+/**
+ * @brief convert matrix to format (SPARSE, DENSE)
+ * @param mat
+ * @param format  (SPARSE, DENSE)
+ */
 void dm_convert(DoubleMatrix *mat, matrix_format format) {
   if (mat->format == format) {
     return;
