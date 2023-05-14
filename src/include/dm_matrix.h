@@ -38,27 +38,27 @@ typedef DoubleMatrix DoubleVector;
 DoubleMatrix *dm_create(size_t rows, size_t cols); // empty sparse matrix
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format);
 
-DoubleMatrix *dm_create_sparse(size_t rows, size_t cols);
-DoubleMatrix *dm_create_dense(size_t rows, size_t cols);
+static DoubleMatrix *dm_create_sparse(size_t rows, size_t cols);
+static DoubleMatrix *dm_create_dense(size_t rows, size_t cols);
 
 // convert:
 void dm_convert(DoubleMatrix *mat, matrix_format format);
-void dm_convert_to_sparse(DoubleMatrix *mat);
-void dm_convert_to_dense(DoubleMatrix *mat);
+static void dm_convert_to_sparse(DoubleMatrix *mat);
+static void dm_convert_to_dense(DoubleMatrix *mat);
 
-static bool is_zero(double value);
+
 
 /*******************************/
 /*        Getter & Setter      */
 /*******************************/
 
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
-double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j);
-double dm_get_sparse(const DoubleMatrix *mat, size_t i, size_t j);
+static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j);
+static double dm_get_sparse(const DoubleMatrix *mat, size_t i, size_t j);
 
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
-void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
-void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
+static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
+static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value);
@@ -72,8 +72,8 @@ static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
 // shrink, push, pop, expand
 static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
 void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
-void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
-void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
+static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
+static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
 
 /*******************************/
 /*    Rand, Clone, Identity    */

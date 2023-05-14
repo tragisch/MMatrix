@@ -64,6 +64,8 @@ uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max) {
   return randomInt_upperBound((max - min) + 1) + min;
 }
 
+bool is_zero(double value) { return fabs(value) < DBL_EPSILON; }
+
 /*******************************/
 /*     Double Matrix Math      */
 /*******************************/

@@ -1,10 +1,9 @@
 cc_library(
     name = "matrix",
     srcs = [
-        "dm_sparse.c",
-        "dm_dense.c",
         "dm_matrix.c",
         "dm_math.c",
+        "dm_manipulate.c",
         "dm_io.c",
         "dv_vector.c",
         "dv_math.c",

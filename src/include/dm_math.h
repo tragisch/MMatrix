@@ -22,6 +22,7 @@
 
 int max_int(int a, int b);
 double max_double(double a, double b);
+bool is_zero(double value);
 
 /*******************************/
 /*  Random Functions           */

@@ -129,7 +129,7 @@ void test_dm_determinant(void) {
 
 void test_dm_inverse(void) {
   // Test case 1: 2x2 matrix
-  DoubleMatrix *mat1 = dm_create_dense(2, 2);
+  DoubleMatrix *mat1 = dm_create_format(2, 2, DENSE);
   dm_set(mat1, 0, 0, 1);
   dm_set(mat1, 0, 1, 2);
   dm_set(mat1, 1, 0, 3);
@@ -143,7 +143,7 @@ void test_dm_inverse(void) {
   TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv1, 1, 1));
 
   // Test case 2: 3x3 matrix
-  DoubleMatrix *mat2 = dm_create_dense(3, 3);
+  DoubleMatrix *mat2 = dm_create_format(3, 3, DENSE);
   dm_set(mat2, 0, 0, 1);
   dm_set(mat2, 0, 1, 2);
   dm_set(mat2, 0, 2, 0);

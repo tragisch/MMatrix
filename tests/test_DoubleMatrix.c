@@ -248,19 +248,19 @@ void test_dm_set_sparse(void) {
   DoubleMatrix *mat = dm_create(3, 3);
 
   // Test setting a non-zero value
-  dm_set_sparse(mat, 1, 1, 3.14);
+  dm_set(mat, 1, 1, 3.14);
   TEST_ASSERT_EQUAL(1, mat->nnz);
   TEST_ASSERT_EQUAL(1, mat->row_indices[0]);
   TEST_ASSERT_EQUAL(1, mat->col_indices[0]);
   TEST_ASSERT_EQUAL_DOUBLE(3.14, mat->values[0]);
 
   // Test updating an existing non-zero value
-  dm_set_sparse(mat, 1, 1, 2.71);
+  dm_set(mat, 1, 1, 2.71);
   TEST_ASSERT_EQUAL(1, mat->nnz);
   TEST_ASSERT_EQUAL_DOUBLE(2.71, mat->values[0]);
 
   // Test setting a zero value
-  dm_set_sparse(mat, 1, 1, 0.0);
+  dm_set(mat, 1, 1, 0.0);
   TEST_ASSERT_EQUAL(0, mat->nnz);
 
   // Clean up the DoubleMatrix instance
@@ -301,7 +301,7 @@ void test_dm_destroy() {
 
 void test_dm_convert_to_sparse() {
   // create dense matrix
-  DoubleMatrix *mat = dm_create_dense(3, 3);
+  DoubleMatrix *mat = dm_create_format(3, 3, DENSE);
   dm_set(mat, 0, 0, 1);
   dm_set(mat, 0, 1, 2);
   dm_set(mat, 0, 2, 0);
@@ -313,7 +313,7 @@ void test_dm_convert_to_sparse() {
   dm_set(mat, 2, 2, 6);
 
   // convert to sparse matrix
-  dm_convert_to_sparse(mat);
+  dm_convert(mat, SPARSE);
 
   // check if matrix is in sparse format
   TEST_ASSERT_EQUAL(SPARSE, mat->format);
@@ -335,7 +335,7 @@ void test_dm_convert_to_sparse() {
 
 void test_dm_convert_to_dense() {
   // create a sparse matrix
-  DoubleMatrix *sparse_mat = dm_create_sparse(3, 3);
+  DoubleMatrix *sparse_mat = dm_create_format(3, 3, SPARSE);
   dm_set(sparse_mat, 0, 0, 1);
   dm_set(sparse_mat, 0, 1, 0);
   dm_set(sparse_mat, 0, 2, 0);
@@ -347,7 +347,7 @@ void test_dm_convert_to_dense() {
   dm_set(sparse_mat, 2, 2, 3);
 
   // convert to dense matrix
-  dm_convert_to_dense(sparse_mat);
+  dm_convert(sparse_mat, DENSE);
 
   // check if matrix is now in dense format
   TEST_ASSERT_EQUAL(DENSE, sparse_mat->format);

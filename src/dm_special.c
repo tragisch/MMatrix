@@ -16,3 +16,60 @@
 /*******************************/
 /*        Special Matrix        */
 /*******************************/
+
+/**
+ * @brief Create a Identity object
+ *
+ * @param rows
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_create_identity(size_t rows) {
+  DoubleMatrix *mat = dm_create(rows, rows);
+  for (size_t i = 0; i < rows; i++) {
+    dm_set(mat, i, i, 1.0);
+  }
+
+  return mat;
+}
+
+/**
+ * @brief create a Double Matrix with random elements in range [0,1]
+ *
+ * @param rows
+ * @param cols
+ * @param density
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
+  DoubleMatrix *mat = dm_create(rows, cols);
+  for (int i = 0; i < mat->rows; i++) {
+    for (int j = 0; j < mat->cols; j++) {
+      if (randomDouble() <= density) {
+        double value = randomDouble();
+        dm_set(mat, i, j, value);
+      }
+    }
+  }
+  return mat;
+}
+
+/**
+ * @brief Set the Array To Matrix object
+ *
+ * @param rows
+ * @param cols
+ * @param array
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
+                                   double array[rows][cols]) {
+  DoubleMatrix *mat = dm_create_format(rows, cols, DENSE);
+
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      dm_set(mat, i, j, array[i][j]);
+    }
+  }
+
+  return mat;
+}
