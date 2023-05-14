@@ -4,14 +4,14 @@
 #include "dm.h"
 #include "dm_internals.h"
 
-#define WIDTH 44
-#define HEIGHT 22
-#define X 1
-#define Y 1
-#define XMAX WIDTH - X - 1
-#define XMIN 1 // -(WIDTH - X)
-#define YMAX HEIGHT - Y - 1
-#define YMIN 1 // -(HEIGHT - Y) + 1
+#define WIDTH (44)
+#define HEIGHT (22)
+#define X (1)
+#define Y (1)
+#define XMAX (WIDTH - X - 1)
+#define XMIN (1= // -(WIDTH - X)
+#define YMAX (HEIGHT - Y - 1)
+#define YMIN (1) // -(HEIGHT - Y) + 1
 
 /*******************************/
 /*     I/O Functions           */
