@@ -37,7 +37,7 @@ static void dv_print_row(const DoubleVector *vec);
 static void print_matrix_dimension(const DoubleMatrix *mat);
 
 /*******************************/
-/*     Plot scructure         */
+/*     Plot structure         */
 /*******************************/
 
 int plot(int x, int y, char c);
