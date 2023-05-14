@@ -89,6 +89,10 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
     }
   }
 
+  if (nnz > 500) {
+    printf("\n");
+  }
+
   // Close the file
   fclose(fp);
   return mat;
