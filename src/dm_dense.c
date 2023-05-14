@@ -35,27 +35,8 @@ DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
   return matrix;
 }
 
-// change size of dense matrix:
-void dm_realloc_dense(DoubleMatrix *mat, size_t new_capacity) {
-  // exit if not DENSE format
-  if (mat->format != DENSE) {
-    perror("Error: matrix format is not dense.\n");
-    exit(EXIT_FAILURE);
-  }
 
-  double *new_values = (double *)realloc(
-      mat->values, (mat->capacity + new_capacity) * sizeof(double));
-
-  if (new_values == NULL) {
-    perror("Error: could not reallocate memory for dense matrix.\n");
-    exit(EXIT_FAILURE);
-  }
-
-  // update matrix:
-  mat->values = new_values;
-  mat->capacity += new_capacity;
-}
-
+// create dense matrix from sparse matrix:
 void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col) {
 
   // allocate new memory for dense matrix:

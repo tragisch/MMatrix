@@ -13,6 +13,7 @@
 #include "dbg.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
+#include "dm_plot.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -132,6 +133,11 @@ static void dv_print_col(const DoubleVector *vec) {
 /*   Pretty print  Matrix      */
 /*******************************/
 
+/**
+ * @brief function print basic matrix information
+ *
+ * @param DoubleMatrix* mat
+ */
 void dm_brief(const DoubleMatrix *mat) {
   printf("Matrix: %zu x %zu\n", mat->rows, mat->cols);
   printf("Non-zero elements: %zu\n", mat->nnz);
@@ -232,6 +238,28 @@ void sp_print_condensed(DoubleMatrix *mat) {
   }
   printf("\n");
 }
+
+void dm_print_structure(DoubleMatrix *mat) {
+  init_grid();
+  double density = dm_density(mat);
+  printf("Matrix (%zu x %zu, %zu), density: %lf\n", mat->rows, mat->cols,
+         mat->nnz, density);
+  density *= 5;
+  for (size_t i = 0; i < mat->nnz; i++) {
+    if (randomDouble() < density) {
+
+      int x = get_x_coord(mat->row_indices[i], mat->rows);
+      int y = get_y_coord(mat->col_indices[i], mat->cols);
+
+      plot(x, y, '*');
+    }
+  }
+  show_grid();
+}
+
+/*******************************/
+/* private functions (helper)  */
+/*******************************/
 
 static void print_matrix_dimension(const DoubleMatrix *mat) {
   switch (mat->format) {

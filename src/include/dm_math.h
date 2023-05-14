@@ -14,14 +14,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
-
 #include "dm_matrix.h"
 
 /*******************************/
 /*      General stuff     */
 /*******************************/
 
-bool dm_is_zero(double value);
 int max_int(int a, int b);
 double max_double(double a, double b);
 

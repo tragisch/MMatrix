@@ -162,16 +162,16 @@ void dm_push_column(DoubleMatrix *mat, DoubleVector *col_vec) {
   }
 }
 
-void dm_resize(DoubleMatrix *mat, size_t rows, size_t cols) {
+void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   switch (mat->format) {
   case DENSE:
-    dm_resize_dense(mat, rows, cols);
+    dm_resize_dense(mat, new_row, new_col);
     break;
   case SPARSE:
-    dm_resize_sparse(mat, rows, cols);
+    dm_resize_sparse(mat, new_row, new_col);
     break;
   case VECTOR:
-    dm_resize_dense(mat, rows, 1);
+    dm_resize_dense(mat, new_row, 1);
     break;
   default:
     break;

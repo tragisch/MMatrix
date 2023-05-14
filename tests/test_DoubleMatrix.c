@@ -1,4 +1,3 @@
-
 #include "dm_io.h"
 #include "dm_math.h"
 #include "dm_matrix.h"
@@ -244,6 +243,30 @@ void test_dm_set(void) {
   dm_destroy(mat);
 }
 
+void test_dm_set_sparse(void) {
+  // Create a DoubleMatrix instance for testing
+  DoubleMatrix *mat = dm_create(3, 3);
+
+  // Test setting a non-zero value
+  dm_set_sparse(mat, 1, 1, 3.14);
+  TEST_ASSERT_EQUAL(1, mat->nnz);
+  TEST_ASSERT_EQUAL(1, mat->row_indices[0]);
+  TEST_ASSERT_EQUAL(1, mat->col_indices[0]);
+  TEST_ASSERT_EQUAL_DOUBLE(3.14, mat->values[0]);
+
+  // Test updating an existing non-zero value
+  dm_set_sparse(mat, 1, 1, 2.71);
+  TEST_ASSERT_EQUAL(1, mat->nnz);
+  TEST_ASSERT_EQUAL_DOUBLE(2.71, mat->values[0]);
+
+  // Test setting a zero value
+  dm_set_sparse(mat, 1, 1, 0.0);
+  TEST_ASSERT_EQUAL(0, mat->nnz);
+
+  // Clean up the DoubleMatrix instance
+  dm_destroy(mat);
+}
+
 void test_dm_get(void) {
   // Create a matrix with 2 rows and 3 columns.
   DoubleMatrix *mat = dm_create(2, 3);
@@ -380,6 +403,7 @@ int main(void) {
   RUN_TEST(test_dm_convert_to_dense);
   RUN_TEST(test_dm_get);
   RUN_TEST(test_dm_set);
+  RUN_TEST(test_dm_set_sparse);
   RUN_TEST(test_dv_get_column);
   RUN_TEST(test_dv_get_row);
   RUN_TEST(test_dm_push_column);

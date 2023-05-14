@@ -134,9 +134,9 @@ void dm_convert_to_sparse(DoubleMatrix *mat) {
   }
 
   // allocate memory for sparse matrix:
-  size_t *row_indices = (size_t *)calloc(nnz, sizeof(size_t));
-  size_t *col_indices = (size_t *)calloc(nnz, sizeof(size_t));
-  double *values = (double *)calloc(nnz, sizeof(double));
+  size_t *row_indices = (size_t *)calloc(nnz + 1, sizeof(size_t));
+  size_t *col_indices = (size_t *)calloc(nnz + 1, sizeof(size_t));
+  double *values = (double *)calloc(nnz + 1, sizeof(double));
   if (row_indices == NULL || col_indices == NULL || values == NULL) {
     printf("Error allocating memory!\n");
     exit(EXIT_FAILURE);

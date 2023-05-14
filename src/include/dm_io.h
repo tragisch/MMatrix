@@ -2,8 +2,6 @@
 #define DM_IO_H
 
 #include "dm_matrix.h"
-#include "pbPlots.h"
-#include "supportLib.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -23,6 +21,7 @@ void dm_print(const DoubleMatrix *matrix);
 void sp_print(const DoubleMatrix *mat);
 void sp_print_braille(const DoubleMatrix *mat);
 void sp_print_condensed(DoubleMatrix *mat);
+void dm_print_structure(DoubleMatrix *mat);
 
 void dv_print(const DoubleVector *vec);
 static void dv_print_col(const DoubleVector *vec);

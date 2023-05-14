@@ -9,17 +9,18 @@ cc_library(
         "dv_vector.c",
         "dv_math.c",
         "dm_special.c",
+        "dm_plot.c",
     ],
     hdrs = [
         "include/dm_matrix.h",
         "include/dm_math.h",
+        "include/dm_plot.h",
         "include/dm_io.h",
     ],
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
         "@dbg-macro",
-         "@pbPlots",
     ],
 )
 

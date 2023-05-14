@@ -17,13 +17,6 @@
 #include <float.h>
 
 /*******************************/
-/*     General functions       */
-/*******************************/
-
-// check if double values is zero
-static bool is_zero(double value) { return fabs(value) < DBL_EPSILON; }
-
-/*******************************/
 /*   Random functions          */
 /*******************************/
 

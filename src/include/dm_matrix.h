@@ -34,8 +34,6 @@ typedef DoubleMatrix DoubleVector;
 /*     Create  & convert       */
 /*******************************/
 
-static bool is_zero(double value);
-
 // Create, Clone, Destroy
 DoubleMatrix *dm_create(size_t rows, size_t cols); // empty sparse matrix
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format);
@@ -47,6 +45,8 @@ DoubleMatrix *dm_create_dense(size_t rows, size_t cols);
 void dm_convert(DoubleMatrix *mat, matrix_format format);
 void dm_convert_to_sparse(DoubleMatrix *mat);
 void dm_convert_to_dense(DoubleMatrix *mat);
+
+static bool is_zero(double value);
 
 /*******************************/
 /*        Getter & Setter      */
@@ -71,7 +71,6 @@ static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 // shrink, push, pop, expand
 static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
-static void dm_realloc_dense(DoubleMatrix *mat, size_t new_capacity);
 void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
 void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
 void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
