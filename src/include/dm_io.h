@@ -8,8 +8,8 @@
 /*     Plot DEFINES            */
 /*******************************/
 
-#define WIDTH (44)
-#define HEIGHT (22)
+#define WIDTH (36) // 44
+#define HEIGHT (18) // 22
 #define X (1)
 #define Y (1)
 #define XMAX (WIDTH - X - 1)
@@ -39,7 +39,7 @@ void dm_print(const DoubleMatrix *matrix);
 void sp_print(const DoubleMatrix *mat);
 void sp_print_braille(const DoubleMatrix *mat);
 void sp_print_condensed(DoubleMatrix *mat);
-void dm_print_structure(DoubleMatrix *mat);
+void dm_print_structure(DoubleMatrix *mat, double strength);
 
 void dv_print(const DoubleVector *vec);
 static void dv_print_col(const DoubleVector *vec);
@@ -53,8 +53,9 @@ static void print_matrix_dimension(const DoubleMatrix *mat);
 int plot(int x, int y, char c);
 
 void init_grid(void);
-void show_grid(void);
+void show_grid(DoubleMatrix *count);
 int get_x_coord(size_t x, size_t rows);
 int get_y_coord(size_t y, size_t cols);
+void set_background_character(int x, int y, int color);
 
 #endif // DM_IO_H

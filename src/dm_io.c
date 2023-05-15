@@ -27,9 +27,9 @@ enum { INIT_CAPACITY = 2U };
 #define MAX_COLUMN_PRINT 4
 
 /* Array of grey shades */
-const int grey_shades[] = {255, 244, 232, 220, 208, 196, 184, 172,
-                           160, 148, 136, 124, 112, 100, 88,  76,
-                           64,  52,  40,  28,  16,  8};
+const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
+                           235, 234, 233, 232, 231, 230, 229, 228,
+                           227, 226, 225, 224, 223, 222, 221};
 
 /*******************************/
 /*     Matrix Market Format    */
@@ -284,51 +284,58 @@ void sp_print_condensed(DoubleMatrix *mat) {
   printf("\n");
 }
 
-void dm_print_structure(DoubleMatrix *mat) {
+void dm_print_structure(DoubleMatrix *mat, double strength) {
 
   // set up grid
   init_grid();
 
   double density = dm_density(mat);
   // information about the matrix
+  printf("Structure of the matrix:\n");
   printf("Matrix (%zu x %zu, %zu), density: %lf\n", mat->rows, mat->cols,
          mat->nnz, density);
 
   // increase density for better visualization:
-  density *= 5;
+  density *= strength;
 
   // setup a small dense matrix to count the appearance of each element
-  DoubleMatrix *count = dm_create_format(HEIGHT, HEIGHT, DENSE);
+  DoubleMatrix *count = dm_create_format(WIDTH, HEIGHT, DENSE);
 
   for (size_t i = 0; i < mat->nnz; i++) {
-
+    // not every element is printed
     if (randomDouble() < density) {
 
       int x = get_x_coord(mat->row_indices[i], mat->rows);
       int y = get_y_coord(mat->col_indices[i], mat->cols);
+      
+      // track the number of elements in each cell
       dm_set(count, x, y, dm_get(count, x, y) + 1);
       plot(x, y, '*');
     }
   }
-
-  show_grid();
+  // print the grid
+  show_grid(count);
 }
 
 /*******************************/
 /*        PLOT STRUCTURE       */
 /*******************************/
 
-void show_grid(void) {
+void show_grid(DoubleMatrix *count) {
 
   for (int y = 0; y < HEIGHT; y++) {
     for (int x = 0; x < WIDTH; x++) {
       // Check if the character has a color escape code
-      if (strncmp(&grid[y][x], ANSI_COLOR_GREY_BASE,
-                  strlen(ANSI_COLOR_GREY_BASE)) == 0) {
-        printf("%s%c" ANSI_COLOR_RESET, &grid[y][x], grid[y][x + 4]);
-        x += 4; // Skip printing the next 4 characters (escape code length)
+      int color = (int)dm_get(count, x, y);
+      if (color > 1) {
+        // get color escape code
+        int grey_color = grey_shades[color];
+        char escape_code[20];
+        sprintf(escape_code, ANSI_COLOR_GREY_BASE, grey_color);
+
+        printf("%s%c%s", escape_code, grid[y][x], ANSI_COLOR_RESET);
       } else {
-        printf("%c", grid[y][x]);
+        printf("%c%s", grid[y][x], ANSI_COLOR_RESET);
       }
     }
     putchar('\n');
@@ -374,39 +381,18 @@ int plot(int x, int y, char c) {
   if (x > XMAX || x < XMIN || y > YMAX || y < YMIN)
     return (-1);
 
-  grid[Y - y][X + x] = c;
+  grid[y][x] = c;
 
   return 1;
 }
 
-// int plot(int x, int y, int character, int color) {
-//   if (x > XMAX || x < XMIN || y > YMAX || y < YMIN)
-//     return (-1);
-
-//   dbg(color);
-//   // Assign the appropriate grey shade based on the color parameter
-//   int num_shades = sizeof(grey_shades) / sizeof(grey_shades[0]);
-//   int shade_index = color % num_shades;
-//   int grey_color = grey_shades[shade_index];
-
-//   char escape_code[20];
-//   sprintf(escape_code, ANSI_COLOR_GREY_BASE, grey_color);
-
-//   // Overwrite the character with the corresponding escape code
-//   //putchar(*escape_code);
-//   putchar(character);
-//   printf(ANSI_COLOR_RESET);
-
-//   return 1;
-// }
-
 int get_x_coord(size_t x, size_t rows) {
-  int nWIDTH = (int)WIDTH / 2;
-  return (int)round((double)x / (double)rows * (double)nWIDTH);
+  return 1 + (int)round((double)x / (double)rows * (double)(WIDTH - 2));
 }
 
 int get_y_coord(size_t y, size_t cols) {
-  return (int)round((double)y / (double)cols * (double)HEIGHT);
+
+  return 1 + (int)round((double)y / (double)cols * (double)(HEIGHT - 3));
 }
 
 /*******************************/
