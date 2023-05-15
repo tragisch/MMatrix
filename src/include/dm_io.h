@@ -4,6 +4,10 @@
 #include "dm.h"
 #include "dm_internals.h"
 
+/*******************************/
+/*     Plot DEFINES            */
+/*******************************/
+
 #define WIDTH (44)
 #define HEIGHT (22)
 #define X (1)
@@ -12,6 +16,12 @@
 #define XMIN (1) // -(WIDTH - X)
 #define YMAX (HEIGHT - Y - 1)
 #define YMIN (1) // -(HEIGHT - Y) + 1
+
+/* ANSI escape codes for colors */
+#define ANSI_COLOR_RESET "\x1b[0m"
+#define ANSI_COLOR_GREY_BASE "\x1b[48;5;%dm"
+
+char grid[HEIGHT][WIDTH];
 
 /*******************************/
 /*     I/O Functions           */
@@ -41,9 +51,9 @@ static void print_matrix_dimension(const DoubleMatrix *mat);
 /*******************************/
 
 int plot(int x, int y, char c);
-char grid[HEIGHT][WIDTH];
+
 void init_grid(void);
-void show_grid(DoubleMatrix *count);
+void show_grid(void);
 int get_x_coord(size_t x, size_t rows);
 int get_y_coord(size_t y, size_t cols);
 

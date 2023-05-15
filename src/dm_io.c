@@ -26,6 +26,11 @@ enum { INIT_CAPACITY = 2U };
 #define MAX_COLUMN 10
 #define MAX_COLUMN_PRINT 4
 
+/* Array of grey shades */
+const int grey_shades[] = {255, 244, 232, 220, 208, 196, 184, 172,
+                           160, 148, 136, 124, 112, 100, 88,  76,
+                           64,  52,  40,  28,  16,  8};
+
 /*******************************/
 /*     Matrix Market Format    */
 /*******************************/
@@ -293,7 +298,7 @@ void dm_print_structure(DoubleMatrix *mat) {
   density *= 5;
 
   // setup a small dense matrix to count the appearance of each element
-  DoubleMatrix *count = dm_create_format(44, 22, DENSE);
+  DoubleMatrix *count = dm_create_format(HEIGHT, HEIGHT, DENSE);
 
   for (size_t i = 0; i < mat->nnz; i++) {
 
@@ -301,25 +306,30 @@ void dm_print_structure(DoubleMatrix *mat) {
 
       int x = get_x_coord(mat->row_indices[i], mat->rows);
       int y = get_y_coord(mat->col_indices[i], mat->cols);
-      count->values[x * count->cols + y] += 1;
+      dm_set(count, x, y, dm_get(count, x, y) + 1);
       plot(x, y, '*');
     }
   }
 
-  show_grid(count);
+  show_grid();
 }
 
 /*******************************/
 /*        PLOT STRUCTURE       */
 /*******************************/
-#define NUM_COLORS 10
 
-void show_grid(DoubleMatrix *count) {
-  int x = 0;
-  int y = 0;
-  for (y = 0; y < HEIGHT; y++) {
-    for (x = 0; x < WIDTH; x++) {
-      putchar(grid[y][x]);
+void show_grid(void) {
+
+  for (int y = 0; y < HEIGHT; y++) {
+    for (int x = 0; x < WIDTH; x++) {
+      // Check if the character has a color escape code
+      if (strncmp(&grid[y][x], ANSI_COLOR_GREY_BASE,
+                  strlen(ANSI_COLOR_GREY_BASE)) == 0) {
+        printf("%s%c" ANSI_COLOR_RESET, &grid[y][x], grid[y][x + 4]);
+        x += 4; // Skip printing the next 4 characters (escape code length)
+      } else {
+        printf("%c", grid[y][x]);
+      }
     }
     putchar('\n');
   }
@@ -361,16 +371,38 @@ void init_grid(void) {
 /*******************************/
 
 int plot(int x, int y, char c) {
-
-  if (x > XMAX || x < XMIN || y > YMAX || y < YMIN) {
+  if (x > XMAX || x < XMIN || y > YMAX || y < YMIN)
     return (-1);
-  }
-  grid[y][x] = c; // '*';
-  return (1);
+
+  grid[Y - y][X + x] = c;
+
+  return 1;
 }
 
+// int plot(int x, int y, int character, int color) {
+//   if (x > XMAX || x < XMIN || y > YMAX || y < YMIN)
+//     return (-1);
+
+//   dbg(color);
+//   // Assign the appropriate grey shade based on the color parameter
+//   int num_shades = sizeof(grey_shades) / sizeof(grey_shades[0]);
+//   int shade_index = color % num_shades;
+//   int grey_color = grey_shades[shade_index];
+
+//   char escape_code[20];
+//   sprintf(escape_code, ANSI_COLOR_GREY_BASE, grey_color);
+
+//   // Overwrite the character with the corresponding escape code
+//   //putchar(*escape_code);
+//   putchar(character);
+//   printf(ANSI_COLOR_RESET);
+
+//   return 1;
+// }
+
 int get_x_coord(size_t x, size_t rows) {
-  return (int)round((double)x / (double)rows * (double)WIDTH);
+  int nWIDTH = (int)WIDTH / 2;
+  return (int)round((double)x / (double)rows * (double)nWIDTH);
 }
 
 int get_y_coord(size_t y, size_t cols) {

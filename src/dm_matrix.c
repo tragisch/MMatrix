@@ -15,7 +15,6 @@
 #include "dm_math.h"
 #include "dv_vector.h"
 
-
 // #define NDEBUG
 enum { INIT_CAPACITY = 2U };
 
