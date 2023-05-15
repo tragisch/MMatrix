@@ -266,11 +266,11 @@ static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
 
   // resize matrix:
   size_t *row_indices = (size_t *)realloc(
-      mat->row_indices, (mat->capacity + new_capacity) * sizeof(size_t));
+      mat->row_indices, (mat->capacity * new_capacity) * sizeof(size_t));
   size_t *col_indices = (size_t *)realloc(
-      mat->col_indices, (mat->capacity + new_capacity) * sizeof(size_t));
+      mat->col_indices, (mat->capacity * new_capacity) * sizeof(size_t));
   double *values = (double *)realloc(
-      mat->values, (mat->capacity + new_capacity) * sizeof(double));
+      mat->values, (mat->capacity * new_capacity) * sizeof(double));
   if (row_indices == NULL || col_indices == NULL || values == NULL) {
     printf("Error allocating memory!\n");
     exit(EXIT_FAILURE);

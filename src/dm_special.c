@@ -97,3 +97,4 @@ DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
 
   return mat;
 }
+

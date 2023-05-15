@@ -89,6 +89,10 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
 
     fscanf(fp, "%zu %zu %lf", &row_idx, &col_idx, &val);
 
+    // if (val == NAN) {
+    //   val = 1.0;
+    // }
+
     if (val != 0.0) {
       dm_set(mat, row_idx - 1, col_idx - 1, val);
     }
@@ -307,7 +311,7 @@ void dm_print_structure(DoubleMatrix *mat, double strength) {
 
       int x = get_x_coord(mat->row_indices[i], mat->rows);
       int y = get_y_coord(mat->col_indices[i], mat->cols);
-      
+
       // track the number of elements in each cell
       dm_set(count, x, y, dm_get(count, x, y) + 1);
       plot(x, y, '*');
