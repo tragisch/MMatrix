@@ -15,7 +15,6 @@
 #include "dm_math.h"
 #include "dv_vector.h"
 
-
 // #define NDEBUG
 enum { INIT_CAPACITY = 2U };
 
@@ -90,6 +89,8 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   // perror if boundaries are exceeded
   if (i >= mat->rows || j >= mat->cols) {
     perror("Error: index out of bounds.\n");
+    // dbg(i);
+    // dbg(j);
   }
   switch (mat->format) {
   case DENSE:

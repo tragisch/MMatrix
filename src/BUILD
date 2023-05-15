@@ -8,7 +8,6 @@ cc_library(
         "dv_vector.c",
         "dv_math.c",
         "dm_special.c",
-        "dm_plot.c",
     ],
     hdrs = [
         "include/dm.h",
