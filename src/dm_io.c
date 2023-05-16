@@ -72,29 +72,30 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
   sscanf(line, "%zu %zu %zu", &nrows, &ncols, &nnz);
 
   // Create DoubleMatrix
-  DoubleMatrix *mat = dm_create(nrows, ncols);
+  DoubleMatrix *mat = dm_create_size(nrows, ncols, nnz);
 
   if (nnz > 500) {
     printf("Reading Matrix Market file: %s\n", filename);
   }
 
   // Read non-zero values
-  for (size_t i = 0; i < (nnz); i++) {
+  for (size_t i = 0; i < nnz; i++) {
     if (nnz > 500) {
       print_progress_bar(i, nnz, 50);
     }
     size_t row_idx = 0;
     size_t col_idx = 0;
-    double val = NAN;
+    double val = 0.0;
 
     fscanf(fp, "%zu %zu %lf", &row_idx, &col_idx, &val);
-
-    // if (val == NAN) {
-    //   val = 1.0;
-    // }
+    // printf("%zu %zu %lf\n", row_idx, col_idx, val);
 
     if (val != 0.0) {
-      dm_set(mat, row_idx - 1, col_idx - 1, val);
+      mat->row_indices[i] = (size_t)(row_idx - 1);
+      mat->col_indices[i] = (size_t)(col_idx - 1);
+      mat->values[i] = (double)val;
+      mat->nnz++;
+      // dm_set(mat, row_idx - 1, col_idx - 1, val);
     }
   }
 
@@ -104,6 +105,7 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
 
   // Close the file
   fclose(fp);
+
   return mat;
 }
 

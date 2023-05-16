@@ -62,6 +62,7 @@ void dm_push_row(DoubleMatrix *mat, DoubleVector *row_vec);
 
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density);
 DoubleMatrix *dm_create_identity(size_t rows);
+DoubleMatrix *dm_create_size(size_t rows, size_t cols, size_t size);
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
                                    double array[rows][cols]);
 DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,

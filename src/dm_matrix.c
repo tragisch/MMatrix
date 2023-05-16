@@ -63,6 +63,20 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
 }
 
 /**
+ * @brief create a DoubleMatrix Object with given size
+ *
+ * @param rows
+ * @param cols
+ * @param size
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_create_size(size_t rows, size_t cols, size_t size) {
+  DoubleMatrix *mat = dm_create_sparse(rows, cols);
+  dm_realloc_sparse(mat, size);
+  return mat;
+}
+
+/**
  * @brief return copy of matrix
  *
  * @param m
@@ -175,7 +189,7 @@ static DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
 static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
   bool found = false;
   for (int k = 0; k < mat->nnz; k++) {
-    if (mat->row_indices[k] == i && mat->col_indices[k] == j) {
+    if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {
       // if element is unequal zero, update the value
       if (is_zero(value) == false) {
         mat->values[k] = value;
@@ -211,7 +225,7 @@ static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j,
 // remove zero value at index i,j of sparse matrix in COO format:
 static void dm_remove_zero(DoubleMatrix *mat, size_t i, size_t j) {
   for (int k = 0; k < mat->nnz; k++) {
-    if (mat->row_indices[k] == i && mat->col_indices[k] == j) {
+    if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {
       // remove element if found
       mat->nnz--;
       for (int l = k; l < mat->nnz; l++) {
@@ -266,11 +280,11 @@ static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
 
   // resize matrix:
   size_t *row_indices = (size_t *)realloc(
-      mat->row_indices, (mat->capacity * new_capacity) * sizeof(size_t));
+      mat->row_indices, (mat->capacity + new_capacity) * sizeof(size_t));
   size_t *col_indices = (size_t *)realloc(
-      mat->col_indices, (mat->capacity * new_capacity) * sizeof(size_t));
+      mat->col_indices, (mat->capacity + new_capacity) * sizeof(size_t));
   double *values = (double *)realloc(
-      mat->values, (mat->capacity * new_capacity) * sizeof(double));
+      mat->values, (mat->capacity + new_capacity) * sizeof(double));
   if (row_indices == NULL || col_indices == NULL || values == NULL) {
     printf("Error allocating memory!\n");
     exit(EXIT_FAILURE);
