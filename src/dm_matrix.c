@@ -16,7 +16,7 @@
 #include "dv_vector.h"
 
 // #define NDEBUG
-enum { INIT_CAPACITY = 2U };
+enum { INIT_CAPACITY = 1000U };
 
 /*******************************/
 /*        Double Matrix        */
@@ -63,16 +63,16 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
 }
 
 /**
- * @brief create a DoubleMatrix Object with given size
+ * @brief create a sparse DoubleMatrix Object size to fit nnz elements
  *
  * @param rows
  * @param cols
  * @param size
  * @return DoubleMatrix*
  */
-DoubleMatrix *dm_create_size(size_t rows, size_t cols, size_t size) {
+DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz) {
   DoubleMatrix *mat = dm_create_sparse(rows, cols);
-  dm_realloc_sparse(mat, size);
+  dm_realloc_sparse(mat, nnz);
   return mat;
 }
 
@@ -190,14 +190,13 @@ static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
   bool found = false;
   for (int k = 0; k < mat->nnz; k++) {
     if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {
-      // if element is unequal zero, update the value
-      if (is_zero(value) == false) {
-        mat->values[k] = value;
-        found = true;
-      } else {
-        found = true;
+      found = true;
+      if (is_zero(value)) {
         dm_remove_zero(mat, i, j);
+      } else {
+        mat->values[k] = value;
       }
+      break;
     }
   }
   if (found == false) {
@@ -212,7 +211,7 @@ static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j,
   if (is_zero(value) == false) {
     // check if nnz is equal to capacity:
     if (mat->nnz == mat->capacity) {
-      dm_realloc_sparse(mat, INIT_CAPACITY);
+      dm_realloc_sparse(mat, mat->capacity * 2);
     }
     // push new value:
     mat->row_indices[mat->nnz] = i;

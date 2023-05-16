@@ -72,7 +72,7 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
   sscanf(line, "%zu %zu %zu", &nrows, &ncols, &nnz);
 
   // Create DoubleMatrix
-  DoubleMatrix *mat = dm_create_size(nrows, ncols, nnz);
+  DoubleMatrix *mat = dm_create_nnz(nrows, ncols, nnz);
 
   if (nnz > 500) {
     printf("Reading Matrix Market file: %s\n", filename);
