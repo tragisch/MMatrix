@@ -28,7 +28,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 # LICENSE: MIT
 http_archive(
     name = "Unity",
-    build_file = "@//:third_party/http/ThrowTheSwitch/Unity/BUILD",
+    build_file = "@//:third_party/ThrowTheSwitch/Unity/BUILD",
     sha256 = "4598298723ecca1f242b8c540a253ae4ab591f6810cbde72f128961007683034",
     strip_prefix = "Unity-2.5.2",
     urls = [
@@ -38,7 +38,7 @@ http_archive(
 
 http_archive(
     name = "CMock",
-    build_file = "@//:third_party/http/ThrowTheSwitch/CMock/BUILD",
+    build_file = "@//:third_party/ThrowTheSwitch/CMock/BUILD",
     sha256 = "f342b8296aa934acfa3310a015938901e7df40ff7f5041c0ef3f5e6b13580207",
     strip_prefix = "CMock-2.5.3",
     url = "https://github.com/ThrowTheSwitch/CMock/archive/refs/tags/v2.5.3.zip",
@@ -49,7 +49,7 @@ http_archive(
 # https://github.com/eerimoq/dbg-macro
 http_archive(
     name = "dbg-macro",
-    build_file = "@//:third_party/http/dbg-macro/BUILD",
+    build_file = "@//:third_party/dbg-macro/BUILD",
     sha256 = "2cd05a0ab0c93d115bf0ee476a5746189f3ced1d589abb098307daeaa57ef329",
     strip_prefix = "dbg-macro-0.12.1",
     url = "https://github.com/eerimoq/dbg-macro/archive/refs/tags/0.12.1.zip",
