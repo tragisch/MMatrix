@@ -1,6 +1,7 @@
 #ifndef DM_H
 #define DM_H
 
+#include "khash.h"
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -9,18 +10,20 @@
 /*******************************/
 
 // sparse matrix formats
-typedef enum { DENSE, SPARSE, VECTOR } matrix_format;
+typedef enum { DENSE, SPARSE, HASHTABLE, VECTOR } matrix_format;
+KHASH_MAP_INIT_INT64(entry, double)
 
 // Standard is of SparseMatrix (COO-Format)
 typedef struct DoubleMatrix {
   size_t rows;
   size_t cols;
-  size_t capacity;      // Capacity of row_indices and col_indices
-  size_t nnz;           // Number of non-zero elements
-  size_t *row_indices;  // Array of row indices of non-zero elements
-  size_t *col_indices;  // Array of column indices of non-zero elements
-  matrix_format format; // SPARSE or DENSE or VECTOR
-  double *values;       // Values
+  size_t capacity;             // Capacity of row_indices and col_indices
+  size_t nnz;                  // Number of non-zero elements
+  size_t *row_indices;         // Array of row indices of non-zero elements
+  size_t *col_indices;         // Array of column indices of non-zero elements
+  matrix_format format;        // SPARSE or DENSE or HASHTABLE or VECTOR
+  khash_t(entry) * hash_table; // Hash table for fast access
+  double *values;              // Values
 } DoubleMatrix;
 
 // Definition of DoubleVector

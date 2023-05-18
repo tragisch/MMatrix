@@ -15,7 +15,7 @@
 #include "dm_math.h"
 #include "dv_vector.h"
 
-enum { INIT_CAPACITY = 2U };
+enum { INIT_CAPACITY = 1000U };
 
 /*******************************/
 /*      Manipulate Matrix      */
@@ -71,11 +71,25 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
   }
   switch (format) {
   case DENSE:
-    dm_convert_to_dense(mat);
-
+    if (mat->format == SPARSE) {
+      dm_convert_to_dense(mat);
+    }
     break;
   case SPARSE:
-    dm_convert_to_sparse(mat);
+    if (mat->format == DENSE) {
+      dm_convert_to_sparse(mat);
+    } else if (mat->format == HASHTABLE) {
+      dm_convert_hash_table_to_coo(mat);
+      return;
+    }
+    break;
+
+  case HASHTABLE:
+    if (mat->format == DENSE) {
+      dm_convert_dense_to_hash_table(mat);
+    } else if (mat->format == SPARSE) {
+      dm_convert_sparse_to_hash_table(mat);
+    }
     break;
 
   case VECTOR:
@@ -134,7 +148,7 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   case VECTOR:
     dm_resize_dense(mat, new_row, 1);
     break;
-  default:
+  case HASHTABLE:
     break;
   }
 }
@@ -148,6 +162,11 @@ static void dm_convert_to_sparse(DoubleMatrix *mat) {
   // check if matrix is already in sparse format:
   if (mat->format == SPARSE) {
     printf("Matrix is already in sparse format!\n");
+    return;
+  }
+
+  if (mat->format == VECTOR) {
+    printf("Matrix is in vector format!\n");
     return;
   }
 
@@ -219,6 +238,130 @@ static void dm_convert_to_dense(DoubleMatrix *mat) {
     free(mat->col_indices);
     mat->row_indices = NULL;
     mat->col_indices = NULL;
+  }
+}
+
+// convert hash_table matrix to COO format
+static void dm_convert_hash_table_to_coo(DoubleMatrix *mat) {
+  if (mat->format == HASHTABLE) {
+
+    // allocate memory for COO matrix:
+    size_t *row_indices = (size_t *)calloc(mat->nnz, sizeof(size_t));
+    size_t *col_indices = (size_t *)calloc(mat->nnz, sizeof(size_t));
+    size_t nnz = 0;
+    double *values = (double *)calloc(mat->nnz, sizeof(double));
+    if (row_indices == NULL || col_indices == NULL || values == NULL) {
+      printf("Error allocating memory!\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // fill COO matrix:
+    size_t k = 0;
+    for (int i = 0; i < mat->rows; i++) {
+      for (int j = 0; j < mat->cols; j++) {
+        double value = dm_get(mat, i, j);
+        if (value != 0) {
+          row_indices[k] = i;
+          col_indices[k] = j;
+          values[k] = value;
+          nnz++;
+        }
+      }
+    }
+
+    // free memory of hash_table matrix:
+    kh_destroy(entry, mat->hash_table);
+
+    // set COO matrix:
+    mat->format = SPARSE;
+    mat->row_indices = row_indices;
+    mat->col_indices = col_indices;
+    mat->values = values;
+    mat->nnz = nnz;
+    mat->capacity = nnz;
+  }
+}
+
+// convert dense to hast_table:
+static void dm_convert_dense_to_hash_table(DoubleMatrix *mat) {
+  if (mat->format == DENSE) {
+    // Create hash table
+    mat->hash_table = kh_init(entry);
+    if (mat->hash_table == NULL) {
+      printf("Error allocating memory!\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // fill hash table:
+    khint_t k = 0;
+    int ret = 0;
+    for (int i = 0; i < mat->rows; i++) {
+      for (int j = 0; j < mat->cols; j++) {
+        double value = dm_get(mat, i, j);
+        if (value != 0) {
+          int64_t key = (int64_t)i << 32 | j;
+          // Check if the value already exists in the hash table
+          k = kh_get(entry, mat->hash_table, key);
+          if (k != kh_end(mat->hash_table)) {
+            // Value already exists, update it
+            kh_value(mat->hash_table, k) = value;
+          } else {
+            // Value doesn't exist, insert it into the hash table
+            k = kh_put(entry, mat->hash_table, key, &ret);
+            kh_value(mat->hash_table, k) = value;
+            mat->nnz++;
+          }
+        }
+      }
+    }
+
+    // free memory of dense matrix:
+    free(mat->values);
+
+    // set hash_table matrix:
+    mat->format = HASHTABLE;
+    mat->values = NULL;
+    mat->capacity = 0;
+  }
+}
+
+static void dm_convert_sparse_to_hash_table(DoubleMatrix *mat) {
+  if (mat->format == SPARSE) {
+    // Create hash table
+    mat->hash_table = kh_init(entry);
+    if (mat->hash_table == NULL) {
+      printf("Error allocating memory!\n");
+      exit(EXIT_FAILURE);
+    }
+
+    // fill hash table:
+    khint_t k = 0;
+    int ret = 0;
+    for (int i = 0; i < mat->nnz; i++) {
+      int64_t key = (int64_t)mat->row_indices[i] << 32 | mat->col_indices[i];
+      // Check if the value already exists in the hash table
+      k = kh_get(entry, mat->hash_table, key);
+      if (k != kh_end(mat->hash_table)) {
+        // Value already exists, update it
+        kh_value(mat->hash_table, k) = mat->values[i];
+      } else {
+        // Value doesn't exist, insert it into the hash table
+        k = kh_put(entry, mat->hash_table, key, &ret);
+        kh_value(mat->hash_table, k) = mat->values[i];
+      }
+    }
+
+    // free memory of sparse matrix:
+    free(mat->row_indices);
+    free(mat->col_indices);
+    free(mat->values);
+
+    // set hash_table matrix:
+    mat->format = HASHTABLE;
+    mat->row_indices = NULL;
+    mat->col_indices = NULL;
+    mat->values = NULL;
+    mat->capacity = 0;
   }
 }
 

@@ -36,6 +36,7 @@ DoubleVector *dv_vector() {
   vec->col_indices = NULL;
   vec->format = VECTOR;
   vec->values = (double *)malloc(vec->capacity * sizeof(double));
+  vec->hash_table = NULL;
   return vec;
 }
 

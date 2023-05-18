@@ -8,7 +8,7 @@
 /*     Plot DEFINES            */
 /*******************************/
 
-#define WIDTH (36) // 44
+#define WIDTH (36)  // 44
 #define HEIGHT (18) // 22
 #define X (1)
 #define Y (1)
@@ -56,6 +56,5 @@ void init_grid(void);
 void show_grid(DoubleMatrix *count);
 int get_x_coord(size_t x, size_t rows);
 int get_y_coord(size_t y, size_t cols);
-void set_background_character(int x, int y, int color);
 
 #endif // DM_IO_H

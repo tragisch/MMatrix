@@ -38,7 +38,7 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
  *
  * @param rows
  * @param cols
- * @param format (SPARSE, DENSE, VECTOR)
+ * @param format (SPARSE,HASHTABLE,DENSE, VECTOR)
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
@@ -50,6 +50,9 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
     break;
   case DENSE:
     mat = dm_create_dense(rows, cols);
+    break;
+  case HASHTABLE:
+    mat = dm_create_hashtable(rows, cols);
     break;
   case VECTOR:
     mat = dv_create(rows);
@@ -113,6 +116,9 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   case SPARSE:
     return dm_get_sparse(mat, i, j);
     break;
+  case HASHTABLE:
+    return dm_get_hash_table(mat, i, j);
+    break;
   case VECTOR:
     return dv_get(mat, i);
     break;
@@ -134,6 +140,9 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   case DENSE:
     dm_set_dense(mat, i, j, value);
     break;
+  case HASHTABLE:
+    dm_set_hash_table(mat, i, j, value);
+    break;
   case VECTOR:
     dv_set(mat, i, value);
     break;
@@ -142,9 +151,13 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
 
 // free sparse matrix
 void dm_destroy(DoubleMatrix *mat) {
+
   free(mat->col_indices);
   free(mat->values);
   free(mat->row_indices);
+  if (mat->format == HASHTABLE) {
+    kh_destroy(entry, mat->hash_table);
+  }
   free(mat);
   mat = NULL;
 }
@@ -169,7 +182,25 @@ static DoubleMatrix *dm_create_sparse(size_t rows, size_t cols) {
       calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
   mat->format = SPARSE;
   mat->values = calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(double));
+  mat->hash_table = NULL;
   return mat;
+}
+
+static DoubleMatrix *dm_create_hashtable(size_t rows, size_t cols) {
+  DoubleMatrix *matrix = malloc(sizeof(DoubleMatrix));
+  matrix->rows = rows;
+  matrix->cols = cols;
+  matrix->capacity = 0;
+  matrix->nnz = 0;
+  matrix->row_indices = NULL;
+  matrix->col_indices = NULL;
+  matrix->format = HASHTABLE;
+  matrix->values = NULL;
+
+  // Create hash table
+  matrix->hash_table = kh_init(entry);
+
+  return matrix;
 }
 
 static DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
@@ -183,6 +214,7 @@ static DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
   matrix->row_indices = NULL;
   matrix->col_indices = NULL;
   matrix->values = (double *)calloc(rows * cols, sizeof(double));
+  matrix->hash_table = NULL;
   return matrix;
 }
 
@@ -201,6 +233,28 @@ static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
   }
   if (found == false) {
     dm_push_sparse(mat, i, j, value);
+  }
+}
+
+static void dm_set_hash_table(DoubleMatrix *matrix, size_t i, size_t j,
+                              double value) {
+  int ret = 0;
+  khint_t k;
+
+  // Calculate the key for the hash table using the combined row and column
+  // indices
+  int64_t key = (int64_t)i << 32 | j;
+
+  // Check if the value already exists in the hash table
+  k = kh_get(entry, matrix->hash_table, key);
+  if (k != kh_end(matrix->hash_table)) {
+    // Value already exists, update it
+    kh_value(matrix->hash_table, k) = value;
+  } else {
+    // Value doesn't exist, insert it into the hash table
+    k = kh_put(entry, matrix->hash_table, key, &ret);
+    kh_value(matrix->hash_table, k) = value;
+    matrix->nnz++;
   }
 }
 
@@ -247,6 +301,21 @@ static double dm_get_sparse(const DoubleMatrix *mat, size_t i, size_t j) {
   }
 
   // Element not found, return 0.0
+  return 0.0;
+}
+
+static double dm_get_hash_table(const DoubleMatrix *matrix, size_t i,
+                                size_t j) {
+  // Calculate the key for the hash table using the combined row and column
+  // indices
+  int64_t key = (int64_t)i << 32 | j;
+
+  // Check if the value exists in the hash table
+  khint_t k = kh_get(entry, matrix->hash_table, key);
+  if (k != kh_end(matrix->hash_table)) {
+    // Value exists, return it
+    return kh_value(matrix->hash_table, k);
+  } // Value doesn't exist, return 0.0
   return 0.0;
 }
 

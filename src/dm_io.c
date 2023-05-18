@@ -16,7 +16,7 @@
 #include "dm_math.h"
 
 #define BRAILLE_SIZE 10
-enum { INIT_CAPACITY = 2U };
+enum { INIT_CAPACITY = 1000U };
 
 /*******************************/
 /*         I/O Functions       */
@@ -36,7 +36,8 @@ const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
 /*******************************/
 
 /**
- * @brief Read a Matrix Market file and return a DoubleMatrix
+ * @brief Read a Matrix Market file and return a DoubleMatrix in COO sparse
+ * format
  *
  * @param filename
  * @return DoubleMatrix*
@@ -291,7 +292,11 @@ void sp_print_condensed(DoubleMatrix *mat) {
 }
 
 void dm_print_structure(DoubleMatrix *mat, double strength) {
-
+  if (mat->format == DENSE) {
+    printf(
+        "Matrix is not in SPARSE or HASHTABLE format, no structure to print\n");
+    return;
+  }
   // set up grid
   init_grid();
 
@@ -307,18 +312,45 @@ void dm_print_structure(DoubleMatrix *mat, double strength) {
   // setup a small dense matrix to count the appearance of each element
   DoubleMatrix *count = dm_create_format(WIDTH, HEIGHT, DENSE);
 
-  for (size_t i = 0; i < mat->nnz; i++) {
-    // not every element is printed
-    if (randomDouble() < density) {
+  // in case of sparse matrix:
+  if (mat->format == SPARSE) {
+    for (size_t i = 0; i < mat->nnz; i++) {
+      // not every element is printed
+      if (randomDouble() < density) {
+        int x = get_x_coord(mat->row_indices[i], mat->rows);
+        int y = get_y_coord(mat->col_indices[i], mat->cols);
 
-      int x = get_x_coord(mat->row_indices[i], mat->rows);
-      int y = get_y_coord(mat->col_indices[i], mat->cols);
+        // track the number of elements in each cell
+        dm_set(count, x, y, dm_get(count, x, y) + 1);
+        plot(x, y, '*');
+      }
+    }
+  } else if (mat->format == HASHTABLE) {
+    khash_t(entry) *hashtable = mat->hash_table;
 
-      // track the number of elements in each cell
-      dm_set(count, x, y, dm_get(count, x, y) + 1);
-      plot(x, y, '*');
+    // Iterate over each bucket in the hash table
+    for (khint_t i = 0; i < kh_end(hashtable); ++i) {
+      if (kh_exist(hashtable, i)) {
+        // Retrieve the key-value pair from the current bucket
+        int64_t key = kh_key(hashtable, i);
+        // double value = kh_value(hashtable, i);
+
+        // Extract row and column indices from the key
+        size_t row = key >> 32;
+        size_t col = key & 0xFFFFFFFF;
+
+        if (randomDouble() < density) {
+          int x = get_x_coord(row, mat->rows);
+          int y = get_y_coord(col, mat->cols);
+
+          // track the number of elements in each cell
+          dm_set(count, x, y, dm_get(count, x, y) + 1);
+          plot(x, y, '*');
+        }
+      }
     }
   }
+
   // print the grid
   show_grid(count);
 }
@@ -412,6 +444,9 @@ static void print_matrix_dimension(const DoubleMatrix *mat) {
     break;
   case DENSE:
     printf("DenseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
+    break;
+  case HASHTABLE:
+    printf("HashTable (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   case VECTOR:
     printf("Vector (%zu x %zu)\n", mat->rows, mat->cols);
