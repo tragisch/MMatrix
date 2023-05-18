@@ -18,9 +18,20 @@
 // #define NDEBUG
 enum { INIT_CAPACITY = 1000U };
 
+matrix_format default_matrix_format = SPARSE;
+
 /*******************************/
 /*        Double Matrix        */
 /*******************************/
+
+/**
+ * @brief Set the Default Matrix Format object
+ *
+ * @param format
+ */
+void set_default_matrix_format(matrix_format format) {
+  default_matrix_format = format;
+}
 
 /**
  * @brief create a Double Matrix Object
@@ -30,7 +41,7 @@ enum { INIT_CAPACITY = 1000U };
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create(size_t rows, size_t cols) {
-  return dm_create_format(rows, cols, SPARSE);
+  return dm_create_format(rows, cols, default_matrix_format);
 }
 
 /**
@@ -55,7 +66,7 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
     mat = dm_create_hashtable(rows, cols);
     break;
   case VECTOR:
-    mat = dv_create(rows);
+    mat = dv_create(rows > cols ? rows : cols);
     break;
   default:
     perror("Error: invalid matrix format.\n");
@@ -74,8 +85,10 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz) {
-  DoubleMatrix *mat = dm_create_sparse(rows, cols);
-  dm_realloc_sparse(mat, nnz);
+  DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
+  if (mat->format == SPARSE) {
+    dm_realloc_sparse(mat, nnz);
+  }
   return mat;
 }
 
@@ -239,7 +252,7 @@ static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
 static void dm_set_hash_table(DoubleMatrix *matrix, size_t i, size_t j,
                               double value) {
   int ret = 0;
-  khint_t k;
+  khint_t k = 0;
 
   // Calculate the key for the hash table using the combined row and column
   // indices

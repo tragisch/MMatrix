@@ -24,7 +24,7 @@
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_identity(size_t rows) {
-  DoubleMatrix *mat = dm_create(rows, rows);
+  DoubleMatrix *mat = dm_create_format(rows, rows, default_matrix_format);
   for (size_t i = 0; i < rows; i++) {
     dm_set(mat, i, i, 1.0);
   }
@@ -41,7 +41,7 @@ DoubleMatrix *dm_create_identity(size_t rows) {
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
-  DoubleMatrix *mat = dm_create(rows, cols);
+  DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
   for (int i = 0; i < mat->rows; i++) {
     for (int j = 0; j < mat->cols; j++) {
       if (randomDouble() <= density) {
@@ -63,7 +63,7 @@ DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
  */
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
                                    double array[rows][cols]) {
-  DoubleMatrix *mat = dm_create_format(rows, cols, DENSE);
+  DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
 
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
@@ -83,7 +83,7 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
-  DoubleMatrix *mat = dm_create(rows, cols);
+  DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
 
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
@@ -97,4 +97,3 @@ DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
 
   return mat;
 }
-

@@ -13,10 +13,12 @@
 typedef enum { DENSE, SPARSE, HASHTABLE, VECTOR } matrix_format;
 KHASH_MAP_INIT_INT64(entry, double)
 
-// Standard is of SparseMatrix (COO-Format)
+extern matrix_format default_matrix_format;
+
+// struct of DoubleMatrix
 typedef struct DoubleMatrix {
-  size_t rows;
-  size_t cols;
+  size_t rows;                 // Number of rows
+  size_t cols;                 // Number of columns
   size_t capacity;             // Capacity of row_indices and col_indices
   size_t nnz;                  // Number of non-zero elements
   size_t *row_indices;         // Array of row indices of non-zero elements
@@ -34,6 +36,7 @@ typedef DoubleMatrix DoubleVector;
 /*******************************/
 
 // Create, Clone, Destroy
+void set_default_matrix_format(matrix_format format);
 DoubleMatrix *dm_create(size_t rows, size_t cols); // empty sparse matrix
 DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz);
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format);
