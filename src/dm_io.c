@@ -194,6 +194,26 @@ void dm_brief(const DoubleMatrix *mat) {
   printf("Matrix: %zu x %zu\n", mat->rows, mat->cols);
   printf("Non-zero elements: %zu\n", mat->nnz);
   printf("Density: %lf\n", dm_density(mat));
+
+  // string
+  char *s;
+  switch (mat->format) {
+  case SPARSE:
+    s = "Sparse";
+    break;
+  case DENSE:
+    s = "Dense";
+    break;
+  case HASHTABLE:
+    s = "Hashtable";
+    break;
+  case VECTOR:
+    s = "Vector";
+    break;
+  default:
+    break;
+  }
+  printf("Format: %s\n", s);
 }
 
 /**
@@ -219,6 +239,10 @@ void dm_print(const DoubleMatrix *matrix) {
  * @param matrix
  */
 void sp_print_braille(const DoubleMatrix *mat) {
+  if (mat->format != SPARSE) {
+    printf("Error: Matrix is not in sparse format.\n");
+    return;
+  }
   printf("--Braille-Form: \n");
   // Define Braille characters for matrix elements
   const char *braille[] = {
@@ -252,7 +276,11 @@ void sp_print_braille(const DoubleMatrix *mat) {
 }
 
 // print all fields of a SparseMatrix *mat
-void sp_print(const DoubleMatrix *mat) {
+void dm_brief_sparse(const DoubleMatrix *mat) {
+  if (mat->format != SPARSE) {
+    printf("Error: Matrix is not in sparse format.\n");
+    return;
+  }
   print_matrix_dimension(mat);
   printf("values: ");
   for (size_t i = 0; i < mat->nnz; i++) {
@@ -278,6 +306,10 @@ void sp_print(const DoubleMatrix *mat) {
 }
 
 void sp_print_condensed(DoubleMatrix *mat) {
+  if (mat->format != SPARSE) {
+    printf("Error: Matrix is not in sparse format.\n");
+    return;
+  }
   print_matrix_dimension(mat);
   size_t start = mat->row_indices[0];
   for (size_t i = 0; i < mat->nnz; i++) {

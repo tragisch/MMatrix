@@ -48,7 +48,7 @@ double dm_trace(const DoubleMatrix *mat);
 
 // principles
 DoubleMatrix *dm_inverse(DoubleMatrix *mat);
-int dm_rank(const DoubleMatrix *mat);
+size_t dm_rank(const DoubleMatrix *mat);
 
 /*******************************/
 /*      Sparse Matrix Math     */
