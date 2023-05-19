@@ -74,7 +74,8 @@ DoubleVector *dv_create(size_t length) {
   }
   DoubleVector *vec = dv_vector();
   vec->rows = length;
-  vec->capacity = length + INIT_CAPACITY;
+  vec->cols = 1;
+  vec->capacity = length > 0 ? length : INIT_CAPACITY;
 
   double *values = (double *)malloc(vec->capacity * sizeof(double));
   if (values == NULL) {

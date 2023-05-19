@@ -163,7 +163,7 @@ void test_dm_inverse(void) {
 void test_dm_rank_dense() {
   double values[3][3] = {{1.0, 2.0, 3.0}, {0.0, 1.0, 4.0}, {5.0, 6.0, 0.0}};
   DoubleMatrix *mat = dm_create_from_array(3, 3, values);
-  int rank = dm_rank(mat);
+  size_t rank = dm_rank(mat);
   TEST_ASSERT_EQUAL_INT(3, rank);
 }
 

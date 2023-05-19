@@ -66,6 +66,10 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
     mat = dm_create_hashtable(rows, cols);
     break;
   case VECTOR:
+    if (rows != 1 && cols != 1) {
+      perror("Error: vector must have one dimension of size 1.\n");
+      exit(EXIT_FAILURE);
+    }
     mat = dv_create(rows > cols ? rows : cols);
     break;
   default:
@@ -98,8 +102,8 @@ DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz) {
  * @param m
  * @return DoubleMatrix*
  */
-DoubleMatrix *dm_clone(DoubleMatrix *mat) {
-  DoubleMatrix *copy = dm_create(mat->rows, mat->cols);
+DoubleMatrix *dm_clone(const DoubleMatrix *mat) {
+  DoubleMatrix *copy = dm_create_format(mat->rows, mat->cols, mat->format);
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
       dm_set(copy, i, j, dm_get(mat, i, j));

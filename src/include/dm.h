@@ -40,7 +40,7 @@ void set_default_matrix_format(matrix_format format);
 DoubleMatrix *dm_create(size_t rows, size_t cols); // empty sparse matrix
 DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz);
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format);
-DoubleMatrix *dm_clone(DoubleMatrix *m);
+DoubleMatrix *dm_clone(const DoubleMatrix *m);
 
 // free memory
 void dm_destroy(DoubleMatrix *mat);
