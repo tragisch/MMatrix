@@ -13,6 +13,7 @@
 
 #include "dbg.h"
 #include "dm.h"
+#include "dm_internals.h"
 #include "dm_math.h"
 #include "dv_vector.h"
 #include <float.h>
@@ -280,82 +281,7 @@ double dm_trace(const DoubleMatrix *mat) {
   return trace;
 }
 
-/**
- * @brief dm_rank. Get Rank of Matrix
- *
- * @param mat
- * @return int
- */
-
-int dm_rank(const DoubleMatrix *mat) {
-  int rank = 0;
-
-  // Convert to dense matrix if sparse
-  if (mat->format != DENSE) {
-    perror("Sparse matrices not supported yet!");
-    return -1;
-  }
-
-  size_t m = mat->rows;
-  size_t n = mat->cols;
-
-  // Create a copy of the matrix
-  double *A = malloc(m * n * sizeof(double));
-  for (size_t i = 0; i < m; i++) {
-    for (size_t j = 0; j < n; j++) {
-      A[i * n + j] = dm_get(mat, i, j);
-    }
-  }
-
-  // Compute row echelon form
-  size_t pivot = 0;
-  for (size_t j = 0; j < n; j++) {
-    bool found_pivot = false;
-    for (size_t i = pivot; i < m; i++) {
-      if (A[i * n + j] != 0.0) {
-        found_pivot = true;
-        // Swap rows i and pivot
-        if (i != pivot) {
-          for (size_t k = j; k < n; k++) {
-            double tmp = A[i * n + k];
-            A[i * n + k] = A[pivot * n + k];
-            A[pivot * n + k] = tmp;
-          }
-        }
-        // Eliminate column j
-        for (size_t k = pivot + 1; k < m; k++) {
-          double factor = A[k * n + j] / A[pivot * n + j];
-          for (size_t l = j; l < n; l++) {
-            A[k * n + l] -= factor * A[pivot * n + l];
-          }
-        }
-        pivot++;
-        break;
-      }
-    }
-    if (!found_pivot) {
-      break;
-    }
-  }
-
-  // Count non-zero rows in REF
-  for (size_t i = 0; i < m; i++) {
-    bool is_zero_row = true;
-    for (size_t j = 0; j < n; j++) {
-      if (A[i * n + j] != 0.0) {
-        is_zero_row = false;
-        break;
-      }
-    }
-    if (!is_zero_row) {
-      rank++;
-    }
-  }
-
-  free(A);
-  return rank;
-}
-
+// density of a matrix
 double dm_density(const DoubleMatrix *mat) {
   if (mat->format != DENSE) {
     return sp_density(mat);
@@ -370,4 +296,73 @@ double dm_density(const DoubleMatrix *mat) {
     }
   }
   return (density / (double)(mat->rows * mat->cols));
+}
+
+size_t dm_rank(const DoubleMatrix *mat) {
+  // Make a copy of the matrix to preserve the original data
+  DoubleMatrix *copy = dm_clone(mat);
+
+  // Apply Gaussian Elimination on the copy
+  dm_gauss_elimination(copy);
+
+  // Count the number of non-zero rows in the row-echelon form
+  size_t rank = 0;
+  for (size_t i = 0; i < copy->rows; i++) {
+    int non_zero = 0;
+    for (size_t j = 0; j < copy->cols; j++) {
+      if (dm_get(copy, i, j) != 0.0) {
+        non_zero = 1;
+        break;
+      }
+    }
+    if (non_zero) {
+      rank++;
+    }
+  }
+
+  // Free the memory of the copy
+  dm_destroy(copy);
+
+  return rank;
+}
+
+// Gaussian Elimination
+static void dm_gauss_elimination(DoubleMatrix *mat) {
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+
+  // Apply Gaussian Elimination
+  for (size_t pivot = 0; pivot < rows; pivot++) {
+    // Find the maximum value in the column below the pivot
+    double max_val = fabs(dm_get(mat, pivot, pivot));
+    size_t max_row = pivot;
+    for (size_t row = pivot + 1; row < rows; row++) {
+      double val = fabs(dm_get(mat, row, pivot));
+      if (val > max_val) {
+        max_val = val;
+        max_row = row;
+      }
+    }
+
+    // Swap rows if necessary
+    if (max_row != pivot) {
+      for (size_t col = 0; col < cols; col++) {
+        double temp = dm_get(mat, pivot, col);
+        dm_set(mat, pivot, col, dm_get(mat, max_row, col));
+        dm_set(mat, max_row, col, temp);
+      }
+    }
+
+    // Perform row operations to eliminate values below the pivot
+    for (size_t row = pivot + 1; row < rows; row++) {
+      double factor = dm_get(mat, row, pivot) / dm_get(mat, pivot, pivot);
+      dm_set(mat, row, pivot, 0.0); // Eliminate the value below the pivot
+
+      for (size_t col = pivot + 1; col < cols; col++) {
+        double val = dm_get(mat, row, col);
+        double pivot_val = dm_get(mat, pivot, col);
+        dm_set(mat, row, col, val - factor * pivot_val);
+      }
+    }
+  }
 }

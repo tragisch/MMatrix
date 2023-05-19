@@ -27,6 +27,9 @@ static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
 // shrink, push, pop, expand
 static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
 
+// gauss ellimination
+static void dm_gauss_elimination(DoubleMatrix *mat);
+
 // transform
 static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
