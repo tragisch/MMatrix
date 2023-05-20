@@ -2,11 +2,14 @@
 test_suite(
     name = "small_tests",
     tags = ["smoke"],
+     visibility = ["//visibility:public"],
+    
 )
 
 test_suite(
     name = "all_tests",
     tags = ["smoke", "enhanced"],
+     visibility = ["//visibility:public"],
 )
 
 
