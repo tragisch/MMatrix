@@ -103,7 +103,7 @@ void test_dm_multiply_by_matrix() {
   DoubleMatrix *expected_result = dm_create_from_array(2, 2, expected_array);
 
   // Compare the result with the expected result
-  TEST_ASSERT_TRUE(dm_equal_matrix(result, expected_result));
+  TEST_ASSERT_TRUE(dm_equal(result, expected_result));
 
   // Free the memory allocated for the matrices and result
   dm_destroy(matrix1);

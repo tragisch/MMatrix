@@ -305,7 +305,7 @@ void dm_brief_sparse(const DoubleMatrix *mat) {
   printf("\n");
 }
 
-void sp_print_condensed(DoubleMatrix *mat) {
+void dm_print_condensed(DoubleMatrix *mat) {
   if (mat->format != SPARSE) {
     printf("Error: Matrix is not in sparse format.\n");
     return;
