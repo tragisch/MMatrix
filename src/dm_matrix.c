@@ -366,6 +366,11 @@ static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
     exit(EXIT_FAILURE);
   }
 
+  if (new_capacity <= mat->capacity) {
+    printf("Can not resize matrix to smaller capacity!\n");
+    exit(EXIT_FAILURE);
+  }
+
   // resize matrix:
   size_t *row_indices = (size_t *)realloc(
       mat->row_indices, (mat->capacity + new_capacity) * sizeof(size_t));
