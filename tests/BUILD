@@ -12,9 +12,9 @@ cc_test(
 )
 
 cc_test(
-    name = "test_DoubleVector",
+    name = "test_DenseMatrix",
     srcs = [
-        "test_DoubleVector.c",
+        "test_DenseMatrix.c",
     ],
     deps = [
         "//src:matrix",
@@ -24,9 +24,21 @@ cc_test(
 )
 
 cc_test(
-    name = "test_SparseMatrix",
+    name = "test_HashTable",
     srcs = [
-        "test_SparseMatrix.c",
+        "test_HashtableMatrix.c",
+    ],
+    deps = [
+        "//src:matrix",
+        "@Unity//:Unity"
+    ],
+    size="small",
+)
+
+cc_test(
+    name = "test_DoubleVector",
+    srcs = [
+        "test_DoubleVector.c",
     ],
     deps = [
         "//src:matrix",

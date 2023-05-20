@@ -257,21 +257,22 @@ static void dm_set_hash_table(DoubleMatrix *matrix, size_t i, size_t j,
                               double value) {
   int ret = 0;
   khint_t k = 0;
+  if (is_zero(value) == false) {
+    // Calculate the key for the hash table using the combined row and column
+    // indices
+    int64_t key = (int64_t)i << 32 | j;
 
-  // Calculate the key for the hash table using the combined row and column
-  // indices
-  int64_t key = (int64_t)i << 32 | j;
-
-  // Check if the value already exists in the hash table
-  k = kh_get(entry, matrix->hash_table, key);
-  if (k != kh_end(matrix->hash_table)) {
-    // Value already exists, update it
-    kh_value(matrix->hash_table, k) = value;
-  } else {
-    // Value doesn't exist, insert it into the hash table
-    k = kh_put(entry, matrix->hash_table, key, &ret);
-    kh_value(matrix->hash_table, k) = value;
-    matrix->nnz++;
+    // Check if the value already exists in the hash table
+    k = kh_get(entry, matrix->hash_table, key);
+    if (k != kh_end(matrix->hash_table)) {
+      // Value already exists, update it
+      kh_value(matrix->hash_table, k) = value;
+    } else {
+      // Value doesn't exist, insert it into the hash table
+      k = kh_put(entry, matrix->hash_table, key, &ret);
+      kh_value(matrix->hash_table, k) = value;
+      matrix->nnz++;
+    }
   }
 }
 
@@ -344,7 +345,9 @@ static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j,
     return;
   }
   mat->values[i * mat->cols + j] = value;
-  mat->nnz++;
+  if (value != 0.0) {
+    mat->nnz++;
+  }
 }
 
 // get value from dense matrix:

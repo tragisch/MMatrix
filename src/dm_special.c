@@ -11,6 +11,7 @@
 
 #include "dbg.h"
 #include "dm.h"
+#include "dm_io.h"
 #include "dm_math.h"
 
 /*******************************/
@@ -42,6 +43,7 @@ DoubleMatrix *dm_create_identity(size_t rows) {
  */
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
   DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
+
   for (int i = 0; i < mat->rows; i++) {
     for (int j = 0; j < mat->cols; j++) {
       if (randomDouble() <= density) {

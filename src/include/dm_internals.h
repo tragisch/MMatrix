@@ -33,6 +33,8 @@ static void dm_gauss_elimination(DoubleMatrix *mat);
 // transform
 static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
+static void dm_resize_hastable(DoubleMatrix *mat, size_t new_row,
+                               size_t new_col);
 
 static void dm_convert_to_sparse(DoubleMatrix *mat);
 static void dm_convert_to_dense(DoubleMatrix *mat);

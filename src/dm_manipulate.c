@@ -120,8 +120,8 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
     perror("Error: matrix index out of bounds.\n");
     exit(EXIT_FAILURE);
   }
-  DoubleMatrix *sub_mat =
-      dm_create(row_end - row_start + 1, col_end - col_start + 1);
+  DoubleMatrix *sub_mat = dm_create_format(
+      row_end - row_start + 1, col_end - col_start + 1, mat->format);
   for (size_t i = row_start; i <= row_end; i++) {
     for (size_t j = col_start; j <= col_end; j++) {
       dm_set(sub_mat, i - row_start, j - col_start, dm_get(mat, i, j));
@@ -149,6 +149,7 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
     dm_resize_dense(mat, new_row, 1);
     break;
   case HASHTABLE:
+    dm_resize_hastable(mat, new_row, new_col);
     break;
   }
 }
@@ -393,11 +394,6 @@ static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col) {
 // resize matrix of COO format:
 static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row,
                              size_t new_col) {
-  // check if matrix is already in sparse format:
-  if (mat->format != SPARSE) {
-    printf("Can not resize matrix to sparse format!\n");
-    exit(EXIT_FAILURE);
-  }
 
   // resize matrix:
   size_t *row_indices =
@@ -415,6 +411,18 @@ static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row,
   mat->row_indices = row_indices;
   mat->col_indices = col_indices;
   mat->values = values;
+  mat->rows = new_row;
+  mat->cols = new_col;
+}
+
+static void dm_resize_hastable(DoubleMatrix *mat, size_t new_row,
+                               size_t new_col) {
+  // resize hash table:
+  kh_resize(entry, mat->hash_table, new_row * new_col);
+  if (mat->hash_table == NULL) {
+    printf("Error allocating memory!\n");
+    exit(EXIT_FAILURE);
+  }
   mat->rows = new_row;
   mat->cols = new_col;
 }

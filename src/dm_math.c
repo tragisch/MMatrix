@@ -272,7 +272,12 @@ DoubleMatrix *dm_inverse(DoubleMatrix *mat) {
   return inverse;
 }
 
-// trace of a matrix
+/**
+ * @brief returns the trace of a matrix
+ *
+ * @param mat
+ * @return double
+ */
 double dm_trace(const DoubleMatrix *mat) {
   double trace = 0;
   for (size_t i = 0; i < mat->rows; i++) {
@@ -281,7 +286,12 @@ double dm_trace(const DoubleMatrix *mat) {
   return trace;
 }
 
-// density of a matrix
+/**
+ * @brief returns the density of a matrix
+ *
+ * @param mat
+ * @return double
+ */
 double dm_density(const DoubleMatrix *mat) {
   if (mat->format != DENSE) {
     return sp_density(mat);
@@ -298,6 +308,12 @@ double dm_density(const DoubleMatrix *mat) {
   return (density / (double)(mat->rows * mat->cols));
 }
 
+/**
+ * @brief returns the rank of a matrix
+ *
+ * @param mat
+ * @return size_t
+ */
 size_t dm_rank(const DoubleMatrix *mat) {
   // Make a copy of the matrix to preserve the original data
   DoubleMatrix *copy = dm_clone(mat);
