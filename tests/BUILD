@@ -1,4 +1,15 @@
 
+test_suite(
+    name = "small_tests",
+    tags = ["smoke"],
+)
+
+test_suite(
+    name = "all_tests",
+    tags = ["smoke", "enhanced"],
+)
+
+
 cc_test(
     name = "test_DoubleMatrix",
     srcs = [
@@ -9,6 +20,7 @@ cc_test(
         "@Unity//:Unity"
     ],
     size="small",
+    tags = ["smoke"],
 )
 
 cc_test(
@@ -21,6 +33,7 @@ cc_test(
         "@Unity//:Unity"
     ],
     size="small",
+    tags = ["smoke"],
 )
 
 cc_test(
@@ -33,6 +46,7 @@ cc_test(
         "@Unity//:Unity"
     ],
     size="small",
+    tags = ["smoke"],
 )
 
 cc_test(
@@ -45,6 +59,7 @@ cc_test(
         "@Unity//:Unity"
     ],
     size="small",
+    tags = ["smoke"],
 )
   
 
@@ -58,6 +73,7 @@ cc_test(
         "@Unity//:Unity"
     ],
     size="small",
+    tags = ["enhanced"],
 )
 
 cc_test(
@@ -70,4 +86,5 @@ cc_test(
         "@Unity//:Unity"
     ],
     size="small",
+    tags = ["enhanced"],
 )
