@@ -14,10 +14,6 @@ DoubleVector *dm_get_column(DoubleMatrix *mat, size_t column_idx);
 void dm_set_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec);
 void dm_set_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec);
 
-// Push Vectors
-void dm_push_column(DoubleMatrix *mat, DoubleVector *col_vec);
-void dm_push_row(DoubleMatrix *mat, DoubleVector *row_vec);
-
 // insert column vector
 void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec);
 static void dm_insert_column_sparse(DoubleMatrix *mat, size_t column_idx);
