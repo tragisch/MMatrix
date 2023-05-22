@@ -24,6 +24,12 @@ static void dm_insert_column_sparse(DoubleMatrix *mat, size_t column_idx);
 static void dm_insert_column_dense(DoubleMatrix *mat, size_t column_idx);
 static void dm_insert_column_hashtable(DoubleMatrix *mat, size_t column_idx);
 
+// insert row vector
+void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec);
+static void dm_insert_row_sparse(DoubleMatrix *mat, size_t row_idx);
+static void dm_insert_row_dense(DoubleMatrix *mat, size_t row_idx);
+static void dm_insert_row_hashtable(DoubleMatrix *mat, size_t row_idx);
+
 DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
                                 size_t row_end, size_t col_start,
                                 size_t col_end);
