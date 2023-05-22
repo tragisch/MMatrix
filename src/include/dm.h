@@ -29,6 +29,9 @@ typedef struct DoubleMatrix {
 } DoubleMatrix;
 
 // Definition of DoubleVector
+typedef struct DoubleMatrix HashTableMatrix;
+
+// Definition of DoubleVector
 typedef DoubleMatrix DoubleVector;
 
 /*******************************/
@@ -52,16 +55,8 @@ void dm_destroy(DoubleMatrix *mat);
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
 
-/*******************************/
-/*           Transform         */
-/*******************************/
 
-void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
-void dm_convert(DoubleMatrix *mat, matrix_format format);
 
-// Push Vectors
-void dm_push_column(DoubleMatrix *mat, DoubleVector *col_vec);
-void dm_push_row(DoubleMatrix *mat, DoubleVector *row_vec);
 
 /*******************************/
 /*     Special Matrices        */
@@ -71,9 +66,7 @@ DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density);
 DoubleMatrix *dm_create_identity(size_t rows);
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
                                    double array[rows][cols]);
-DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
-                                size_t row_end, size_t col_start,
-                                size_t col_end);
+
 DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]);
 
 #endif // DM_H

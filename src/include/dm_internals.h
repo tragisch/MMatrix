@@ -25,21 +25,11 @@ static void dm_remove_zero(DoubleMatrix *mat, size_t i, size_t j);
 static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 // shrink, push, pop, expand
-static void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
+void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
 
 // gauss ellimination
 static void dm_gauss_elimination(DoubleMatrix *mat);
 
-// transform
-static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
-static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
-static void dm_resize_hastable(DoubleMatrix *mat, size_t new_row,
-                               size_t new_col);
 
-static void dm_convert_to_sparse(DoubleMatrix *mat);
-static void dm_convert_to_dense(DoubleMatrix *mat);
-static void dm_convert_hash_table_to_coo(DoubleMatrix *mat);
-static void dm_convert_sparse_to_hash_table(DoubleMatrix *mat);
-static void dm_convert_dense_to_hash_table(DoubleMatrix *mat);
 
 #endif // !MATRIX_H

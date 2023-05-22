@@ -114,7 +114,7 @@ void test_dv_pop_column() {
   DoubleMatrix *mat = dm_create_from_array(2, 3, arr);
 
   // pop the last column
-  DoubleVector *popped = dm_pop_column_vector(mat);
+  DoubleVector *popped = dm_pop_column(mat);
 
   // convert popped_to_array:
   double *pop_arr = dv_get_array(popped);
@@ -127,7 +127,7 @@ void test_dv_pop_column() {
   TEST_ASSERT_EQUAL_INT(2, mat->cols);
   double *exp2 = (double[]){1, 4};
   TEST_ASSERT_EQUAL_DOUBLE_ARRAY(exp2,
-                                 dv_get_array(dv_get_column_vector(mat, 0)), 2);
+                                 dv_get_array(dm_get_column(mat, 0)), 2);
 
   // free memory
   dv_destroy(popped);
@@ -137,7 +137,7 @@ void test_dv_pop_column() {
 void test_dv_pop_row() {
   double array[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
   DoubleMatrix *mat = dm_create_from_array(3, 3, array);
-  DoubleVector *row = dm_pop_row_vector(mat);
+  DoubleVector *row = dm_pop_row(mat);
   TEST_ASSERT_EQUAL_INT(mat->rows, 2); // rows should be decreased by 1
   TEST_ASSERT_EQUAL_DOUBLE(dv_get(row, 0),
                            7.0); // first value in popped row should be equal to

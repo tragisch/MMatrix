@@ -1,15 +1,6 @@
 #ifndef DM_MATH_H
 #define DM_MATH_H
 
-#ifdef __APPLE__
-#include <stdlib.h>
-#define random_number_generator arc4random
-#else
-#include <stdlib.h>
-#include <time.h>
-#define random_number_generator rand
-#endif
-
 #include "dm.h"
 #include <math.h>
 
@@ -17,8 +8,9 @@
 /*      General stuff     */
 /*******************************/
 
-int max_int(int a, int b);
 double max_double(double a, double b);
+double min_double(double a, double b);
+int max_int(int a, int b);
 bool is_zero(double value);
 
 /*******************************/
@@ -28,8 +20,8 @@ bool is_zero(double value);
 double randomDouble();
 double randomDouble_betweenBounds(uint32_t min, uint32_t max);
 uint32_t randomInt();
-uint32_t randomInt_upperBound(uint32_t limit);
 uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max);
+uint32_t randomInt_upperBound(uint32_t limit);
 
 /*******************************/
 /*      Double Matrix Math     */
@@ -54,7 +46,6 @@ size_t dm_rank(const DoubleMatrix *mat);
 /*      Sparse Matrix Math     */
 /*******************************/
 
-static double sp_density(const DoubleMatrix *mat);
 double dm_density(const DoubleMatrix *mat);
 
 /*******************************/

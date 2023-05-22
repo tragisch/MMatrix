@@ -143,29 +143,7 @@ void dv_resize(DoubleVector *vec, size_t rows) {
   }
 }
 
-/**
- * @brief pop last column of Matrix mat
- *
- * @param mat
- * @return DoubleVector*
- */
-DoubleVector *dm_pop_column_vector(DoubleMatrix *mat) {
-  DoubleVector *column_vec = dv_get_column_vector(mat, mat->cols - 1);
-  dm_resize(mat, mat->cols - 1, mat->rows);
-  return column_vec;
-}
 
-/**
- * @brief pop last row of Matrix mat
- *
- * @param mat
- * @return DoubleVector*
- */
-DoubleVector *dm_pop_row_vector(DoubleMatrix *mat) {
-  DoubleVector *row_vec = dv_get_row_vector(mat, mat->rows - 1);
-  dm_resize(mat, mat->rows - 1, mat->cols);
-  return row_vec;
-}
 
 /**
  * @brief get double array from values
@@ -207,42 +185,4 @@ double dv_pop_value(DoubleVector *vec) {
 void dv_destroy(DoubleVector *vec) {
   // in case of a dense matrix:
   dm_destroy(vec);
-}
-
-/**
- * @brief Get the Row Vector object of Row row
- *
- * @param mat
- * @param row
- * @return DoubleVector
- */
-DoubleVector *dv_get_row_vector(DoubleMatrix *mat, size_t row) {
-  if (row < 0 || row > (mat->rows - 1)) {
-    perror("This row does not exist");
-  }
-  DoubleVector *vec = dv_create(mat->cols);
-  for (size_t i = 0; i < vec->rows; i++) {
-    dv_set(vec, i, dm_get(mat, row, i));
-  }
-
-  return vec;
-}
-
-/**
- * @brief Get the Column Vector object
- *
- * @param mat
- * @param column
- * @return DoubleVector
- */
-DoubleVector *dv_get_column_vector(DoubleMatrix *mat, size_t column) {
-  if (column < 0 || column > (mat->cols) - 1) {
-    perror("This column does not exist");
-  }
-  DoubleVector *vec = dv_create(mat->rows);
-  for (size_t i = 0; i < mat->rows; i++) {
-    dv_set(vec, i, dm_get(mat, i, column));
-  }
-
-  return vec;
 }

@@ -1,4 +1,5 @@
 #include "dm.h"
+#include "dm_convert.h"
 #include "dm_internals.h"
 #include "dm_io.h"
 #include "dm_math.h"
@@ -201,7 +202,7 @@ void test_dv_get_row(void) {
   DoubleMatrix *mat = dm_create_from_array(3, 4, values);
 
   // get row vector
-  DoubleVector *vec = dv_get_row_vector(mat, 1);
+  DoubleVector *vec = dm_get_row(mat, 1);
 
   // check vector length
   TEST_ASSERT_EQUAL_INT(4, vec->rows);
@@ -221,7 +222,7 @@ void test_dv_get_column(void) {
 
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
   DoubleMatrix *mat = dm_create_from_array(3, 2, values);
-  DoubleVector *vec = dv_get_column_vector(mat, 1);
+  DoubleVector *vec = dm_get_column(mat, 1);
   TEST_ASSERT_EQUAL_DOUBLE(2.0, dv_get(vec, 0));
   TEST_ASSERT_EQUAL_DOUBLE(4.0, dv_get(vec, 1));
   TEST_ASSERT_EQUAL_DOUBLE(6.0, dv_get(vec, 2));
