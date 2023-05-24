@@ -3,6 +3,7 @@
 #include "dm_internals.h"
 #include "dm_io.h"
 #include "dm_math.h"
+#include "dm_modify.h"
 #include "dv_vector.h"
 #include <stddef.h>
 #include <stdlib.h>
@@ -162,37 +163,6 @@ void test_dm_create_from_array() {
 
   // Free the input data and output matrix
   dm_destroy(matrix);
-}
-
-void test_dm_push_column() {
-  // Create a DoubleMatrix to push a column to
-  DoubleMatrix *mat = dm_create(3, 2);
-  dm_set(mat, 0, 0, 1.0);
-  dm_set(mat, 1, 0, 2.0);
-  dm_set(mat, 2, 0, 3.0);
-
-  // Create a DoubleVector to push as a column
-  DoubleVector *col_vec = dv_vector();
-  dv_push_value(col_vec, 4.0);
-  dv_push_value(col_vec, 5.0);
-  dv_push_value(col_vec, 6.0);
-
-  // Push the column to the DoubleMatrix
-  dm_push_column(mat, col_vec);
-  // Check if column-capacity is increased correctly:
-  TEST_ASSERT_EQUAL(3, mat->cols);
-
-  // Check that the column was pushed correctly
-  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 2, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 0, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 1, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 2, 1));
-
-  // Clean up
-  dm_destroy(mat);
-  dv_destroy(col_vec);
 }
 
 void test_dv_get_row(void) {
@@ -392,36 +362,6 @@ void test_dm_convert_to_dense() {
   dm_destroy(sparse_mat);
 }
 
-void test_dm_push_row() {
-  // Create a DoubleMatrix to push a row to
-  DoubleMatrix *mat = dm_create(3, 2);
-  dm_set(mat, 0, 0, 1.0);
-  dm_set(mat, 1, 0, 2.0);
-  dm_set(mat, 2, 1, 3.0);
-
-  // Create a DoubleVector to push as a row
-  DoubleVector *col_row = dv_create(2);
-  dv_set(col_row, 0, 4.0);
-  dv_set(col_row, 1, 5.0);
-
-  // Push the row to the DoubleMatrix
-  dm_push_row(mat, col_row);
-
-  // Check if row-capacity is increased correctly:
-  TEST_ASSERT_EQUAL(4, mat->rows);
-
-  // Check that the column was pushed correctly
-  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 2, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 3, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 3, 1));
-
-  // Clean up
-  dm_destroy(mat);
-  dv_destroy(col_row);
-}
-
 int main(void) {
   UNITY_BEGIN();
 
@@ -437,10 +377,8 @@ int main(void) {
   RUN_TEST(test_dv_get_row);
   RUN_TEST(test_dm_get_sub_matrix);
   RUN_TEST(test_dm_create_diagonal);
-  RUN_TEST(test_dm_push_column);
   RUN_TEST(test_dm_create_from_array);
   RUN_TEST(test_dm_create_identity);
-  RUN_TEST(test_dm_push_row);
 
   return UNITY_END();
 }

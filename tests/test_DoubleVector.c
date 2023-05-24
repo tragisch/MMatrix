@@ -105,52 +105,6 @@ void test_dv_set_array() {
   dv_destroy(vec);
 }
 
-void test_dv_pop_column() {
-  // create a matrix with 3 rows and 2 columns
-  double arr[2][3] = {
-      {1., 2., 3.},
-      {4., 5., 6.},
-  };
-  DoubleMatrix *mat = dm_create_from_array(2, 3, arr);
-
-  // pop the last column
-  DoubleVector *popped = dm_pop_column(mat);
-
-  // convert popped_to_array:
-  double *pop_arr = dv_get_array(popped);
-
-  // assert that the popped vector is correct
-  double *exp1 = (double[]){3, 6};
-  TEST_ASSERT_EQUAL_DOUBLE_ARRAY(exp1, pop_arr, 2);
-
-  // assert that the matrix has been updated correctly
-  TEST_ASSERT_EQUAL_INT(2, mat->cols);
-  double *exp2 = (double[]){1, 4};
-  TEST_ASSERT_EQUAL_DOUBLE_ARRAY(exp2,
-                                 dv_get_array(dm_get_column(mat, 0)), 2);
-
-  // free memory
-  dv_destroy(popped);
-  dm_destroy(mat);
-}
-
-void test_dv_pop_row() {
-  double array[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
-  DoubleMatrix *mat = dm_create_from_array(3, 3, array);
-  DoubleVector *row = dm_pop_row(mat);
-  TEST_ASSERT_EQUAL_INT(mat->rows, 2); // rows should be decreased by 1
-  TEST_ASSERT_EQUAL_DOUBLE(dv_get(row, 0),
-                           7.0); // first value in popped row should be equal to
-  TEST_ASSERT_EQUAL_DOUBLE(dv_get(row, 1),
-                           8.0); // second value in popped row should be equal
-  TEST_ASSERT_EQUAL_DOUBLE(dv_get(row, 2),
-                           9.0); // third value in popped row should be equal to
-
-  // free memory:
-  dv_destroy(row);
-  dm_destroy(mat);
-}
-
 void test_dv_push_value(void) {
   size_t length = 10;
   DoubleVector *vec = dv_create(length);
@@ -260,8 +214,6 @@ int main(void) {
   RUN_TEST(test_dv_create);
   RUN_TEST(test_dv_create_rand);
   RUN_TEST(test_dv_set_array);
-  RUN_TEST(test_dv_pop_column);
-  RUN_TEST(test_dv_pop_row);
   RUN_TEST(test_dv_push_value);
   RUN_TEST(test_dv_pop_value);
   RUN_TEST(test_dv_get_array);
