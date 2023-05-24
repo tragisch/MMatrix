@@ -26,6 +26,19 @@ static void dm_insert_row_sparse(DoubleMatrix *mat, size_t row_idx);
 static void dm_insert_row_dense(DoubleMatrix *mat, size_t row_idx);
 static void dm_insert_row_hashtable(DoubleMatrix *mat, size_t row_idx);
 
+// remove column vector
+void dm_remove_column(DoubleMatrix *mat, size_t column_idx);
+static void dm_remove_column_sparse(DoubleMatrix *mat, size_t column_idx);
+static void dm_remove_column_dense(DoubleMatrix *mat, size_t column_idx);
+static void dm_remove_column_hashtable(DoubleMatrix *mat, size_t column_idx);
+
+// remove row vector
+void dm_remove_row(DoubleMatrix *mat, size_t row_idx);
+static void dm_remove_row_sparse(DoubleMatrix *mat, size_t row_idx);
+static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx);
+static void dm_remove_row_hashtable(DoubleMatrix *mat, size_t row_idx);
+
+// get sub matrix
 DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
                                 size_t row_end, size_t col_start,
                                 size_t col_end);

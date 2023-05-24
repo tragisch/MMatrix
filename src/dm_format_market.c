@@ -123,7 +123,7 @@ void dm_write_matrix_market(const DoubleMatrix *mat, const char *filename) {
 // if file to read is very large, print a progress bar:
 static void print_progress_bar(size_t progress, size_t total, int barWidth) {
   float percentage = (float)progress / (float)total;
-  int filledWidth = (int)(percentage * barWidth);
+  int filledWidth = (int)(percentage * (float)barWidth);
 
   printf("[");
   for (int i = 0; i < barWidth; i++) {

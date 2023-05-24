@@ -193,13 +193,13 @@ static void dm_insert_row_hashtable(DoubleMatrix *mat, size_t row_idx) {
       size_t col = (size_t)(key & 0xFFFFFFFF);
 
       if (row >= row_idx) {
-        key = ((int64_t)(row + 1) << 32) | col;
+        key = ((int64_t)(row + 1) << 32) | (int64_t)col;
       }
 
       double value = kh_value(mat->hash_table, iter);
 
       // Insert the updated entry into the new hash table
-      int ret;
+      int ret = 0;
       iter = kh_put(entry, new_hash_table, key, &ret);
       kh_value(new_hash_table, iter) = value;
     }

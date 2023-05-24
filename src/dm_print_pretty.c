@@ -107,7 +107,7 @@ void dm_brief(const DoubleMatrix *mat) {
   printf("Density: %lf\n", dm_density(mat));
 
   // string
-  char *s;
+  char *s = NULL;
   switch (mat->format) {
   case SPARSE:
     s = "Sparse";
