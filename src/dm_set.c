@@ -134,7 +134,7 @@ static void dm_set_hash_table(DoubleMatrix *matrix, size_t i, size_t j,
   if (is_zero(value) == false) {
     // Calculate the key for the hash table using the combined row and column
     // indices
-    int64_t key = (int64_t)i << 32 | j;
+    int64_t key = (int64_t)i << 32 | (int64_t)j;
 
     // Check if the value already exists in the hash table
     k = kh_get(entry, matrix->hash_table, key);

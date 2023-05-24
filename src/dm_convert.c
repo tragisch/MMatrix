@@ -30,6 +30,8 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
   case DENSE:
     if (mat->format == SPARSE) {
       dm_convert_sparse_to_dense(mat);
+    } else if (mat->format == HASHTABLE) {
+      dm_convert_hash_table_to_dense(mat);
     }
     break;
   case SPARSE:
@@ -37,7 +39,6 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
       dm_convert_dense_to_sparse(mat);
     } else if (mat->format == HASHTABLE) {
       dm_convert_hash_table_to_sparse(mat);
-      return;
     }
     break;
 
@@ -163,7 +164,8 @@ static void dm_convert_sparse_to_hash_table(DoubleMatrix *mat) {
     khint_t k = 0;
     int ret = 0;
     for (int i = 0; i < mat->nnz; i++) {
-      int64_t key = (int64_t)mat->row_indices[i] << 32 | mat->col_indices[i];
+      int64_t key =
+          (int64_t)mat->row_indices[i] << 32 | (int64_t)mat->col_indices[i];
       // Check if the value already exists in the hash table
       k = kh_get(entry, mat->hash_table, key);
       if (k != kh_end(mat->hash_table)) {

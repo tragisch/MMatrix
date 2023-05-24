@@ -82,7 +82,7 @@ static double dm_get_hash_table(const DoubleMatrix *matrix, size_t i,
                                 size_t j) {
   // Calculate the key for the hash table using the combined row and column
   // indices
-  int64_t key = (int64_t)i << 32 | j;
+  int64_t key = (int64_t)i << 32 | (int64_t)j;
 
   // Check if the value exists in the hash table
   khint_t k = kh_get(entry, matrix->hash_table, key);
