@@ -14,14 +14,6 @@
 #include "unity.h"
 #include "unity_internals.h"
 
-void setUp(void) {
-  // set stuff up here
-}
-
-void tearDown(void) {
-  // clean stuff up here
-}
-
 /******************************
  ** Tests
  *******************************/
@@ -205,22 +197,4 @@ void test_dv_get(void) {
 
   // free memory:
   dv_destroy(vec);
-}
-
-int main(void) {
-  UNITY_BEGIN();
-  RUN_TEST(test_dv_new_vector);
-  RUN_TEST(test_dv_clone);
-  RUN_TEST(test_dv_create);
-  RUN_TEST(test_dv_create_rand);
-  RUN_TEST(test_dv_set_array);
-  RUN_TEST(test_dv_push_value);
-  RUN_TEST(test_dv_pop_value);
-  RUN_TEST(test_dv_get_array);
-  RUN_TEST(test_dv_swap_elements);
-  RUN_TEST(test_dv_reverse);
-  RUN_TEST(test_dv_set);
-  RUN_TEST(test_dv_get);
-
-  return UNITY_END();
 }

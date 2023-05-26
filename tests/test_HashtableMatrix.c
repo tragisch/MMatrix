@@ -17,13 +17,7 @@
 #include "unity.h"
 #include "unity_internals.h"
 
-void setUp(void) {
-  // set stuff up here
-}
-
-void tearDown(void) {
-  // clean stuff up here
-}
+void setUp(void) { set_default_matrix_format(HASHTABLE); }
 
 /******************************
  ** Test if precision works
@@ -360,25 +354,4 @@ void test_dm_convert_to_dense() {
 
   // destroy matrix
   dm_destroy(sparse_mat);
-}
-
-int main(void) {
-  UNITY_BEGIN();
-
-  set_default_matrix_format(HASHTABLE);
-  RUN_TEST(test_double_precision);
-  RUN_TEST(test_dm_create2);
-  RUN_TEST(test_dm_create_rand);
-  RUN_TEST(test_dm_create_rand);
-  RUN_TEST(test_dm_destroy);
-  RUN_TEST(test_dm_get);
-  RUN_TEST(test_dm_set);
-  RUN_TEST(test_dv_get_column);
-  RUN_TEST(test_dv_get_row);
-  RUN_TEST(test_dm_get_sub_matrix);
-  RUN_TEST(test_dm_create_diagonal);
-  RUN_TEST(test_dm_create_from_array);
-  RUN_TEST(test_dm_create_identity);
-
-  return UNITY_END();
 }

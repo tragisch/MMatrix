@@ -20,14 +20,6 @@
 #include "unity.h"
 #include "unity_internals.h"
 
-void setUp(void) {
-  // set stuff up here
-}
-
-void tearDown(void) {
-  // clean stuff up here
-}
-
 /******************************
  ** Tests
  *******************************/
@@ -210,18 +202,4 @@ void test_dm_trace() {
 
   // Clean up
   dm_destroy(mat);
-}
-
-int main(void) {
-  UNITY_BEGIN();
-  RUN_TEST(test_dm_transpose);
-  RUN_TEST(test_dm_multiply_by_vector);
-  RUN_TEST(test_dm_multiply_by_matrix);
-  RUN_TEST(test_dm_multiply_by_scalar);
-  RUN_TEST(test_dm_determinant);
-  RUN_TEST(test_dm_inverse);
-  RUN_TEST(test_dm_rank_dense);
-  RUN_TEST(test_dm_trace);
-
-  return UNITY_END();
 }

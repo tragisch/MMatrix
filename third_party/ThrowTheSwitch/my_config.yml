@@ -1,4 +1,0 @@
-:unity:
-  :includes:
-    - stdio.h
-  :cexception: 1
