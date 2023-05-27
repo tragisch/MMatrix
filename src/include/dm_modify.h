@@ -38,6 +38,14 @@ static void dm_remove_row_sparse(DoubleMatrix *mat, size_t row_idx);
 static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx);
 static void dm_remove_row_hashtable(DoubleMatrix *mat, size_t row_idx);
 
+// reshape matrix
+void dm_reshape(DoubleMatrix *mat, size_t new_row, size_t new_col);
+static void dm_reshape_sparse(DoubleMatrix *mat, size_t new_row,
+                              size_t new_col);
+static void dm_reshape_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
+static void dm_reshape_hashtable(DoubleMatrix *mat, size_t new_row,
+                                 size_t new_col);
+
 // get sub matrix
 DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
                                 size_t row_end, size_t col_start,
