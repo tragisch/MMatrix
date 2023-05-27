@@ -55,14 +55,13 @@ void dm_destroy(DoubleMatrix *mat);
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
 
-
-
-
 /*******************************/
 /*     Special Matrices        */
 /*******************************/
 
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density);
+DoubleMatrix *dm_create_rand_between(size_t rows, size_t cols, size_t min,
+                                     size_t max);
 DoubleMatrix *dm_create_identity(size_t rows);
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
                                    double array[rows][cols]);

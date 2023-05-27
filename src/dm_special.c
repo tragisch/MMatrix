@@ -56,6 +56,28 @@ DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
 }
 
 /**
+ * @brief create a Double Matrix with random elements in range [min,max]
+ *
+ * @param rows
+ * @param cols
+ * @param min
+ * @param max
+ * @return DoubleMatrix*
+ */
+DoubleMatrix *dm_create_rand_between(size_t rows, size_t cols, size_t min,
+                                     size_t max) {
+  DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
+
+  for (int i = 0; i < mat->rows; i++) {
+    for (int j = 0; j < mat->cols; j++) {
+      double value = randomDouble_betweenBounds(min, max);
+      dm_set(mat, i, j, value);
+    }
+  }
+  return mat;
+}
+
+/**
  * @brief Set the Array To Matrix object
  *
  * @param rows
