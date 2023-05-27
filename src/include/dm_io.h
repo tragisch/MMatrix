@@ -10,12 +10,14 @@
 
 #define WIDTH (36)  // 44
 #define HEIGHT (18) // 22
-#define X (1)
-#define Y (1)
-#define XMAX (WIDTH - X - 1)
+#define X_DM (1)
+#define Y_DM (1)
+#define XMAX (WIDTH - X_DM - 1)
 #define XMIN (1) // -(WIDTH - X)
-#define YMAX (HEIGHT - Y - 1)
+#define YMAX (HEIGHT - Y_DM - 1)
 #define YMIN (1) // -(HEIGHT - Y) + 1
+#define MAX_NUMBER_OF_COLUMNS (30)
+#define MAX_NUMBER_OF_ROWS (30)
 
 /* ANSI escape codes for colors */
 #define ANSI_COLOR_RESET "\x1b[0m"

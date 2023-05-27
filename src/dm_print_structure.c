@@ -130,22 +130,22 @@ void init_grid(void) {
 
   /* draw the axis */
   for (y = 0; y < HEIGHT; y++) {
-    grid[y][X - 1] = '|';
+    grid[y][X_DM - 1] = '|';
   }
   for (y = 0; y < HEIGHT; y++) {
     grid[y][WIDTH - 1] = '|';
   }
   for (x = 0; x < WIDTH; x++) {
-    grid[Y - 1][x] = '-';
+    grid[Y_DM - 1][x] = '-';
   }
   for (x = 0; x < WIDTH; x++) {
     grid[HEIGHT - 1][x] = '-';
   }
 
   /* set corners */
-  grid[Y - 1][X - 1] = '+';
-  grid[Y - 1][WIDTH - 1] = '+';
-  grid[HEIGHT - 1][X - 1] = '+';
+  grid[Y_DM - 1][X_DM - 1] = '+';
+  grid[Y_DM - 1][WIDTH - 1] = '+';
+  grid[HEIGHT - 1][X_DM - 1] = '+';
   grid[HEIGHT - 1][WIDTH - 1] = '+';
 }
 
