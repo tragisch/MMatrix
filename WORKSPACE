@@ -55,5 +55,16 @@ http_archive(
     url = "https://github.com/eerimoq/dbg-macro/archive/refs/tags/0.12.1.zip",
 )
 
+##########################
+## LOCAL REPOSITORIES (e.g. BREW)
+##########################
+
+# openblas
+new_local_repository(
+    name = "cblas",
+    build_file = "./third_party/cblas/BUILD",
+    path = "/opt/homebrew/Cellar/openblas/0.3.23",
+)
+
 
 

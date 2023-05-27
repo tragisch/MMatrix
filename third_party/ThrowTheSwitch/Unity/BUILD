@@ -1,4 +1,3 @@
-
 cc_library(
     name = "Unity",
     srcs = ["src/unity.c"],
