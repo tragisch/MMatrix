@@ -1,5 +1,5 @@
 /**
- * @file dm_math_dense.c
+ * @file dm_math_blas.c
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
  * @version 0.2

@@ -1,5 +1,5 @@
 /**
- * @file dm_math_dense.c
+ * @file dm_math_sparse.c
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
  * @version 0.2
@@ -15,8 +15,15 @@
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
-#include "dv_vector.h"
+#include "dm_math_blas.h"
+
+
+
+
+
+
+
 
 /*******************************/
-/*                              */
+/*      SPBLAS Support         */
 /*******************************/

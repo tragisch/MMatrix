@@ -15,7 +15,10 @@
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
+#include "dm_math_blas.h"
 #include "dv_vector.h"
+
+#define EPSILON 0.000000001
 
 /*******************************/
 /*     Double Matrix Math      */
@@ -57,7 +60,7 @@ bool dm_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     return false;
   }
   for (size_t i = 0; i < mat1->cols * mat1->rows; i++) {
-    if (mat1->values[i] != mat2->values[i]) {
+    if (fabs(mat1->values[i] - mat2->values[i]) > EPSILON) {
       return false;
     }
   }
@@ -84,6 +87,15 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
         "Error: number of columns of m1 has to be euqal to number of rows of "
         "m2!");
     return NULL;
+  }
+
+  if (mat1->format != mat2->format) {
+    perror("Error: Matrices have to be of the same format.");
+    return NULL;
+  }
+
+  if (mat1->format == DENSE) {
+    return dm_blas_multiply_by_matrix(mat1, mat2);
   }
 
   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);

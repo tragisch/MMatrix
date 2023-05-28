@@ -1,5 +1,5 @@
 /**
- * @file dm_print_pretty.c
+ * @file dm_math_rand.c
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
  * @version 0.1
