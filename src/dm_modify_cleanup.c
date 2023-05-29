@@ -48,6 +48,7 @@ static void dm_cleanup_hashtable(DoubleMatrix *mat) {
     if (kh_exist(mat->hash_table, iter)) {
       if (fabs(kh_value(mat->hash_table, iter)) < EPSILON) {
         kh_del(entry, mat->hash_table, iter);
+        mat->nnz--;
       }
     }
   }

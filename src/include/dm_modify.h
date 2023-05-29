@@ -49,8 +49,8 @@ void dm_reshape(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_reshape_sparse(DoubleMatrix *mat, size_t new_row,
                               size_t new_col);
 static void dm_reshape_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
-static void dm_reshape_hastable(DoubleMatrix *matrix, size_t new_rows,
-                                size_t new_cols);
+static void dm_reshape_hashtable(DoubleMatrix *matrix, size_t new_rows,
+                                 size_t new_cols);
 
 // get sub matrix
 DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
