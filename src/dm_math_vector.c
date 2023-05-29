@@ -9,10 +9,9 @@
  *
  */
 
-#include "dbg.h"
 #include "dm.h"
 #include "dm_math.h"
-#include "dv_vector.h"
+#include "dm_vector.h"
 
 /*******************************/
 /*     Double Vector Math      */

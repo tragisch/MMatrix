@@ -16,9 +16,9 @@
 #include "dm_internals.h"
 #include "dm_math.h"
 #include "dm_math_blas.h"
-#include "dv_vector.h"
+#include "dm_vector.h"
 
-#define EPSILON 0.000000001
+#define EPSILON 1e-10
 
 /*******************************/
 /*     Double Matrix Math      */

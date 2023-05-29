@@ -15,7 +15,7 @@
 #include "dm_internals.h"
 #include "dm_math.h"
 #include "dm_math_blas.h"
-#include "dv_vector.h"
+#include "dm_vector.h"
 #include <cblas.h>
 
 /*******************************/

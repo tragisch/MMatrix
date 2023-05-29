@@ -10,9 +10,8 @@
  */
 
 #include "dm_modify.h"
-#include "dbg.h"
 #include "dm.h"
-#include "dv_vector.h"
+#include "dm_vector.h"
 
 /*******************************/
 /*      Get Row and Column     */

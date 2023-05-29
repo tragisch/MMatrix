@@ -9,8 +9,7 @@
  *
  */
 
-#include "dv_vector.h"
-#include "dbg.h"
+#include "dm_vector.h"
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
@@ -142,8 +141,6 @@ void dv_resize(DoubleVector *vec, size_t rows) {
     dm_resize(vec, rows, 1);
   }
 }
-
-
 
 /**
  * @brief get double array from values
