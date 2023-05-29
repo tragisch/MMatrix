@@ -27,6 +27,10 @@
  * @param value
  */
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
+  if (i < 0 || i >= mat->rows || j < 0 || j >= mat->cols) {
+    perror("Error: matrix index out of bounds.\n");
+    exit(EXIT_FAILURE);
+  }
   switch (mat->format) {
   case SPARSE:
     dm_set_sparse(mat, i, j, value);
@@ -50,10 +54,6 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
 // get value from dense matrix:
 static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j,
                          const double value) {
-  if (i < 0 || i >= mat->rows || j < 0 || j >= mat->cols) {
-    perror("Error: matrix index out of bounds.\n");
-    exit(EXIT_FAILURE);
-  }
   mat->values[i * mat->cols + j] = value;
   if (value != 0.0) {
     mat->nnz++;
@@ -65,10 +65,7 @@ static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j,
 /*******************************/
 
 static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
-  if (i < 0 || i >= mat->rows || j < 0 || j >= mat->cols) {
-    perror("Error: matrix index out of bounds.\n");
-    exit(EXIT_FAILURE);
-  }
+
   bool found = false;
   for (int k = 0; k < mat->nnz; k++) {
     if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {
@@ -89,10 +86,6 @@ static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value) {
 // push new value to sparse matrix in COO format:
 static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j,
                            double value) {
-  if (i < 0 || i >= mat->rows || j < 0 || j >= mat->cols) {
-    perror("Error: matrix index out of bounds.\n");
-    exit(EXIT_FAILURE);
-  }
   // check if value is zero:
   if (is_zero(value) == false) {
     // check if nnz is equal to capacity:
