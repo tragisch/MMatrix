@@ -9,10 +9,10 @@
  *
  */
 
-#include "dbg.h"
 #include "dm.h"
 #include "dm_io.h"
 #include "dm_math.h"
+#include "dm_modify.h"
 
 /*******************************/
 /*        Special Matrix        */
@@ -62,16 +62,19 @@ DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
  * @param cols
  * @param min
  * @param max
+ * @param density
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_rand_between(size_t rows, size_t cols, size_t min,
-                                     size_t max) {
+                                     size_t max, double density) {
   DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
 
   for (int i = 0; i < mat->rows; i++) {
     for (int j = 0; j < mat->cols; j++) {
-      double value = randomDouble_betweenBounds(min, max);
-      dm_set(mat, i, j, value);
+      if (randomDouble() <= density) {
+        double value = randomDouble_betweenBounds(min, max);
+        dm_set(mat, i, j, value);
+      }
     }
   }
   return mat;
@@ -117,6 +120,10 @@ DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
         dm_set(mat, i, j, 0.0);
       }
     }
+  }
+
+  if ((mat->format == SPARSE) || (mat->format == HASHTABLE)) {
+    dm_cleanup(mat);
   }
 
   return mat;
