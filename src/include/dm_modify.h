@@ -11,8 +11,14 @@
 DoubleVector *dm_get_row(DoubleMatrix *mat, size_t row_idx);
 DoubleVector *dm_get_column(DoubleMatrix *mat, size_t column_idx);
 
+// Set DoubleVector in DoubleMatrix:
 void dm_set_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec);
 void dm_set_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec);
+
+// remove entry from matrix (sparse and hashtable only)
+void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j);
+static void dm_remove_entry_sparse(DoubleMatrix *mat, size_t i, size_t j);
+static void dm_remove_entry_hashtable(DoubleMatrix *mat, size_t i, size_t j);
 
 // insert column vector
 void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec);
@@ -61,5 +67,14 @@ static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_resize_hastable(DoubleMatrix *mat, size_t new_row,
                                size_t new_col);
+
+/*******************************/
+/*           Cleanup           */
+/*******************************/
+
+void dm_cleanup(DoubleMatrix *mat);
+static void dm_cleanup_dense(DoubleMatrix *mat);
+static void dm_cleanup_sparse(DoubleMatrix *mat);
+static void dm_cleanup_hashtable(DoubleMatrix *mat);
 
 #endif // DM_MODIFY_H

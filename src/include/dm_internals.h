@@ -21,7 +21,7 @@ static void dm_set_hash_table(DoubleMatrix *matrix, size_t i, size_t j,
                               double value);
 static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
 
-static void dm_remove_zero(DoubleMatrix *mat, size_t i, size_t j);
+static void dm_remove_entry_sparse(DoubleMatrix *mat, size_t i, size_t j);
 static void dm_push_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 // shrink, push, pop, expand

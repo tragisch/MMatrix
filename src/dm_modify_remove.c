@@ -1,5 +1,5 @@
 /**
- * @file dm_modify_resize.c
+ * @file dm_modify_remove.c
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
  * @version 0.1
@@ -12,6 +12,51 @@
 #include "dbg.h"
 #include "dm.h"
 #include "dm_modify.h"
+
+/*******************************/
+/*       Remove  entry         */
+/*******************************/
+
+void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
+  switch (mat->format) {
+  case SPARSE:
+    dm_remove_entry_sparse(mat, i, j);
+    break;
+  case DENSE:
+    break; // nothing to do
+  case HASHTABLE:
+    dm_remove_entry_hashtable(mat, i, j);
+    break;
+  case VECTOR:
+    break; // nothing to do
+  }
+}
+
+// remove nnz value at index i,j of sparse matrix in COO format:
+static void dm_remove_entry_sparse(DoubleMatrix *mat, size_t i, size_t j) {
+  for (int k = 0; k < mat->nnz; k++) {
+    if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {
+      // remove element if found
+      mat->nnz--;
+      for (int l = k; l < mat->nnz; l++) {
+        mat->row_indices[l] = mat->row_indices[l + 1];
+        mat->col_indices[l] = mat->col_indices[l + 1];
+        mat->values[l] = mat->values[l + 1];
+      }
+      return;
+    }
+  }
+}
+
+// remove entry from at index i,j of hash table matrix:
+static void dm_remove_entry_hashtable(DoubleMatrix *mat, size_t i, size_t j) {
+  int64_t key = ((int64_t)i << 32) | j;
+  khiter_t iter = kh_get(entry, mat->hash_table, key);
+  if (iter != kh_end(mat->hash_table)) {
+    kh_del(entry, mat->hash_table, iter);
+    mat->nnz--;
+  }
+}
 
 /*******************************/
 /*         Remove Column       */
