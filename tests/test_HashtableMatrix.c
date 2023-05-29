@@ -4,7 +4,7 @@
 #include "dm_io.h"
 #include "dm_math.h"
 #include "dm_modify.h"
-#include "dv_vector.h"
+#include "dm_vector.h"
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -240,7 +240,7 @@ void test_dm_get_sub_matrix(void) {
 
   // Get the sub-matrix
   DoubleMatrix *sub_mat = dm_get_sub_matrix(mat, 1, 3, 1, 3);
-
+  dm_cleanup(sub_mat);
   // Verify the properties of the sub-matrix
   TEST_ASSERT_EQUAL(3, sub_mat->rows);
   TEST_ASSERT_EQUAL(3, sub_mat->cols);

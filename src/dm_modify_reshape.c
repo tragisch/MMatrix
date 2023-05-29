@@ -82,5 +82,5 @@ static void dm_reshape_sparse(DoubleMatrix *matrix, size_t new_rows,
 /*******************************/
 
 // TODO: Implement
-static void dm_reshape_hastable(DoubleMatrix *matrix, size_t new_rows,
-                                size_t new_cols) {}
+static void dm_reshape_hashtable(DoubleMatrix *matrix, size_t new_rows,
+                                 size_t new_cols) {}
