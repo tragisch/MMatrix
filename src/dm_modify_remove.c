@@ -9,7 +9,6 @@
  *
  */
 
-#include "dbg.h"
 #include "dm.h"
 #include "dm_modify.h"
 
@@ -50,7 +49,7 @@ static void dm_remove_entry_sparse(DoubleMatrix *mat, size_t i, size_t j) {
 
 // remove entry from at index i,j of hash table matrix:
 static void dm_remove_entry_hashtable(DoubleMatrix *mat, size_t i, size_t j) {
-  int64_t key = ((int64_t)i << 32) | j;
+  int64_t key = ((int64_t)i << 32) | (int64_t)j;
   khiter_t iter = kh_get(entry, mat->hash_table, key);
   if (iter != kh_end(mat->hash_table)) {
     kh_del(entry, mat->hash_table, iter);

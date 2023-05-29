@@ -9,9 +9,9 @@
  *
  */
 
-#include "dbg.h"
 #include "dm.h"
 #include "dm_modify.h"
+#include <math.h>
 
 #define EPSILON 1e-10
 
@@ -57,8 +57,8 @@ static void dm_cleanup_dense(DoubleMatrix *mat) {
   // remove all entries with absolute value < EPSILON:
   for (int i = 0; i < mat->rows; i++) {
     for (int j = 0; j < mat->cols; j++) {
-      if (fabs(dm_get_entry(mat, i, j)) < EPSILON) {
-        dm_set_entry(mat, i, j, 0.0);
+      if (fabs(dm_get(mat, i, j)) < EPSILON) {
+        dm_set(mat, i, j, 0.0);
       }
     }
   }
