@@ -74,7 +74,7 @@ static void dm_reshape_dense(DoubleMatrix *matrix, size_t new_rows,
 /*******************************/
 /*       Reshape SPARSE        */
 /*******************************/
-
+// TODO: Implement
 static void dm_reshape_sparse(DoubleMatrix *matrix, size_t new_rows,
                               size_t new_cols) {}
 
@@ -82,5 +82,6 @@ static void dm_reshape_sparse(DoubleMatrix *matrix, size_t new_rows,
 /*    Reshape HASHTABLE        */
 /*******************************/
 
+// TODO: Implement
 static void dm_reshape_hastable(DoubleMatrix *matrix, size_t new_rows,
                                 size_t new_cols) {}
