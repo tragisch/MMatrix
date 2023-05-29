@@ -11,6 +11,7 @@
 
 #include "dm.h"
 #include "dm_io.h"
+#include "dm_modify.h"
 #include "dm_utils.h"
 
 /*******************************/
@@ -86,6 +87,8 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
 
   // Close the file
   fclose(fp);
+
+  dm_cleanup(mat);
 
   return mat;
 }
