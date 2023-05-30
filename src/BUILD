@@ -11,7 +11,6 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = [
         "@dbg-macro",
-        "//third_party/klib:klib",
         "@cblas",
     ],
 )

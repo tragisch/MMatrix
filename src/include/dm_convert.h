@@ -2,7 +2,6 @@
 #define DM_CONVERT_H
 
 #include "dm.h"
-#include "khash.h"
 #include <stdbool.h>
 
 /*******************************/

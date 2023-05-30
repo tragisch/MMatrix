@@ -34,6 +34,8 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   case COO:
     dm_set_coo(mat, i, j, value);
     break;
+  case CSR:
+    break;
   case DENSE:
     dm_set_dense(mat, i, j, value);
     break;
