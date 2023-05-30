@@ -64,7 +64,7 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
 
   switch (format) {
   case COO:
-    mat = dm_create_sparse(rows, cols);
+    mat = dm_create_coo(rows, cols);
     break;
   case CSR:
     // mat = dm_create_CSR(rows, cols);
@@ -134,7 +134,7 @@ DoubleMatrix *dm_clone(const DoubleMatrix *mat) {
 /*        COO MATRIX        */
 /*******************************/
 
-static DoubleMatrix *dm_create_sparse(size_t rows, size_t cols) {
+static DoubleMatrix *dm_create_coo(size_t rows, size_t cols) {
   if (rows < 1 || cols < 1) {
     perror("Error: invalid matrix dimensions.\n");
     return NULL;

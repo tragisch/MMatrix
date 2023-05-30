@@ -54,7 +54,7 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
     return dm_blas_multiply_by_matrix(mat1, mat2);
     break;
   case COO:
-    return dm_multiply_by_matrix_sparse(mat1, mat2);
+    return dm_multiply_by_matrix_coo(mat1, mat2);
     break;
   case CSR:
     break; // not implemented yet
@@ -86,7 +86,7 @@ static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
 /*       Sparse Matrix         */
 /*******************************/
 
-static DoubleMatrix *dm_multiply_by_matrix_sparse(const DoubleMatrix *matrixA,
+static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
                                                   const DoubleMatrix *matrixB) {
 
   DoubleMatrix *result = dm_create(matrixA->rows, matrixB->cols);

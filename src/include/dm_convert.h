@@ -11,7 +11,7 @@
 
 void dm_convert(DoubleMatrix *mat, matrix_format format);
 
-static void dm_convert_sparse_to_dense(DoubleMatrix *mat);
-static void dm_convert_dense_to_sparse(DoubleMatrix *mat);
+static void dm_convert_coo_to_dense(DoubleMatrix *mat);
+static void dm_convert_dense_to_coo(DoubleMatrix *mat);
 
 #endif //  DM_CONVERT_H

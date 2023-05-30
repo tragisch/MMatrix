@@ -31,8 +31,8 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
                                     const DoubleMatrix *mat2);
 static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
                                                 const DoubleMatrix *mat2);
-static DoubleMatrix *dm_multiply_by_matrix_sparse(const DoubleMatrix *matrixA,
-                                                  const DoubleMatrix *matrixB);
+static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
+                                               const DoubleMatrix *matrixB);
 static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
                               double value);
 

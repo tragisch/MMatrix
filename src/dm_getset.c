@@ -32,7 +32,7 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   }
   switch (mat->format) {
   case COO:
-    dm_set_sparse(mat, i, j, value);
+    dm_set_coo(mat, i, j, value);
     break;
   case DENSE:
     dm_set_dense(mat, i, j, value);
@@ -60,8 +60,7 @@ static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j,
 /*         Set COO          */
 /*******************************/
 
-static void dm_set_sparse(DoubleMatrix *matrix, size_t i, size_t j,
-                          double value) {
+static void dm_set_coo(DoubleMatrix *matrix, size_t i, size_t j, double value) {
   // Find the position of the element (i, j) in the matrix
   size_t position = binary_search(matrix, i, j);
 
@@ -142,7 +141,7 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
     return dm_get_dense(mat, i, j);
     break;
   case COO:
-    return dm_get_sparse(mat, i, j);
+    return dm_get_coo(mat, i, j);
     break;
   case CSR:
     break; // not implemented yet
@@ -165,7 +164,7 @@ static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j) {
 /*         Get COO          */
 /*******************************/
 
-static double dm_get_sparse(const DoubleMatrix *matrix, size_t i, size_t j) {
+static double dm_get_coo(const DoubleMatrix *matrix, size_t i, size_t j) {
   if (i >= matrix->rows || j >= matrix->cols) {
     // Invalid position, handle error accordingly
     return 0.0; // Assuming 0.0 represents the default value

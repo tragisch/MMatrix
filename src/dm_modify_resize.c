@@ -29,7 +29,7 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
     dm_resize_dense(mat, new_row, new_col);
     break;
   case COO:
-    dm_resize_sparse(mat, new_row, new_col);
+    dm_resize_coo(mat, new_row, new_col);
     break;
   case CSR:
     break; // not implemented yet
@@ -65,7 +65,7 @@ static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col) {
 }
 
 // resize matrix of COO format:
-static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row,
+static void dm_resize_coo(DoubleMatrix *mat, size_t new_row,
                              size_t new_col) {
 
   // resize matrix:

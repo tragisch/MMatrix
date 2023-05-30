@@ -19,7 +19,7 @@
 void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
   switch (mat->format) {
   case COO:
-    dm_remove_entry_sparse(mat, i, j);
+    dm_remove_entry_coo(mat, i, j);
     break;
   case CSR:
     break; // not implemented yet
@@ -31,7 +31,7 @@ void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
 }
 
 // remove nnz value at index i,j of sparse matrix in COO format:
-static void dm_remove_entry_sparse(DoubleMatrix *mat, size_t i, size_t j) {
+static void dm_remove_entry_coo(DoubleMatrix *mat, size_t i, size_t j) {
   for (int k = 0; k < mat->nnz; k++) {
     if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {
       // remove element if found
@@ -59,7 +59,7 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
     dm_remove_column_dense(mat, column_idx);
     break;
   case COO:
-    dm_remove_column_sparse(mat, column_idx);
+    dm_remove_column_coo(mat, column_idx);
     break;
   case CSR:
     break; // not implemented yet
@@ -68,7 +68,7 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
   }
 }
 
-static void dm_remove_column_sparse(DoubleMatrix *mat, size_t column_idx) {
+static void dm_remove_column_coo(DoubleMatrix *mat, size_t column_idx) {
   // shift all columns to the left:
   for (size_t i = 0; i < mat->nnz; i++) {
     if (mat->col_indices[i] == column_idx - 1) {
@@ -108,7 +108,7 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
     dm_remove_row_dense(mat, row_idx);
     break;
   case COO:
-    dm_remove_row_sparse(mat, row_idx);
+    dm_remove_row_coo(mat, row_idx);
     break;
   case CSR:
     break; // not implemented yet
@@ -117,7 +117,7 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
   }
 }
 
-static void dm_remove_row_sparse(DoubleMatrix *mat, size_t row_idx) {
+static void dm_remove_row_coo(DoubleMatrix *mat, size_t row_idx) {
   size_t *temp_row_index = calloc(mat->nnz, sizeof(size_t));
   size_t *temp_col_index = calloc(mat->nnz, sizeof(size_t));
   double *temp_values = calloc(mat->nnz, sizeof(double));

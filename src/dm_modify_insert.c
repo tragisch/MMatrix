@@ -26,7 +26,7 @@ void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec) {
       dm_insert_column_dense(mat, column_idx);
       break;
     case COO:
-      dm_insert_column_sparse(mat, column_idx);
+      dm_insert_column_coo(mat, column_idx);
       break;
     case CSR:
       break; // not implemented yet
@@ -41,7 +41,7 @@ void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec) {
   }
 }
 
-static void dm_insert_column_sparse(DoubleMatrix *mat, size_t column_idx) {
+static void dm_insert_column_coo(DoubleMatrix *mat, size_t column_idx) {
   // resize the matrix:
   dm_resize(mat, mat->rows, mat->cols + 1);
 
@@ -93,7 +93,7 @@ void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec) {
       dm_insert_row_dense(mat, row_idx);
       break;
     case COO:
-      dm_insert_row_sparse(mat, row_idx);
+      dm_insert_row_coo(mat, row_idx);
       break;
     case CSR:
       break; // not implemented yet
@@ -108,7 +108,7 @@ void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec) {
   }
 }
 
-static void dm_insert_row_sparse(DoubleMatrix *mat, size_t row_idx) {
+static void dm_insert_row_coo(DoubleMatrix *mat, size_t row_idx) {
   // resize the matrix:
   dm_resize(mat, mat->rows + 1, mat->cols);
 

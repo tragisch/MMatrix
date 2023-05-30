@@ -29,12 +29,12 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
   switch (format) {
   case DENSE:
     if (mat->format == COO) {
-      dm_convert_sparse_to_dense(mat);
+      dm_convert_coo_to_dense(mat);
     }
     break;
   case COO:
     if (mat->format == DENSE) {
-      dm_convert_dense_to_sparse(mat);
+      dm_convert_dense_to_coo(mat);
     }
     break;
 
@@ -48,7 +48,7 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
 /*******************************/
 
 // convert dense matrix to sparse matrix of COO format:
-static void dm_convert_dense_to_sparse(DoubleMatrix *mat) {
+static void dm_convert_dense_to_coo(DoubleMatrix *mat) {
   // check if matrix is already in sparse format:
   if (mat->format == COO) {
     printf("Matrix is already in sparse format!\n");
@@ -109,7 +109,7 @@ static void dm_convert_dense_to_sparse(DoubleMatrix *mat) {
 /*******************************/
 
 // convert SparseMatrix of COO format to Dense format
-static void dm_convert_sparse_to_dense(DoubleMatrix *mat) {
+static void dm_convert_coo_to_dense(DoubleMatrix *mat) {
   if (mat->format == COO) {
 
     // allocate memory for dense matrix:
@@ -134,5 +134,3 @@ static void dm_convert_sparse_to_dense(DoubleMatrix *mat) {
     mat->col_indices = NULL;
   }
 }
-
-
