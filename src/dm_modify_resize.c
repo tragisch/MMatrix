@@ -28,7 +28,7 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   case DENSE:
     dm_resize_dense(mat, new_row, new_col);
     break;
-  case SPARSE:
+  case COO:
     dm_resize_sparse(mat, new_row, new_col);
     break;
   case VECTOR:

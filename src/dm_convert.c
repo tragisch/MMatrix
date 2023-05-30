@@ -18,9 +18,9 @@
 /*******************************/
 
 /**
- * @brief convert matrix to format (SPARSE, HASHTABLE, DENSE)
+ * @brief convert matrix to format (COO, HASHTABLE, DENSE)
  * @param mat
- * @param format  (SPARSE, HASHTABLE, DENSE)
+ * @param format  (COO, HASHTABLE, DENSE)
  */
 void dm_convert(DoubleMatrix *mat, matrix_format format) {
   if (mat->format == format) {
@@ -28,13 +28,13 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
   }
   switch (format) {
   case DENSE:
-    if (mat->format == SPARSE) {
+    if (mat->format == COO) {
       dm_convert_sparse_to_dense(mat);
     } else if (mat->format == HASHTABLE) {
       dm_convert_hash_table_to_dense(mat);
     }
     break;
-  case SPARSE:
+  case COO:
     if (mat->format == DENSE) {
       dm_convert_dense_to_sparse(mat);
     } else if (mat->format == HASHTABLE) {
@@ -45,7 +45,7 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
   case HASHTABLE:
     if (mat->format == DENSE) {
       dm_convert_dense_to_hash_table(mat);
-    } else if (mat->format == SPARSE) {
+    } else if (mat->format == COO) {
       dm_convert_sparse_to_hash_table(mat);
     }
     break;
@@ -56,13 +56,13 @@ void dm_convert(DoubleMatrix *mat, matrix_format format) {
 }
 
 /*******************************/
-/*       DENSE -> SPARSE       */
+/*       DENSE -> COO       */
 /*******************************/
 
 // convert dense matrix to sparse matrix of COO format:
 static void dm_convert_dense_to_sparse(DoubleMatrix *mat) {
   // check if matrix is already in sparse format:
-  if (mat->format == SPARSE) {
+  if (mat->format == COO) {
     printf("Matrix is already in sparse format!\n");
     return;
   }
@@ -108,7 +108,7 @@ static void dm_convert_dense_to_sparse(DoubleMatrix *mat) {
   free(mat->values);
 
   // set sparse matrix:
-  mat->format = SPARSE;
+  mat->format = COO;
   mat->nnz = nnz;
   mat->capacity = nnz;
   mat->row_indices = row_indices;
@@ -117,12 +117,12 @@ static void dm_convert_dense_to_sparse(DoubleMatrix *mat) {
 }
 
 /*******************************/
-/*       SPARSE -> DENSE       */
+/*       COO -> DENSE       */
 /*******************************/
 
 // convert SparseMatrix of COO format to Dense format
 static void dm_convert_sparse_to_dense(DoubleMatrix *mat) {
-  if (mat->format == SPARSE) {
+  if (mat->format == COO) {
 
     // allocate memory for dense matrix:
     double *new_values =
@@ -148,11 +148,11 @@ static void dm_convert_sparse_to_dense(DoubleMatrix *mat) {
 }
 
 /*******************************/
-/*     SPARSE -> HASHTABLE     */
+/*     COO -> HASHTABLE     */
 /*******************************/
 
 static void dm_convert_sparse_to_hash_table(DoubleMatrix *mat) {
-  if (mat->format == SPARSE) {
+  if (mat->format == COO) {
     // Create hash table
     mat->hash_table = kh_init(entry);
     if (mat->hash_table == NULL) {
@@ -240,7 +240,7 @@ static void dm_convert_dense_to_hash_table(DoubleMatrix *mat) {
 }
 
 /*******************************/
-/*     HASHTABLE --> SPARSE    */
+/*     HASHTABLE --> COO    */
 /*******************************/
 
 // convert hash_table matrix to COO format
@@ -275,7 +275,7 @@ static void dm_convert_hash_table_to_sparse(DoubleMatrix *mat) {
     kh_destroy(entry, mat->hash_table);
 
     // set COO matrix:
-    mat->format = SPARSE;
+    mat->format = COO;
     mat->row_indices = row_indices;
     mat->col_indices = col_indices;
     mat->values = values;

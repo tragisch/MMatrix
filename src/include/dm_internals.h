@@ -20,9 +20,9 @@ static void dm_set_sparse(DoubleMatrix *mat, size_t i, size_t j, double value);
 static void dm_set_hash_table(DoubleMatrix *matrix, size_t i, size_t j,
                               double value);
 static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
-static void insert_element(DoubleMatrix *matrix, size_t i, size_t j,
+void insert_element(DoubleMatrix *matrix, size_t i, size_t j,
                            double value, size_t position);
-static size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j);
+
 
 
 // shrink, push, pop, expand

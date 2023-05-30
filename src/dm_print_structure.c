@@ -29,7 +29,7 @@ const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
 void dm_print_structure(DoubleMatrix *mat, double strength) {
   if (mat->format == DENSE) {
     printf(
-        "Matrix is not in SPARSE or HASHTABLE format, no structure to print\n");
+        "Matrix is not in COO or HASHTABLE format, no structure to print\n");
     return;
   }
   // set up grid
@@ -48,7 +48,7 @@ void dm_print_structure(DoubleMatrix *mat, double strength) {
   DoubleMatrix *count = dm_create_format(WIDTH, HEIGHT, DENSE);
 
   // in case of sparse matrix:
-  if (mat->format == SPARSE) {
+  if (mat->format == COO) {
     for (size_t i = 0; i < mat->nnz; i++) {
       // not every element is printed
       if (randomDouble() < density) {

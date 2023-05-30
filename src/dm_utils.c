@@ -13,6 +13,7 @@
 #include "dm_io.h"
 #include "dm_modify.h"
 #include <stdio.h>
+#include <time.h>
 
 /*******************************/
 /*  performance measurement    */
@@ -20,14 +21,17 @@
 
 // write double date to file in a table woth row "name" and colum format
 void write_double_to_file(char *filename, char *name, double data,
-                          matrix_format format) {
+                          matrix_format format, double density) {
   FILE *fp;
   fp = fopen(filename, "a");
   if (fp == NULL) {
     printf("Error opening file!\n");
     exit(1);
   }
-  fprintf(fp, "%s\t%.10lf\t%d\n", name, data, format);
+  time_t tm = 0;
+  time(&tm);
+  fprintf(fp, "%s\t%.10lf\t%lf\t%d\t%s\n", name, data, density, format,
+          ctime(&tm));
   fclose(fp);
 }
 

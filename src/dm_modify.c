@@ -32,6 +32,7 @@ DoubleVector *dm_get_row(DoubleMatrix *mat, size_t row_idx) {
   if (mat->format == DENSE) {
     memcpy(vec->values, mat->values + row_idx * mat->cols,
            mat->cols * sizeof(double));
+    return vec;
   }
   for (size_t i = 0; i < vec->rows; i++) {
     dv_set(vec, i, dm_get(mat, row_idx, i));

@@ -17,7 +17,7 @@
 
 void dm_cleanup(DoubleMatrix *mat) {
   switch (mat->format) {
-  case SPARSE:
+  case COO:
     dm_cleanup_sparse(mat);
     break;
   case DENSE:

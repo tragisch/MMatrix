@@ -25,7 +25,7 @@ void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec) {
     case DENSE:
       dm_insert_column_dense(mat, column_idx);
       break;
-    case SPARSE:
+    case COO:
       dm_insert_column_sparse(mat, column_idx);
       break;
     case HASHTABLE:
@@ -121,7 +121,7 @@ void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec) {
     case DENSE:
       dm_insert_row_dense(mat, row_idx);
       break;
-    case SPARSE:
+    case COO:
       dm_insert_row_sparse(mat, row_idx);
       break;
     case HASHTABLE:

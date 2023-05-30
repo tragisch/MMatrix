@@ -31,7 +31,7 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
     exit(EXIT_FAILURE);
   }
   switch (mat->format) {
-  case SPARSE:
+  case COO:
     dm_set_sparse(mat, i, j, value);
     break;
   case DENSE:
@@ -60,7 +60,7 @@ static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j,
 }
 
 /*******************************/
-/*         Set SPARSE          */
+/*         Set COO          */
 /*******************************/
 
 static void dm_set_sparse(DoubleMatrix *matrix, size_t i, size_t j,
@@ -79,7 +79,7 @@ static void dm_set_sparse(DoubleMatrix *matrix, size_t i, size_t j,
   }
 }
 
-static size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j) {
+size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j) {
   size_t low = 0;
   size_t high = matrix->nnz;
 
@@ -100,7 +100,7 @@ static size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j) {
   return low; // Element not found, return the insertion position
 }
 
-static void insert_element(DoubleMatrix *matrix, size_t i, size_t j,
+void insert_element(DoubleMatrix *matrix, size_t i, size_t j,
                            double value, size_t position) {
   // Increase the capacity if needed
   if (matrix->nnz == matrix->capacity) {
@@ -170,7 +170,7 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   case DENSE:
     return dm_get_dense(mat, i, j);
     break;
-  case SPARSE:
+  case COO:
     return dm_get_sparse(mat, i, j);
     break;
   case HASHTABLE:
@@ -192,7 +192,7 @@ static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j) {
 }
 
 /*******************************/
-/*         Get SPARSE          */
+/*         Get COO          */
 /*******************************/
 
 static double dm_get_sparse(const DoubleMatrix *matrix, size_t i, size_t j) {

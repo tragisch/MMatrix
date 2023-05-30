@@ -122,7 +122,7 @@ DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
     }
   }
 
-  if ((mat->format == SPARSE) || (mat->format == HASHTABLE)) {
+  if ((mat->format == COO) || (mat->format == HASHTABLE)) {
     dm_cleanup(mat);
   }
 

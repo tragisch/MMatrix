@@ -18,7 +18,7 @@
 
 void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
   switch (mat->format) {
-  case SPARSE:
+  case COO:
     dm_remove_entry_sparse(mat, i, j);
     break;
   case DENSE:
@@ -69,7 +69,7 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
   case DENSE:
     dm_remove_column_dense(mat, column_idx);
     break;
-  case SPARSE:
+  case COO:
     dm_remove_column_sparse(mat, column_idx);
     break;
   case HASHTABLE:
@@ -154,7 +154,7 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
   case DENSE:
     dm_remove_row_dense(mat, row_idx);
     break;
-  case SPARSE:
+  case COO:
     dm_remove_row_sparse(mat, row_idx);
     break;
   case HASHTABLE:

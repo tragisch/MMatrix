@@ -12,19 +12,19 @@
 #include "dm.h"
 
 /*******************************/
-/*      Realloc SPARSE          */
+/*      Realloc COO          */
 /*******************************/
 
 void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
   // check if matrix is already in sparse format:
-  if (mat->format != SPARSE) {
+  if (mat->format != COO) {
     printf("Can not resize matrix to sparse format!\n");
     exit(EXIT_FAILURE);
   }
 
   if (new_capacity <= mat->capacity) {
     printf("Can not resize matrix to smaller capacity!\n");
-    exit(EXIT_FAILURE);
+    return;
   }
 
   // resize matrix:
@@ -48,9 +48,6 @@ void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
 /*******************************/
 /*       Realloc DENSE         */
 /*******************************/
-
-
-
 
 /*******************************/
 /*     Realloc HASHTABLE       */

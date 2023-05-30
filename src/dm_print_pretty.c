@@ -108,7 +108,7 @@ void dm_brief(const DoubleMatrix *mat) {
   // string
   char *s = NULL;
   switch (mat->format) {
-  case SPARSE:
+  case COO:
     s = "Sparse";
     break;
   case DENSE:
@@ -136,7 +136,7 @@ void dm_brief(const DoubleMatrix *mat) {
  * @param matrix
  */
 void sp_print_braille(const DoubleMatrix *mat) {
-  if (mat->format != SPARSE) {
+  if (mat->format != COO) {
     printf("Error: Matrix is not in sparse format.\n");
     return;
   }
@@ -173,12 +173,12 @@ void sp_print_braille(const DoubleMatrix *mat) {
 }
 
 /*******************************/
-/*      SPARSE MATRIX ONLY     */
+/*      COO MATRIX ONLY     */
 /*******************************/
 
 // print all fields of a SparseMatrix *mat
 void dm_brief_sparse(const DoubleMatrix *mat) {
-  if (mat->format != SPARSE) {
+  if (mat->format != COO) {
     printf("Error: Matrix is not in sparse format.\n");
     return;
   }
@@ -208,7 +208,7 @@ void dm_brief_sparse(const DoubleMatrix *mat) {
 
 // print a sparse matrix in condensed form
 void dm_print_condensed(DoubleMatrix *mat) {
-  if (mat->format != SPARSE) {
+  if (mat->format != COO) {
     printf("Error: Matrix is not in sparse format.\n");
     return;
   }
@@ -231,7 +231,7 @@ void dm_print_condensed(DoubleMatrix *mat) {
 
 static void print_matrix_dimension(const DoubleMatrix *mat) {
   switch (mat->format) {
-  case SPARSE:
+  case COO:
     printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   case DENSE:

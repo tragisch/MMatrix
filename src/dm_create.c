@@ -21,7 +21,7 @@ enum { INIT_CAPACITY = 1000U };
 /*        DEFAULT FORMAT       */
 /*******************************/
 
-matrix_format default_matrix_format = SPARSE; // default format
+matrix_format default_matrix_format = COO; // default format
 
 /**
  * @brief Set the Default Matrix Format object
@@ -59,14 +59,14 @@ void dm_destroy(DoubleMatrix *mat) {
  *
  * @param rows
  * @param cols
- * @param format (SPARSE, HASHTABLE, DENSE, VECTOR)
+ * @param format (COO, HASHTABLE, DENSE, VECTOR)
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
   DoubleMatrix *mat = NULL;
 
   switch (format) {
-  case SPARSE:
+  case COO:
     mat = dm_create_sparse(rows, cols);
     break;
   case DENSE:
@@ -111,7 +111,7 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
  */
 DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz) {
   DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
-  if (mat->format == SPARSE) {
+  if (mat->format == COO) {
     dm_realloc_sparse(mat, nnz);
   }
   return mat;
@@ -134,7 +134,7 @@ DoubleMatrix *dm_clone(const DoubleMatrix *mat) {
 }
 
 /*******************************/
-/*        SPARSE MATRIX        */
+/*        COO MATRIX        */
 /*******************************/
 
 static DoubleMatrix *dm_create_sparse(size_t rows, size_t cols) {
@@ -151,7 +151,7 @@ static DoubleMatrix *dm_create_sparse(size_t rows, size_t cols) {
       calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
   mat->col_indices =
       calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
-  mat->format = SPARSE;
+  mat->format = COO;
   mat->values = calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(double));
   mat->hash_table = NULL;
   return mat;

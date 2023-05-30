@@ -11,7 +11,7 @@
 /*******************************/
 
 // sparse matrix formats
-typedef enum { DENSE, SPARSE, HASHTABLE, VECTOR } matrix_format;
+typedef enum { DENSE, COO, CSR, HASHTABLE, VECTOR } matrix_format;
 KHASH_MAP_INIT_INT64(entry, double)
 
 extern matrix_format default_matrix_format;
@@ -24,7 +24,7 @@ typedef struct DoubleMatrix {
   size_t nnz;                  // Number of non-zero elements
   size_t *row_indices;         // Array of row indices of non-zero elements
   size_t *col_indices;         // Array of column indices of non-zero elements
-  matrix_format format;        // SPARSE or DENSE or HASHTABLE or VECTOR
+  matrix_format format;        // COO or DENSE or HASHTABLE or VECTOR
   khash_t(entry) * hash_table; // Hash table for fast access
   double *values;              // Values
 } DoubleMatrix;
@@ -55,6 +55,7 @@ void dm_destroy(DoubleMatrix *mat);
 
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
+size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j);
 
 /*******************************/
 /*     Special Matrices        */

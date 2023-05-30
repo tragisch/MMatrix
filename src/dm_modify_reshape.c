@@ -30,7 +30,7 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
   case DENSE:
     dm_reshape_dense(mat, new_rows, new_cols);
     break;
-  case SPARSE:
+  case COO:
     dm_reshape_sparse(mat, new_rows, new_cols);
     break;
   case HASHTABLE:
@@ -71,7 +71,7 @@ static void dm_reshape_dense(DoubleMatrix *matrix, size_t new_rows,
 }
 
 /*******************************/
-/*       Reshape SPARSE        */
+/*       Reshape COO        */
 /*******************************/
 // TODO: Implement
 static void dm_reshape_sparse(DoubleMatrix *matrix, size_t new_rows,

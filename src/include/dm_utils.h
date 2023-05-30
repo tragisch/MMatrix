@@ -14,7 +14,7 @@
   })
 
 void write_double_to_file(char *filename, char *name, double data,
-                          matrix_format format);
+                          matrix_format format, double density);
 
 void print_progress_bar(size_t progress, size_t total, int barWidth);
 

@@ -307,10 +307,10 @@ void test_dm_convert_to_sparse() {
   dm_set(mat, 2, 2, 6);
 
   // convert to sparse matrix
-  dm_convert(mat, SPARSE);
+  dm_convert(mat, COO);
 
   // check if matrix is in sparse format
-  TEST_ASSERT_EQUAL(SPARSE, mat->format);
+  TEST_ASSERT_EQUAL(COO, mat->format);
 
   // check matrix values
   TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
@@ -329,7 +329,7 @@ void test_dm_convert_to_sparse() {
 
 void test_dm_convert_to_dense() {
   // create a sparse matrix
-  DoubleMatrix *sparse_mat = dm_create_format(3, 3, SPARSE);
+  DoubleMatrix *sparse_mat = dm_create_format(3, 3, COO);
   dm_set(sparse_mat, 0, 0, 1);
   dm_set(sparse_mat, 0, 1, 0);
   dm_set(sparse_mat, 0, 2, 0);
