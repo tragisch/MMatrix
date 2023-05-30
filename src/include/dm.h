@@ -24,12 +24,9 @@ typedef struct DoubleMatrix {
   size_t nnz;           // Number of non-zero elements
   size_t *row_indices;  // Array of row indices of non-zero elements
   size_t *col_indices;  // Array of column indices of non-zero elements
-  matrix_format format; // COO or DENSE or HASHTABLE or VECTOR
+  matrix_format format; // COO, CSR, DENSE or VECTOR
   double *values;       // Values
 } DoubleMatrix;
-
-// Definition of DoubleVector
-typedef struct DoubleMatrix HashTableMatrix;
 
 // Definition of DoubleVector
 typedef DoubleMatrix DoubleVector;

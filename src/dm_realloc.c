@@ -49,6 +49,4 @@ void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
 /*       Realloc DENSE         */
 /*******************************/
 
-/*******************************/
-/*     Realloc HASHTABLE       */
-/*******************************/
+

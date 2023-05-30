@@ -56,7 +56,7 @@ void dm_destroy(DoubleMatrix *mat) {
  *
  * @param rows
  * @param cols
- * @param format (COO, HASHTABLE, DENSE, VECTOR)
+ * @param format (COO, CSR, DENSE, VECTOR)
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {

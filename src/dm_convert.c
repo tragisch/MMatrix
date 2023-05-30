@@ -18,9 +18,9 @@
 /*******************************/
 
 /**
- * @brief convert matrix to format (COO, HASHTABLE, DENSE)
+ * @brief convert matrix to format (COO, CSR, DENSE)
  * @param mat
- * @param format  (COO, HASHTABLE, DENSE)
+ * @param format  (COO, CSR, DENSE)
  */
 void dm_convert(DoubleMatrix *mat, matrix_format format) {
   if (mat->format == format) {
@@ -135,6 +135,4 @@ static void dm_convert_sparse_to_dense(DoubleMatrix *mat) {
   }
 }
 
-/*******************************/
-/*     COO -> HASHTABLE     */
-/*******************************/
+
