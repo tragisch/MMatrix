@@ -36,9 +36,6 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   case VECTOR:
     dm_resize_dense(mat, new_row, 1);
     break;
-  case HASHTABLE:
-    dm_resize_hastable(mat, new_row, new_col);
-    break;
   }
 }
 
@@ -87,18 +84,6 @@ static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row,
   mat->row_indices = row_indices;
   mat->col_indices = col_indices;
   mat->values = values;
-  mat->rows = new_row;
-  mat->cols = new_col;
-}
-
-static void dm_resize_hastable(DoubleMatrix *mat, size_t new_row,
-                               size_t new_col) {
-  // resize hash table:
-  kh_resize(entry, mat->hash_table, new_row * new_col);
-  if (mat->hash_table == NULL) {
-    printf("Error allocating memory!\n");
-    exit(EXIT_FAILURE);
-  }
   mat->rows = new_row;
   mat->cols = new_col;
 }

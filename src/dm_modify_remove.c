@@ -25,9 +25,6 @@ void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
     break; // not implemented yet
   case DENSE:
     break; // nothing to do
-  case HASHTABLE:
-    dm_remove_entry_hashtable(mat, i, j);
-    break;
   case VECTOR:
     break; // nothing to do
   }
@@ -49,16 +46,6 @@ static void dm_remove_entry_sparse(DoubleMatrix *mat, size_t i, size_t j) {
   }
 }
 
-// remove entry from at index i,j of hash table matrix:
-static void dm_remove_entry_hashtable(DoubleMatrix *mat, size_t i, size_t j) {
-  int64_t key = ((int64_t)i << 32) | (int64_t)j;
-  khiter_t iter = kh_get(entry, mat->hash_table, key);
-  if (iter != kh_end(mat->hash_table)) {
-    kh_del(entry, mat->hash_table, iter);
-    mat->nnz--;
-  }
-}
-
 /*******************************/
 /*         Remove Column       */
 /*******************************/
@@ -76,9 +63,6 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
     break;
   case CSR:
     break; // not implemented yet
-  case HASHTABLE:
-    dm_remove_column_hashtable(mat, column_idx);
-    break;
   case VECTOR:
     break;
   }
@@ -111,41 +95,6 @@ static void dm_remove_column_dense(DoubleMatrix *mat, size_t column_idx) {
   dm_resize(mat, mat->rows, mat->cols - 1);
 }
 
-static void dm_remove_column_hashtable(DoubleMatrix *mat, size_t column_idx) {
-  // Create a new hash table for the updated matrix
-  khash_t(entry) *new_hash_table = kh_init(entry);
-  kh_resize(entry, new_hash_table, mat->rows * (mat->cols - 1));
-
-  // Iterate over the existing entries in the hash table
-  for (khiter_t iter = kh_begin(mat->hash_table);
-       iter != kh_end(mat->hash_table); ++iter) {
-    if (kh_exist(mat->hash_table, iter)) {
-      int64_t key = kh_key(mat->hash_table, iter);
-      double value = kh_value(mat->hash_table, iter);
-      size_t row = (size_t)(key >> 32);
-      size_t col = (size_t)(key & 0xFFFFFFFF);
-
-      if (col != column_idx) {
-        if (col > column_idx) {
-          col--;
-        }
-
-        int64_t new_key = ((int64_t)row << 32) | (int64_t)col;
-        int ret = 0;
-        khiter_t new_iter = kh_put(entry, new_hash_table, new_key, &ret);
-        kh_value(new_hash_table, new_iter) = value;
-      }
-    }
-  }
-
-  // Free the old hash table
-  kh_destroy(entry, mat->hash_table);
-
-  // Update the hash table pointer in the matrix
-  mat->hash_table = new_hash_table;
-  mat->cols--;
-}
-
 /*******************************/
 /*         Remove Row          */
 /*******************************/
@@ -163,9 +112,6 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
     break;
   case CSR:
     break; // not implemented yet
-  case HASHTABLE:
-    dm_remove_row_hashtable(mat, row_idx);
-    break;
   case VECTOR:
     break;
   }
@@ -217,39 +163,4 @@ static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx) {
 
   // resize the matrix:
   dm_resize(mat, mat->rows - 1, mat->cols);
-}
-
-static void dm_remove_row_hashtable(DoubleMatrix *mat, size_t row_idx) {
-  // Create a new hash table for the updated matrix
-  khash_t(entry) *new_hash_table = kh_init(entry);
-  kh_resize(entry, new_hash_table, (mat->rows - 1) * mat->cols);
-
-  // Iterate over the existing entries in the hash table
-  for (khiter_t iter = kh_begin(mat->hash_table);
-       iter != kh_end(mat->hash_table); ++iter) {
-    if (kh_exist(mat->hash_table, iter)) {
-      int64_t key = kh_key(mat->hash_table, iter);
-      double value = kh_value(mat->hash_table, iter);
-      size_t row = (size_t)(key >> 32);
-      size_t col = (size_t)(key & 0xFFFFFFFF);
-
-      if (row != row_idx) {
-        if (row > row_idx) {
-          row--;
-        }
-
-        int64_t new_key = ((int64_t)row << 32) | (int64_t)col;
-        int ret = 0;
-        khiter_t new_iter = kh_put(entry, new_hash_table, new_key, &ret);
-        kh_value(new_hash_table, new_iter) = value;
-      }
-    }
-  }
-
-  // Free the old hash table
-  kh_destroy(entry, mat->hash_table);
-
-  // Update the hash table pointer in the matrix
-  mat->hash_table = new_hash_table;
-  mat->rows--;
 }

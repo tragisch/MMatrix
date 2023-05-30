@@ -30,9 +30,6 @@ void dm_drop_small_entries(DoubleMatrix *mat) {
   case DENSE:
     dm_drop_dense(mat);
     break;
-  case HASHTABLE:
-    dm_drop_hashtable(mat);
-    break;
   case VECTOR:
     break;
   }
@@ -44,19 +41,6 @@ static void dm_drop_coo(DoubleMatrix *mat) {
     if (fabs(mat->values[i]) < EPSILON) {
       dm_remove_entry(mat, mat->row_indices[i], mat->col_indices[i]);
       i--;
-    }
-  }
-}
-
-static void dm_drop_hashtable(DoubleMatrix *mat) {
-  // remove all entries with absolute value < EPSILON:
-  for (khiter_t iter = kh_begin(mat->hash_table);
-       iter != kh_end(mat->hash_table); iter++) {
-    if (kh_exist(mat->hash_table, iter)) {
-      if (fabs(kh_value(mat->hash_table, iter)) < EPSILON) {
-        kh_del(entry, mat->hash_table, iter);
-        mat->nnz--;
-      }
     }
   }
 }

@@ -30,9 +30,6 @@ void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec) {
       break;
     case CSR:
       break; // not implemented yet
-    case HASHTABLE:
-      dm_insert_column_hashtable(mat, column_idx);
-      break;
     case VECTOR:
       break;
     }
@@ -81,35 +78,7 @@ static void dm_insert_column_dense(DoubleMatrix *mat, size_t column_idx) {
   }
 }
 
-static void dm_insert_column_hashtable(DoubleMatrix *mat, size_t column_idx) {
-  // resize hast_table
-  mat->cols++;
-  kh_resize(entry, mat->hash_table, mat->rows * mat->cols);
 
-  // Create a new hash table for the updated matrix
-  khash_t(entry) *new_hash_table = kh_init(entry);
-
-  // Iterate over the existing entries in the hash table
-  for (khiter_t iter = kh_begin(matrix->hash_table);
-       iter != kh_end(mat->hash_table); ++iter) {
-    if (kh_exist(mat->hash_table, iter)) {
-      int64_t key = kh_key(mat->hash_table, iter);
-      int64_t new_key = key + ((key >> 32) >= column_idx ? 1 : 0);
-      double value = kh_value(mat->hash_table, iter);
-
-      // Insert the updated entry into the new hash table
-      int ret = 0;
-      iter = kh_put(entry, new_hash_table, new_key, &ret);
-      kh_value(new_hash_table, iter) = value;
-    }
-  }
-
-  // Free the old hash table
-  kh_destroy(entry, mat->hash_table);
-
-  // Update the hash table pointer in the matrix
-  mat->hash_table = new_hash_table;
-}
 
 /*******************************/
 /*         Insert Row          */
@@ -128,9 +97,6 @@ void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec) {
       break;
     case CSR:
       break; // not implemented yet
-    case HASHTABLE:
-      dm_insert_row_hashtable(mat, row_idx);
-      break;
     case VECTOR:
       break;
     }
@@ -179,38 +145,3 @@ static void dm_insert_row_dense(DoubleMatrix *mat, size_t row_idx) {
   }
 }
 
-static void dm_insert_row_hashtable(DoubleMatrix *mat, size_t row_idx) {
-  // Resize the hash_table
-  mat->rows++;
-  kh_resize(entry, mat->hash_table, mat->rows * mat->cols);
-
-  // Create a new hash table for the updated matrix
-  khash_t(entry) *new_hash_table = kh_init(entry);
-
-  // Iterate over the existing entries in the hash table
-  for (khiter_t iter = kh_begin(mat->hash_table);
-       iter != kh_end(mat->hash_table); ++iter) {
-    if (kh_exist(mat->hash_table, iter)) {
-      int64_t key = kh_key(mat->hash_table, iter);
-      size_t row = (size_t)(key >> 32);
-      size_t col = (size_t)(key & 0xFFFFFFFF);
-
-      if (row >= row_idx) {
-        key = ((int64_t)(row + 1) << 32) | (int64_t)col;
-      }
-
-      double value = kh_value(mat->hash_table, iter);
-
-      // Insert the updated entry into the new hash table
-      int ret = 0;
-      iter = kh_put(entry, new_hash_table, key, &ret);
-      kh_value(new_hash_table, iter) = value;
-    }
-  }
-
-  // Free the old hash table
-  kh_destroy(entry, mat->hash_table);
-
-  // Update the hash table pointer in the matrix
-  mat->hash_table = new_hash_table;
-}

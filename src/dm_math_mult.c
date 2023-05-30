@@ -45,8 +45,7 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
   }
   // check if matrices have the same format
   if (mat1->format != mat2->format) {
-    perror("Error: Matrices have to be of the same format (DENSE, COO, "
-           "HASHTABLE).");
+    perror("Error: Matrices have to be of the same format (DENSE, COO, CSR).");
     exit(EXIT_FAILURE);
   }
 
@@ -59,9 +58,6 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
     break;
   case CSR:
     break; // not implemented yet
-  case HASHTABLE:
-    return dm_multiply_by_matrix_hastable(mat1, mat2);
-    break;
   case VECTOR:
     return NULL;
     break; // not relevant
@@ -144,50 +140,6 @@ static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
   }
 }
 
-/*******************************/
-/*      Hastable Matrix        */
-/*******************************/
-
-static DoubleMatrix *
-dm_multiply_by_matrix_hastable(const DoubleMatrix *matrix1,
-                               const DoubleMatrix *matrix2) {
-  DoubleMatrix *result =
-      dm_create_format(matrix1->rows, matrix2->cols, HASHTABLE);
-
-  for (size_t row = 0; row < matrix1->rows; row++) {
-    khiter_t k = 0;
-    for (k = kh_begin(matrix1->hash_table); k != kh_end(matrix1->hash_table);
-         ++k) {
-      if (kh_exist(matrix1->hash_table, k)) {
-        size_t col1 = kh_key(matrix1->hash_table, k);
-        double value1 = kh_value(matrix1->hash_table, k);
-
-        // Iterate over corresponding column in the second matrix
-        khiter_t k2 = 0;
-        for (k2 = kh_begin(matrix2->hash_table);
-             k2 != kh_end(matrix2->hash_table); ++k2) {
-          if (kh_exist(matrix2->hash_table, k2)) {
-            size_t col2 = kh_key(matrix2->hash_table, k2);
-            double value2 = kh_value(matrix2->hash_table, k2);
-
-            // Check if there is a non-zero entry in the second matrix at
-            // current column
-            if (col1 == col2) {
-              double product = value1 * value2;
-
-              // Add result to the corresponding entry in the result matrix
-              k = kh_put(entry, result->hash_table, col2, &k);
-              kh_value(result->hash_table, k) += product;
-              break;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return result;
-}
 
 /*******************************/
 /*      Naive Approach         */

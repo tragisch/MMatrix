@@ -35,9 +35,6 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
     break;
   case CSR:
     break; // not implemented yet
-  case HASHTABLE:
-    dm_reshape_hashtable(mat, new_rows, new_cols);
-    break;
   case VECTOR:
     break;
   }
@@ -78,11 +75,3 @@ static void dm_reshape_dense(DoubleMatrix *matrix, size_t new_rows,
 // TODO: Implement
 static void dm_reshape_sparse(DoubleMatrix *matrix, size_t new_rows,
                               size_t new_cols) {}
-
-/*******************************/
-/*    Reshape HASHTABLE        */
-/*******************************/
-
-// TODO: Implement
-static void dm_reshape_hashtable(DoubleMatrix *matrix, size_t new_rows,
-                                 size_t new_cols) {}

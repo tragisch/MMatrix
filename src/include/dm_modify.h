@@ -28,34 +28,29 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
 /*      Remove / Insert        */
 /*******************************/
 
-// remove entry from matrix (sparse and hashtable only)
+// remove entry from matrix (COO only)
 void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j);
 static void dm_remove_entry_sparse(DoubleMatrix *mat, size_t i, size_t j);
-static void dm_remove_entry_hashtable(DoubleMatrix *mat, size_t i, size_t j);
 
 // insert column vector
 void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec);
 static void dm_insert_column_sparse(DoubleMatrix *mat, size_t column_idx);
 static void dm_insert_column_dense(DoubleMatrix *mat, size_t column_idx);
-static void dm_insert_column_hashtable(DoubleMatrix *mat, size_t column_idx);
 
 // insert row vector
 void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec);
 static void dm_insert_row_sparse(DoubleMatrix *mat, size_t row_idx);
 static void dm_insert_row_dense(DoubleMatrix *mat, size_t row_idx);
-static void dm_insert_row_hashtable(DoubleMatrix *mat, size_t row_idx);
 
 // remove column vector
 void dm_remove_column(DoubleMatrix *mat, size_t column_idx);
 static void dm_remove_column_sparse(DoubleMatrix *mat, size_t column_idx);
 static void dm_remove_column_dense(DoubleMatrix *mat, size_t column_idx);
-static void dm_remove_column_hashtable(DoubleMatrix *mat, size_t column_idx);
 
 // remove row vector
 void dm_remove_row(DoubleMatrix *mat, size_t row_idx);
 static void dm_remove_row_sparse(DoubleMatrix *mat, size_t row_idx);
 static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx);
-static void dm_remove_row_hashtable(DoubleMatrix *mat, size_t row_idx);
 
 /*******************************/
 /*          Reshape            */
@@ -66,8 +61,6 @@ void dm_reshape(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_reshape_sparse(DoubleMatrix *mat, size_t new_row,
                               size_t new_col);
 static void dm_reshape_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
-static void dm_reshape_hashtable(DoubleMatrix *matrix, size_t new_rows,
-                                 size_t new_cols);
 
 /*******************************/
 /*           Resize            */
@@ -77,8 +70,6 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
 
 static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_resize_sparse(DoubleMatrix *mat, size_t new_row, size_t new_col);
-static void dm_resize_hastable(DoubleMatrix *mat, size_t new_row,
-                               size_t new_col);
 
 /*******************************/
 /*     Drop Small Entries      */
@@ -87,7 +78,6 @@ static void dm_resize_hastable(DoubleMatrix *mat, size_t new_row,
 void dm_drop_small_entries(DoubleMatrix *mat);
 static void dm_drop_dense(DoubleMatrix *mat);
 static void dm_drop_coo(DoubleMatrix *mat);
-static void dm_drop_hashtable(DoubleMatrix *mat);
 
 /*******************************/
 /*          Order COO          */

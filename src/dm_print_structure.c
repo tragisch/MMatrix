@@ -28,8 +28,7 @@ const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
 
 void dm_print_structure(DoubleMatrix *mat, double strength) {
   if (mat->format == DENSE) {
-    printf(
-        "Matrix is not in COO or HASHTABLE format, no structure to print\n");
+    printf("Matrix is not in COO or CSR format, no structure to print\n");
     return;
   }
   // set up grid
@@ -58,30 +57,6 @@ void dm_print_structure(DoubleMatrix *mat, double strength) {
         // track the number of elements in each cell
         dm_set(count, x, y, dm_get(count, x, y) + 1);
         plot(x, y, '*');
-      }
-    }
-  } else if (mat->format == HASHTABLE) {
-    khash_t(entry) *hashtable = mat->hash_table;
-
-    // Iterate over each bucket in the hash table
-    for (khint_t i = 0; i < kh_end(hashtable); ++i) {
-      if (kh_exist(hashtable, i)) {
-        // Retrieve the key-value pair from the current bucket
-        int64_t key = kh_key(hashtable, i);
-        // double value = kh_value(hashtable, i);
-
-        // Extract row and column indices from the key
-        size_t row = key >> 32;
-        size_t col = key & 0xFFFFFFFF;
-
-        if (randomDouble() < density) {
-          int x = get_x_coord(row, mat->rows);
-          int y = get_y_coord(col, mat->cols);
-
-          // track the number of elements in each cell
-          dm_set(count, x, y, dm_get(count, x, y) + 1);
-          plot(x, y, '*');
-        }
       }
     }
   }

@@ -109,13 +109,13 @@ void dm_brief(const DoubleMatrix *mat) {
   char *s = NULL;
   switch (mat->format) {
   case COO:
-    s = "Sparse";
+    s = "Sparse - COO";
     break;
   case DENSE:
     s = "Dense";
     break;
-  case HASHTABLE:
-    s = "Hashtable";
+  case CSR:
+    s = "Sparse - CSR";
     break;
   case VECTOR:
     s = "Vector";
@@ -232,15 +232,13 @@ void dm_print_condensed(DoubleMatrix *mat) {
 static void print_matrix_dimension(const DoubleMatrix *mat) {
   switch (mat->format) {
   case COO:
-    printf("SparseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
+    printf("SparseMatrix (COO) (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   case DENSE:
     printf("DenseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   case CSR:
-    break; // not implemented yet
-  case HASHTABLE:
-    printf("HashTable (%zu x %zu)\n", mat->rows, mat->cols);
+    printf("SparseMatrix (CSR) (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   case VECTOR:
     printf("Vector (%zu x %zu)\n", mat->rows, mat->cols);

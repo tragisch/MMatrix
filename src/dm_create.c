@@ -43,9 +43,6 @@ void dm_destroy(DoubleMatrix *mat) {
   free(mat->col_indices);
   free(mat->values);
   free(mat->row_indices);
-  if (mat->format == HASHTABLE) {
-    kh_destroy(entry, mat->hash_table);
-  }
   free(mat);
   mat = NULL;
 }
@@ -69,11 +66,11 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
   case COO:
     mat = dm_create_sparse(rows, cols);
     break;
+  case CSR:
+    // mat = dm_create_CSR(rows, cols);
+    break;
   case DENSE:
     mat = dm_create_dense(rows, cols);
-    break;
-  case HASHTABLE:
-    mat = dm_create_hashtable(rows, cols);
     break;
   case VECTOR:
     if (rows != 1 && cols != 1) {
@@ -153,29 +150,7 @@ static DoubleMatrix *dm_create_sparse(size_t rows, size_t cols) {
       calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
   mat->format = COO;
   mat->values = calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(double));
-  mat->hash_table = NULL;
   return mat;
-}
-
-/*******************************/
-/*      HASHTABLE MATRIX       */
-/*******************************/
-
-static DoubleMatrix *dm_create_hashtable(size_t rows, size_t cols) {
-  DoubleMatrix *matrix = malloc(sizeof(DoubleMatrix));
-  matrix->rows = rows;
-  matrix->cols = cols;
-  matrix->capacity = 0;
-  matrix->nnz = 0;
-  matrix->row_indices = NULL;
-  matrix->col_indices = NULL;
-  matrix->format = HASHTABLE;
-  matrix->values = NULL;
-
-  // Create hash table
-  matrix->hash_table = kh_init(entry);
-
-  return matrix;
 }
 
 /*******************************/
@@ -193,6 +168,5 @@ static DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
   matrix->row_indices = NULL;
   matrix->col_indices = NULL;
   matrix->values = (double *)calloc(rows * cols, sizeof(double));
-  matrix->hash_table = NULL;
   return matrix;
 }

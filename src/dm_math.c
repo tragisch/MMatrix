@@ -66,8 +66,6 @@ bool dm_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   return true;
 }
 
-
-
 /**
  * @brief Multiply a matrix with a scalar
  *
@@ -205,7 +203,7 @@ double dm_trace(const DoubleMatrix *mat) {
  * @return double
  */
 double dm_density(const DoubleMatrix *mat) {
-  if (mat->format == DENSE || mat->format == HASHTABLE) {
+  if (mat->format == DENSE || mat->format == CSR) {
     return ((double)mat->nnz / (double)(mat->rows * mat->cols));
   }
 

@@ -35,8 +35,7 @@ static DoubleMatrix *dm_multiply_by_matrix_sparse(const DoubleMatrix *matrixA,
                                                   const DoubleMatrix *matrixB);
 static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
                               double value);
-static DoubleMatrix *dm_multiply_by_matrix_hastable(const DoubleMatrix *mat1,
-                                                    const DoubleMatrix *mat2);
+
 DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
                                     const DoubleVector *vec);
 void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar);

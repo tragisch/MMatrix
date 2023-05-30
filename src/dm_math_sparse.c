@@ -16,13 +16,6 @@
 #include "dm_math.h"
 #include "dm_math_blas.h"
 
-
-
-
-
-
-
-
 /*******************************/
 /*      SPBLAS Support         */
 /*******************************/

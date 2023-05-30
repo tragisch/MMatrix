@@ -37,9 +37,6 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   case DENSE:
     dm_set_dense(mat, i, j, value);
     break;
-  case HASHTABLE:
-    dm_set_hash_table(mat, i, j, value);
-    break;
   case VECTOR:
     dv_set(mat, i, value);
     break;
@@ -124,32 +121,6 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
 }
 
 /*******************************/
-/*      Set HASHTABLE          */
-/*******************************/
-
-static void dm_set_hash_table(DoubleMatrix *matrix, size_t i, size_t j,
-                              double value) {
-  int ret = 0;
-  khint_t k = 0;
-
-  // Calculate the key for the hash table using the combined row and column
-  // indices
-  int64_t key = (int64_t)i << 32 | (int64_t)j;
-
-  // Check if the value already exists in the hash table
-  k = kh_get(entry, matrix->hash_table, key);
-  if (k != kh_end(matrix->hash_table)) {
-    // Value already exists, update it
-    kh_value(matrix->hash_table, k) = value;
-  } else {
-    // Value doesn't exist, insert it into the hash table
-    k = kh_put(entry, matrix->hash_table, key, &ret);
-    kh_value(matrix->hash_table, k) = value;
-    matrix->nnz++;
-  }
-}
-
-/*******************************/
 /*          Get Value          */
 /*******************************/
 
@@ -175,9 +146,6 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
     break;
   case CSR:
     break; // not implemented yet
-  case HASHTABLE:
-    return dm_get_hash_table(mat, i, j);
-    break;
   case VECTOR:
     return dv_get(mat, i);
     break;
@@ -213,25 +181,6 @@ static double dm_get_sparse(const DoubleMatrix *matrix, size_t i, size_t j) {
 
   // Element not found at position (i, j), return 0.0 or the default value
   return 0.0; // Assuming 0.0 represents the default value
-}
-
-/*******************************/
-/*         Get HASHTABLE       */
-/*******************************/
-
-static double dm_get_hash_table(const DoubleMatrix *matrix, size_t i,
-                                size_t j) {
-  // Calculate the key for the hash table using the combined row and column
-  // indices
-  int64_t key = (int64_t)i << 32 | (int64_t)j;
-
-  // Check if the value exists in the hash table
-  khint_t k = kh_get(entry, matrix->hash_table, key);
-  if (k != kh_end(matrix->hash_table)) {
-    // Value exists, return it
-    return kh_value(matrix->hash_table, k);
-  } // Value doesn't exist, return 0.0
-  return 0.0;
 }
 
 /*******************************/

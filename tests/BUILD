@@ -4,14 +4,14 @@ load("//third_party/ThrowTheSwitch/Unity:unity.bzl", "unity_test")
 test_suite(
     name = "small_tests",
     tags = ["smoke"],
-     visibility = ["//visibility:public"],
+    visibility = ["//visibility:public"],
     
 )
 
 test_suite(
-    name = "all_tests",
-    tags = ["smoke", "enhanced"],
-     visibility = ["//visibility:public"],
+    name = "test_math",
+    tags = ["math"],
+    visibility = ["//visibility:public"],
 )
 
 
@@ -30,17 +30,6 @@ unity_test(
     name = "test_DenseMatrix",
     srcs = [
         "test_DenseMatrix.c",
-    ],
-    deps = [
-        "//src:matrix",
-    ],
-    tags = ["smoke"],
-)
-
-unity_test(
-    name = "test_HashTable",
-    srcs = [
-        "test_HashtableMatrix.c",
     ],
     deps = [
         "//src:matrix",
@@ -68,7 +57,7 @@ unity_test(
     deps = [
         "//src:matrix",
     ],
-    tags = ["enhanced"],
+    tags = ["math"],
 )
 
 unity_test(
@@ -79,5 +68,5 @@ unity_test(
     deps = [
         "//src:matrix",
     ],
-    tags = ["enhanced"],
+    tags = ["math"],
 )
