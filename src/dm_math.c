@@ -66,51 +66,7 @@ bool dm_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   return true;
 }
 
-/**
- * @brief Matrix Multiplication of two matrices m1 x m2
- *
- * @param m1
- * @param m2
- * @return DoubleMatrix*
- */
-DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
-                                    const DoubleMatrix *mat2) {
 
-  if (mat1 == NULL || mat2 == NULL) {
-    perror("Error: Matrices shouldn't be empty.");
-    return NULL;
-  }
-
-  if (mat1->cols != mat2->rows) {
-    perror(
-        "Error: number of columns of m1 has to be euqal to number of rows of "
-        "m2!");
-    return NULL;
-  }
-
-  if (mat1->format != mat2->format) {
-    perror("Error: Matrices have to be of the same format.");
-    return NULL;
-  }
-
-  if (mat1->format == DENSE) {
-    return dm_blas_multiply_by_matrix(mat1, mat2);
-  }
-
-  DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
-
-  // Multiplying first and second matrices and storing it in product
-  for (size_t i = 0; i < mat1->rows; ++i) {
-    for (size_t j = 0; j < mat2->cols; ++j) {
-      for (size_t k = 0; k < mat1->cols; ++k) {
-        dm_set(product, i, j,
-               dm_get(product, i, j) + dm_get(mat1, i, k) * dm_get(mat2, k, j));
-      }
-    }
-  }
-
-  return product;
-}
 
 /**
  * @brief Multiply a matrix with a scalar
