@@ -34,7 +34,7 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
   case COO:
     dm_reshape_coo(mat, new_rows, new_cols);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     break;

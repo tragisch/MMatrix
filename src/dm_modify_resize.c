@@ -31,7 +31,7 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   case COO:
     dm_resize_coo(mat, new_row, new_col);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     dm_resize_dense(mat, new_row, 1);
@@ -65,8 +65,7 @@ static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col) {
 }
 
 // resize matrix of COO format:
-static void dm_resize_coo(DoubleMatrix *mat, size_t new_row,
-                             size_t new_col) {
+static void dm_resize_coo(DoubleMatrix *mat, size_t new_row, size_t new_col) {
 
   // resize matrix:
   size_t *row_indices =

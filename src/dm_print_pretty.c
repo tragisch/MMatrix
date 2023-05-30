@@ -114,8 +114,8 @@ void dm_brief(const DoubleMatrix *mat) {
   case DENSE:
     s = "Dense";
     break;
-  case CSR:
-    s = "Sparse - CSR";
+  case CSC:
+    s = "Sparse - CSC";
     break;
   case VECTOR:
     s = "Vector";
@@ -237,8 +237,8 @@ static void print_matrix_dimension(const DoubleMatrix *mat) {
   case DENSE:
     printf("DenseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
     break;
-  case CSR:
-    printf("SparseMatrix (CSR) (%zu x %zu)\n", mat->rows, mat->cols);
+  case CSC:
+    printf("SparseMatrix (CSC) (%zu x %zu)\n", mat->rows, mat->cols);
     break;
   case VECTOR:
     printf("Vector (%zu x %zu)\n", mat->rows, mat->cols);

@@ -28,7 +28,7 @@ void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec) {
     case COO:
       dm_insert_column_coo(mat, column_idx);
       break;
-    case CSR:
+    case CSC:
       break; // not implemented yet
     case VECTOR:
       break;
@@ -95,7 +95,7 @@ void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec) {
     case COO:
       dm_insert_row_coo(mat, row_idx);
       break;
-    case CSR:
+    case CSC:
       break; // not implemented yet
     case VECTOR:
       break;

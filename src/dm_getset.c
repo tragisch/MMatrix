@@ -34,7 +34,7 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   case COO:
     dm_set_coo(mat, i, j, value);
     break;
-  case CSR:
+  case CSC:
     break;
   case DENSE:
     dm_set_dense(mat, i, j, value);
@@ -145,7 +145,7 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   case COO:
     return dm_get_coo(mat, i, j);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     return dv_get(mat, i);

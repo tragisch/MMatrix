@@ -66,7 +66,7 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
   case COO:
     mat = dm_create_coo(rows, cols);
     break;
-  case CSR:
+  case CSC:
     // mat = dm_create_CSR(rows, cols);
     break;
   case DENSE:

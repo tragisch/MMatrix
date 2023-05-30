@@ -10,7 +10,7 @@
 /*******************************/
 
 // sparse matrix formats
-typedef enum { DENSE, COO, CSR, VECTOR } matrix_format;
+typedef enum { DENSE, COO, CSC, VECTOR } matrix_format;
 
 extern matrix_format default_matrix_format;
 

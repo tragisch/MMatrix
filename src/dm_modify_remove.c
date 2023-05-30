@@ -21,7 +21,7 @@ void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
   case COO:
     dm_remove_entry_coo(mat, i, j);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case DENSE:
     break; // nothing to do
@@ -61,7 +61,7 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
   case COO:
     dm_remove_column_coo(mat, column_idx);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     break;
@@ -110,7 +110,7 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
   case COO:
     dm_remove_row_coo(mat, row_idx);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     break;

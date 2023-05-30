@@ -203,7 +203,7 @@ double dm_trace(const DoubleMatrix *mat) {
  * @return double
  */
 double dm_density(const DoubleMatrix *mat) {
-  if (mat->format == DENSE || mat->format == CSR) {
+  if (mat->format == DENSE || mat->format == CSC) {
     return ((double)mat->nnz / (double)(mat->rows * mat->cols));
   }
 
