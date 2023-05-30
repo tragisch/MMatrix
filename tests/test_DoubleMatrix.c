@@ -226,7 +226,7 @@ void test_dm_set_sparse(void) {
 
   // Test setting a zero value
   dm_set(mat, 1, 1, 0.0);
-  dm_cleanup(mat);
+  dm_drop_small_entries(mat);
   TEST_ASSERT_EQUAL(0, mat->nnz);
 
   // Clean up the DoubleMatrix instance

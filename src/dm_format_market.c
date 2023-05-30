@@ -88,7 +88,8 @@ DoubleMatrix *dm_read_matrix_market(const char *filename) {
   // Close the file
   fclose(fp);
 
-  dm_cleanup(mat);
+  // Sort the matrix, due to performance not during reading!
+  dm_order_coo(mat);
 
   return mat;
 }

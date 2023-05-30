@@ -13,25 +13,30 @@
 #include "dm_modify.h"
 #include <math.h>
 
+// TODO: use a better value for EPSILON
 #define EPSILON 1e-10
 
-void dm_cleanup(DoubleMatrix *mat) {
+/*******************************/
+/*      drop small entries     */
+/*******************************/
+
+void dm_drop_small_entries(DoubleMatrix *mat) {
   switch (mat->format) {
   case COO:
-    dm_cleanup_sparse(mat);
+    dm_drop_coo(mat);
     break;
   case DENSE:
-    dm_cleanup_dense(mat);
+    dm_drop_dense(mat);
     break;
   case HASHTABLE:
-    dm_cleanup_hashtable(mat);
+    dm_drop_hashtable(mat);
     break;
   case VECTOR:
     break;
   }
 }
 
-static void dm_cleanup_sparse(DoubleMatrix *mat) {
+static void dm_drop_coo(DoubleMatrix *mat) {
   // remove all entries with absolute value < EPSILON:
   for (int i = 0; i < mat->nnz; i++) {
     if (fabs(mat->values[i]) < EPSILON) {
@@ -41,7 +46,7 @@ static void dm_cleanup_sparse(DoubleMatrix *mat) {
   }
 }
 
-static void dm_cleanup_hashtable(DoubleMatrix *mat) {
+static void dm_drop_hashtable(DoubleMatrix *mat) {
   // remove all entries with absolute value < EPSILON:
   for (khiter_t iter = kh_begin(mat->hash_table);
        iter != kh_end(mat->hash_table); iter++) {
@@ -54,7 +59,7 @@ static void dm_cleanup_hashtable(DoubleMatrix *mat) {
   }
 }
 
-static void dm_cleanup_dense(DoubleMatrix *mat) {
+static void dm_drop_dense(DoubleMatrix *mat) {
   // remove all entries with absolute value < EPSILON:
   for (int i = 0; i < mat->rows; i++) {
     for (int j = 0; j < mat->cols; j++) {
@@ -63,4 +68,37 @@ static void dm_cleanup_dense(DoubleMatrix *mat) {
       }
     }
   }
+}
+
+/*******************************/
+/*       Order COO Entries     */
+/*******************************/
+
+// due to performance reason order the entries in the sparse matrix
+
+void dm_order_coo(DoubleMatrix *mat) {
+  // sort the entries in the sparse matrix:
+  for (int i = 0; i < mat->nnz; i++) {
+    for (int j = i + 1; j < mat->nnz; j++) {
+      if (mat->row_indices[i] > mat->row_indices[j]) {
+        dm_swap_entries_coo(mat, i, j);
+      } else if (mat->row_indices[i] == mat->row_indices[j]) {
+        if (mat->col_indices[i] > mat->col_indices[j]) {
+          dm_swap_entries_coo(mat, i, j);
+        }
+      }
+    }
+  }
+}
+
+static void dm_swap_entries_coo(DoubleMatrix *mat, size_t i, size_t j) {
+  size_t tmp_row = mat->row_indices[i];
+  size_t tmp_col = mat->col_indices[i];
+  double tmp_val = mat->values[i];
+  mat->row_indices[i] = mat->row_indices[j];
+  mat->col_indices[i] = mat->col_indices[j];
+  mat->values[i] = mat->values[j];
+  mat->row_indices[j] = tmp_row;
+  mat->col_indices[j] = tmp_col;
+  mat->values[j] = tmp_val;
 }

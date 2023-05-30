@@ -132,6 +132,6 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
       dm_set(sub_mat, i - row_start, j - col_start, dm_get(mat, i, j));
     }
   }
-  dm_cleanup(sub_mat);
+  dm_drop_small_entries(sub_mat);
   return sub_mat;
 }

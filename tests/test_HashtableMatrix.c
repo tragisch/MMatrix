@@ -240,7 +240,7 @@ void test_dm_get_sub_matrix(void) {
 
   // Get the sub-matrix
   DoubleMatrix *sub_mat = dm_get_sub_matrix(mat, 1, 3, 1, 3);
-  dm_cleanup(sub_mat);
+  dm_drop_small_entries(sub_mat);
   // Verify the properties of the sub-matrix
   TEST_ASSERT_EQUAL(3, sub_mat->rows);
   TEST_ASSERT_EQUAL(3, sub_mat->cols);
