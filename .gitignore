@@ -95,7 +95,6 @@ Temporary Items
 user.bazelrc
 
 /tmp/*
-/data/*
 
 
 
