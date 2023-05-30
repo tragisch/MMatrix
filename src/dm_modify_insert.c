@@ -28,6 +28,8 @@ void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec) {
     case COO:
       dm_insert_column_sparse(mat, column_idx);
       break;
+    case CSR:
+      break; // not implemented yet
     case HASHTABLE:
       dm_insert_column_hashtable(mat, column_idx);
       break;
@@ -124,6 +126,8 @@ void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec) {
     case COO:
       dm_insert_row_sparse(mat, row_idx);
       break;
+    case CSR:
+      break; // not implemented yet
     case HASHTABLE:
       dm_insert_row_hashtable(mat, row_idx);
       break;

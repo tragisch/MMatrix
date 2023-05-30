@@ -22,7 +22,7 @@
 // write double date to file in a table woth row "name" and colum format
 void write_double_to_file(char *filename, char *name, double data,
                           matrix_format format, double density) {
-  FILE *fp;
+  FILE *fp = NULL;
   fp = fopen(filename, "a");
   if (fp == NULL) {
     printf("Error opening file!\n");

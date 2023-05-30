@@ -100,8 +100,8 @@ size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j) {
   return low; // Element not found, return the insertion position
 }
 
-void insert_element(DoubleMatrix *matrix, size_t i, size_t j,
-                           double value, size_t position) {
+void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
+                    size_t position) {
   // Increase the capacity if needed
   if (matrix->nnz == matrix->capacity) {
     dm_realloc_sparse(matrix, matrix->capacity * 2);
@@ -173,6 +173,8 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   case COO:
     return dm_get_sparse(mat, i, j);
     break;
+  case CSR:
+    break; // not implemented yet
   case HASHTABLE:
     return dm_get_hash_table(mat, i, j);
     break;

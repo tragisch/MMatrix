@@ -33,6 +33,8 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
   case COO:
     dm_reshape_sparse(mat, new_rows, new_cols);
     break;
+  case CSR:
+    break; // not implemented yet
   case HASHTABLE:
     dm_reshape_hashtable(mat, new_rows, new_cols);
     break;

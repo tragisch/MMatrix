@@ -237,6 +237,8 @@ static void print_matrix_dimension(const DoubleMatrix *mat) {
   case DENSE:
     printf("DenseMatrix (%zu x %zu)\n", mat->rows, mat->cols);
     break;
+  case CSR:
+    break; // not implemented yet
   case HASHTABLE:
     printf("HashTable (%zu x %zu)\n", mat->rows, mat->cols);
     break;

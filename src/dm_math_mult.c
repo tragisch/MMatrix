@@ -57,6 +57,8 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
   case COO:
     return dm_multiply_by_matrix_sparse(mat1, mat2);
     break;
+  case CSR:
+    break; // not implemented yet
   case HASHTABLE:
     return dm_multiply_by_matrix_hastable(mat1, mat2);
     break;

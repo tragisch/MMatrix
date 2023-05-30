@@ -21,6 +21,8 @@ void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
   case COO:
     dm_remove_entry_sparse(mat, i, j);
     break;
+  case CSR:
+    break; // not implemented yet
   case DENSE:
     break; // nothing to do
   case HASHTABLE:
@@ -72,6 +74,8 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
   case COO:
     dm_remove_column_sparse(mat, column_idx);
     break;
+  case CSR:
+    break; // not implemented yet
   case HASHTABLE:
     dm_remove_column_hashtable(mat, column_idx);
     break;
@@ -157,6 +161,8 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
   case COO:
     dm_remove_row_sparse(mat, row_idx);
     break;
+  case CSR:
+    break; // not implemented yet
   case HASHTABLE:
     dm_remove_row_hashtable(mat, row_idx);
     break;
