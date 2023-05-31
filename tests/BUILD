@@ -1,4 +1,4 @@
-load("//third_party/ThrowTheSwitch/Unity:unity.bzl", "unity_test")
+load("//third_party/ThrowTheSwitch/Unity:unity.bzl", "unity_test", "generate_test_runner")
 
 
 test_suite(
@@ -14,12 +14,22 @@ test_suite(
     visibility = ["//visibility:public"],
 )
 
+# generate_test_runner(
+#     name = "test",
+#     my_config = ["my_config.yml"],
+#     file_name = 
+#         "test_DoubleMatrix.c",
+# )
+
 
 unity_test(
-    name = "test_DoubleMatrix",
+    name = "test_my_config",
     srcs = [
         "test_DoubleMatrix.c",
     ],
+    my_config = [
+        "my_config.yml"
+        ],
     deps = [
         "//src:matrix",
     ],

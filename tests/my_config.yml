@@ -1,0 +1,6 @@
+:unity:
+  :includes:
+    - stdio.h
+    - stdlib.h
+  :cexception: 0
+  :use_param_tests: 1

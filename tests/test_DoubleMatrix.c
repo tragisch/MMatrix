@@ -13,6 +13,9 @@
 #define UNITY_INCLUDE_DOUBLE
 #define UNITY_DOUBLE_PRECISION 10
 
+/* Support for Meta Test Rig */
+#define TEST_CASE(...)
+
 #include "unity.h"
 #include "unity_internals.h"
 
@@ -38,7 +41,11 @@ void test_double_precision(void) {
  ** Creation of matrices:
  *******************************/
 
-void test_dm_create(void) {
+TEST_CASE(0)
+TEST_CASE(1)
+TEST_CASE(2)
+void test_dm_create(matrix_format format) {
+  set_default_matrix_format(format);
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   size_t cols = 4;
