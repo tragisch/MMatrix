@@ -1,5 +1,6 @@
 load("//third_party/ThrowTheSwitch/Unity:unity.bzl", "unity_test", "generate_test_runner")
 
+## Generate a test suite with all the tests in the current directory.
 
 test_suite(
     name = "small_tests",
@@ -14,13 +15,29 @@ test_suite(
     visibility = ["//visibility:public"],
 )
 
-# generate_test_runner(
-#     name = "test",
-#     my_config = ["my_config.yml"],
-#     file_name = 
-#         "test_DoubleMatrix.c",
-# )
+## Unit tests:
 
+unity_test(
+    name = "test_dm_create",
+    srcs = [
+        "test_dm_create.c",
+    ],
+    deps = [
+        "//src:matrix",
+    ],
+    tags = ["smoke"],
+)
+
+unity_test(
+    name = "test_dm_create_special",
+    srcs = [
+        "test_dm_create_special.c",
+    ],
+    deps = [
+        "//src:matrix",
+    ],
+    tags = ["smoke"],
+)
 
 unity_test(
     name = "test_my_config",
@@ -35,6 +52,7 @@ unity_test(
     ],
     tags = ["smoke"],
 )
+
 
 unity_test(
     name = "test_DenseMatrix",

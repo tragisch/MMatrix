@@ -35,6 +35,7 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
     dm_set_coo(mat, i, j, value);
     break;
   case CSC:
+    dm_set_csc(mat, i, j, value);
     break;
   case DENSE:
     dm_set_dense(mat, i, j, value);
@@ -122,6 +123,12 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
 }
 
 /*******************************/
+/*          Set CSC          */
+/*******************************/
+
+static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {}
+
+/*******************************/
 /*          Get Value          */
 /*******************************/
 
@@ -146,6 +153,7 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
     return dm_get_coo(mat, i, j);
     break;
   case CSC:
+    return dm_get_csc(mat, i, j);
     break; // not implemented yet
   case VECTOR:
     return dv_get(mat, i);
@@ -160,6 +168,20 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
 // get value from dense matrix:
 static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j) {
   return mat->values[i * mat->cols + j];
+}
+
+/*******************************/
+/*         Get CSC             */
+/*******************************/
+
+static double dm_get_csc(const DoubleMatrix *matrix, size_t i, size_t j) {
+  /// search for the element with row i and column j
+  for (int k = 0; k < matrix->nnz; k++) {
+    if (matrix->row_indices[k] == i && matrix->col_indices[k] == j) {
+      return matrix->values[k];
+    }
+  }
+  return 0.0;
 }
 
 /*******************************/

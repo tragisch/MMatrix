@@ -15,7 +15,6 @@
 #include "dm_math.h"
 
 #define BRAILLE_SIZE 10
-enum { INIT_CAPACITY = 1000U };
 
 /*******************************/
 /*         I/O Functions       */

@@ -18,9 +18,9 @@
 /*******************************/
 
 /**
- * @brief convert matrix to format (COO, CSR, DENSE)
+ * @brief convert matrix to format (COO, CSC, DENSE)
  * @param mat
- * @param format  (COO, CSR, DENSE)
+ * @param format  (COO, CSC, DENSE)
  */
 void dm_convert(DoubleMatrix *mat, matrix_format format) {
   if (mat->format == format) {

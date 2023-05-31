@@ -57,6 +57,7 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
     return dm_multiply_by_matrix_coo(mat1, mat2);
     break;
   case CSC:
+    return NULL;
     break; // not implemented yet
   case VECTOR:
     return NULL;
@@ -87,7 +88,7 @@ static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
 /*******************************/
 
 static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
-                                                  const DoubleMatrix *matrixB) {
+                                               const DoubleMatrix *matrixB) {
 
   DoubleMatrix *result = dm_create(matrixA->rows, matrixB->cols);
 
@@ -139,7 +140,6 @@ static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
     insert_element(result, row, col, value, position);
   }
 }
-
 
 /*******************************/
 /*      Naive Approach         */
