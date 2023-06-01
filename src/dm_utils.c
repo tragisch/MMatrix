@@ -55,3 +55,21 @@ void print_progress_bar(size_t progress, size_t total, int barWidth) {
   printf("] %d%%\r", (int)(percentage * 100));
   fflush(stdout);
 }
+
+/*******************************/
+/*     max index array       */
+/*******************************/
+
+size_t find_max_index(const size_t *data, size_t length) {
+  size_t max_index = 0;
+  size_t max_value = data[0];
+
+  for (size_t i = 1; i < length; i++) {
+    if (data[i] > max_value) {
+      max_value = data[i];
+      max_index = i;
+    }
+  }
+
+  return max_index;
+}

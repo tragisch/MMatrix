@@ -31,14 +31,17 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
                                     const DoubleMatrix *mat2);
 static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
                                                 const DoubleMatrix *mat2);
-static DoubleMatrix *dm_multiply_by_matrix_sparse(const DoubleMatrix *matrixA,
-                                                  const DoubleMatrix *matrixB);
+static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
+                                               const DoubleMatrix *matrixB);
 static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
                               double value);
 
 DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
                                     const DoubleVector *vec);
 void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar);
+static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
+                                         const double scalar);
+void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar);
 bool dm_equal(const DoubleMatrix *m1, const DoubleMatrix *m2);
 void dm_transpose(DoubleMatrix *mat);
 double dm_determinant(const DoubleMatrix *mat);

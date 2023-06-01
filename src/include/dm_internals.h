@@ -21,7 +21,7 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
                     size_t position);
 
 // shrink, push, pop, expand
-void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
+void dm_realloc_coo(DoubleMatrix *mat, size_t new_capacity);
 
 // gauss ellimination
 static void dm_gauss_elimination(DoubleMatrix *mat);

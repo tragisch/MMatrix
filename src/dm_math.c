@@ -67,45 +67,6 @@ bool dm_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 }
 
 /**
- * @brief Multiply a matrix with a scalar
- *
- * @param mat
- * @param scalar
- * @return DoubleMatrix
- */
-void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      dm_set(mat, i, j, dm_get(mat, i, j) * scalar);
-    }
-  }
-}
-
-/**
- * @brief Matrix-Vector Multiplication (n x m) x (n x 1)
- *
- * @param vec
- * @param mat
- * @return DoubleVector*
- */
-DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
-                                    const DoubleVector *vec) {
-  if (vec->rows != mat->cols) {
-    return NULL; // dimensions are incompatible, return NULL
-  }
-
-  DoubleVector *vec_result = dv_create(mat->rows);
-  for (size_t i = 0; i < mat->rows; i++) {
-    dv_set(vec_result, i, 0.0);
-    for (size_t j = 0; j < vec->rows; j++) {
-      dv_set(vec_result, i,
-             dv_get(vec_result, i) + dm_get(mat, i, j) * dv_get(vec, j));
-    }
-  }
-  return vec_result;
-}
-
-/**
  * @brief Matrix Vector
  *
  * @param mat

@@ -19,7 +19,7 @@
 /*******************************/
 
 /**
- * @brief Read a Matrix Market file and return a DoubleMatrix in Sparse format
+ * @brief Read a Matrix Market file and return a DoubleMatrix in COO format
  * format
  *
  * @param filename

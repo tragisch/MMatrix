@@ -15,9 +15,9 @@
 /*      Realloc COO          */
 /*******************************/
 
-void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
+void dm_realloc_coo(DoubleMatrix *mat, size_t new_capacity) {
   // check if matrix is already in sparse format:
-  if (mat->format != COO) {
+  if (mat->format == DENSE) {
     printf("Can not resize matrix to sparse format!\n");
     exit(EXIT_FAILURE);
   }
@@ -48,5 +48,3 @@ void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity) {
 /*******************************/
 /*       Realloc DENSE         */
 /*******************************/
-
-

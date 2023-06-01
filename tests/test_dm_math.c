@@ -17,6 +17,9 @@
 #define UNITY_INCLUDE_DOUBLE
 #define UNITY_DOUBLE_PRECISION 10
 
+/* Support for Meta Test Rig */
+#define TEST_CASE(...)
+
 #include "unity.h"
 #include "unity_internals.h"
 
@@ -24,7 +27,11 @@
  ** Tests
  *******************************/
 
-void test_dm_transpose() {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_transpose(matrix_format format) {
+  set_default_matrix_format(format);
   // Create a test matrix
   double arr[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
   DoubleMatrix *matrix = dm_create_from_array(3, 3, arr);
@@ -49,7 +56,11 @@ void test_dm_transpose() {
   dm_destroy(matrix);
 }
 
-void test_dm_multiply_by_vector() {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_multiply_by_vector(matrix_format format) {
+  set_default_matrix_format(format);
   // Create test matrix and vector
   double array[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   DoubleMatrix *matrix = dm_create_from_array(2, 3, array);
@@ -79,7 +90,11 @@ void test_dm_multiply_by_vector() {
   dv_destroy(expected_result);
 }
 
-void test_dm_multiply_by_matrix() {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_multiply_by_matrix(matrix_format format) {
+  set_default_matrix_format(format);
   // Create two test matrices
   double array1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   DoubleMatrix *matrix1 = dm_create_from_array(2, 3, array1);
@@ -104,7 +119,11 @@ void test_dm_multiply_by_matrix() {
   dm_destroy(expected_result);
 }
 
-void test_dm_determinant(void) {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_determinant(matrix_format format) {
+  set_default_matrix_format(format);
 
   double values[2][2] = {{2.0, 3.0}, {1.0, 5.0}};
   DoubleMatrix *mat = dm_create_from_array(2, 2, values);
@@ -121,9 +140,13 @@ void test_dm_determinant(void) {
   dm_destroy(mat2);
 }
 
-void test_dm_inverse(void) {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_inverse(matrix_format format) {
+  set_default_matrix_format(format);
   // Test case 1: 2x2 matrix
-  DoubleMatrix *mat1 = dm_create_format(2, 2, DENSE);
+  DoubleMatrix *mat1 = dm_create(2, 2);
   dm_set(mat1, 0, 0, 1);
   dm_set(mat1, 0, 1, 2);
   dm_set(mat1, 1, 0, 3);
@@ -137,7 +160,7 @@ void test_dm_inverse(void) {
   TEST_ASSERT_EQUAL_DOUBLE(-0.5, dm_get(inv1, 1, 1));
 
   // Test case 2: 3x3 matrix
-  DoubleMatrix *mat2 = dm_create_format(3, 3, DENSE);
+  DoubleMatrix *mat2 = dm_create(3, 3);
   dm_set(mat2, 0, 0, 1);
   dm_set(mat2, 0, 1, 2);
   dm_set(mat2, 0, 2, 0);
@@ -152,14 +175,22 @@ void test_dm_inverse(void) {
   dm_destroy(inv1);
 }
 
-void test_dm_rank_dense() {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_rank_dense(matrix_format format) {
+  set_default_matrix_format(format);
   double values[3][3] = {{1.0, 2.0, 3.0}, {0.0, 1.0, 4.0}, {5.0, 6.0, 0.0}};
   DoubleMatrix *mat = dm_create_from_array(3, 3, values);
   size_t rank = dm_rank(mat);
   TEST_ASSERT_EQUAL_INT(3, rank);
 }
 
-void test_dm_multiply_by_scalar() {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_multiply_by_scalar(matrix_format format) {
+  set_default_matrix_format(format);
   // Create a 2x2 matrix
 
   DoubleMatrix *mat = dm_create(2, 2);
@@ -181,7 +212,11 @@ void test_dm_multiply_by_scalar() {
   dm_destroy(mat);
 }
 
-void test_dm_trace() {
+TEST_CASE(0)
+TEST_CASE(1)
+// TEST_CASE(2)
+void test_dm_trace(matrix_format format) {
+  set_default_matrix_format(format);
   // Create a 3x3 matrix
   DoubleMatrix *mat = dm_create(3, 3);
   dm_set(mat, 0, 0, 1.0);

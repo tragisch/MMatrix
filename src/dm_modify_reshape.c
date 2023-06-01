@@ -31,7 +31,7 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
     dm_reshape_dense(mat, new_rows, new_cols);
     break;
   case COO:
-    dm_reshape_sparse(mat, new_rows, new_cols);
+    dm_reshape_coo(mat, new_rows, new_cols);
     break;
   case CSR:
     break; // not implemented yet
@@ -46,32 +46,41 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
 
 static void dm_reshape_dense(DoubleMatrix *matrix, size_t new_rows,
                              size_t new_cols) {
-
-  DoubleMatrix *reshaped_matrix = dm_create_format(new_rows, new_cols, DENSE);
-  if (reshaped_matrix == NULL) {
-    // Failed to allocate memory for the reshaped matrix
-    return;
-  }
-
-  // Copy values from the original matrix to the reshaped matrix
-  memcpy(reshaped_matrix->values, matrix->values,
-         matrix->rows * matrix->cols * sizeof(double));
-
-  // Update the matrix pointer with the reshaped matrix
   matrix->rows = new_rows;
   matrix->cols = new_cols;
-  matrix->capacity = new_rows * new_cols;
-  free(matrix->values);
-  matrix->values = reshaped_matrix->values;
-
-  // Free the reshaped matrix struct (not the values as they were assigned to
-  // the original matrix)
-  free(reshaped_matrix);
 }
 
 /*******************************/
 /*       Reshape COO        */
 /*******************************/
-// TODO: Implement
-static void dm_reshape_sparse(DoubleMatrix *matrix, size_t new_rows,
-                              size_t new_cols) {}
+static void dm_reshape_coo(DoubleMatrix *matrix, size_t new_rows,
+                           size_t new_cols) {
+
+  // new row_indices, col_indices and values arrays
+  size_t *new_row_indices =
+      realloc(matrix->row_indices, matrix->nnz * sizeof(size_t));
+  size_t *new_col_indices =
+      realloc(matrix->col_indices, matrix->nnz * sizeof(size_t));
+  double *new_values = realloc(matrix->values, matrix->nnz * sizeof(double));
+
+  if ((new_row_indices == NULL) || (new_col_indices == NULL) ||
+      (new_values == NULL)) {
+    perror("Error: memory allocation failed.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  size_t k = 0;
+  for (size_t i = 0; i < new_rows; i++) {
+    for (size_t j = 0; j < new_cols; j++) {
+      new_col_indices[k] = j;
+      new_row_indices[k] = i;
+      k++;
+    }
+  }
+
+  matrix->rows = new_rows;
+  matrix->cols = new_cols;
+  matrix->row_indices = new_row_indices;
+  matrix->col_indices = new_col_indices;
+  matrix->values = new_values;
+}
