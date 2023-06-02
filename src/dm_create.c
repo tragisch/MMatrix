@@ -106,7 +106,7 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
 DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz) {
   DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
   if (mat->format == COO) {
-    dm_realloc_sparse(mat, nnz);
+    dm_realloc_coo(mat, nnz);
   }
   return mat;
 }

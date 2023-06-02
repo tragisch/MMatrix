@@ -84,5 +84,6 @@ static void dm_drop_coo(DoubleMatrix *mat);
 
 void dm_order_coo(DoubleMatrix *mat);
 static void dm_swap_entries_coo(DoubleMatrix *mat, size_t i, size_t j);
+static void dm_correct_rows_cols_coo(DoubleMatrix *mat);
 
 #endif // DM_MODIFY_H

@@ -24,7 +24,7 @@ static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value);
 static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
 
 // shrink, push, pop, expand
-void dm_realloc_sparse(DoubleMatrix *mat, size_t new_capacity);
+void dm_realloc_coo(DoubleMatrix *mat, size_t new_capacity);
 
 // gauss ellimination
 static void dm_gauss_elimination(DoubleMatrix *mat);

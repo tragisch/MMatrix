@@ -16,6 +16,13 @@
 /*       Remove  entry         */
 /*******************************/
 
+/**
+ * @brief Remove a non-zero element from a sparse matrix
+ *
+ * @param mat (COO or CSC format)
+ * @param i
+ * @param j
+ */
 void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
   switch (mat->format) {
   case COO:
@@ -23,14 +30,15 @@ void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
     break;
   case CSC:
     break; // not implemented yet
-  case DENSE:
-    break; // nothing to do
-  case VECTOR:
-    break; // nothing to do
+  default:
+    perror("This function is only implemented for sparse matrices");
   }
 }
 
 // remove nnz value at index i,j of sparse matrix in COO format:
+// TODO: if removed element is last of row, col --> remove row, col
+// Due to performance reasons, there is an overall check during odering COO
+
 static void dm_remove_entry_coo(DoubleMatrix *mat, size_t i, size_t j) {
   for (int k = 0; k < mat->nnz; k++) {
     if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {

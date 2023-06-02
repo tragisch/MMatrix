@@ -53,7 +53,11 @@ static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   // copy values from old matrix to new matrix:
   for (int i = 0; i < new_row; i++) {
     for (int j = 0; j < new_col; j++) {
-      new_values[i * new_col + j] = mat->values[i * mat->cols + j];
+      if (i >= mat->rows || j >= mat->cols) {
+        new_values[i * new_col + j] = 0.0;
+      } else {
+        new_values[i * new_col + j] = mat->values[i * mat->cols + j];
+      }
     }
   }
 

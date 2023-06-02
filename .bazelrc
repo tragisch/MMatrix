@@ -1,25 +1,27 @@
+# build
 # ld: warning: -undefined dynamic_lookup may not work with chained fixups
 # temporary solution: https://github.com/bazelbuild/bazel/issues/16413
 build --linkopt=-Wl,-no_fixup_chains
-# build:macos_arm64_clang_coverage {
-#   copts = [ "-fprofile-instr-generate",    "-fcoverage-mapping",  ]
-#   linkopt = ["-fprofile-instr-generate",]
-# }
+
+# buildbuddy
+# build --bes_results_url=https://app.buildbuddy.io/invocation/
+# build --bes_backend=grpcs://remote.buildbuddy.io
 
 # test
-test --test_verbose_timeout_warnings
-
+test --test_verbose_timeout_warnings 
+test --verbose_failures
+test --keep_going 
+test --test_output=all
 
 # coverage:
-# coverage --incompatible_cc_coverage
 coverage --instrument_test_targets
-# coverage --experimental_cc_coverage
 coverage --instrumentation_filter="/tests[/test_:]" 
 coverage --combined_report=lcov 
+coverage --coverage_report_generator=@bazel_tools//tools/test/CoverageOutputGenerator/java/com/google/devtools/coverageoutputgenerator:Main               
+# coverage --incompatible_cc_coverage
+# coverage --experimental_cc_coverage
 # coverage --collect_code_coverage
 # coverage --nocache_test_results 
 # coverage --experimental_split_coverage_postprocessing
 # coverage --experimental_fetch_all_coverage_outputs 
 # coverage --remote_download_outputs=all
-coverage --coverage_report_generator=@bazel_tools//tools/test/CoverageOutputGenerator/java/com/google/devtools/coverageoutputgenerator:Main
-                   

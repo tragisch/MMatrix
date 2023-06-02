@@ -9,8 +9,10 @@
  *
  */
 
+#include "dbg.h"
 #include "dm.h"
 #include "dm_modify.h"
+#include "dm_utils.h"
 #include <math.h>
 
 // TODO: use a better value for EPSILON
@@ -87,4 +89,22 @@ static void dm_swap_entries_coo(DoubleMatrix *mat, size_t i, size_t j) {
   mat->row_indices[j] = tmp_row;
   mat->col_indices[j] = tmp_col;
   mat->values[j] = tmp_val;
+}
+
+/*******************************/
+/*   Correct rows, cols (COO)  */
+/*******************************/
+
+static void dm_correct_rows_cols_coo(DoubleMatrix *mat) {
+  // correct the rows and cols of the sparse matrix:
+  size_t k_col = find_max_index(mat->col_indices, mat->nnz);
+  size_t k_row = find_max_index(mat->row_indices, mat->nnz);
+
+  if (k_col != mat->cols) {
+    dbg(mat->cols = k_col); // Warning: this should not happen
+  }
+
+  if (k_row != mat->rows) {
+    dbg(mat->rows = k_row); // Warning: this should not happen
+  }
 }

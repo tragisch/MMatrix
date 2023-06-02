@@ -1,5 +1,5 @@
 /**
- * @file dm_math_blas.c
+ * @file dm_math_mult.c
  * @author Uwe Röttgermann (uwe@roettgermann.de)
  * @brief
  * @version 0.2
@@ -65,10 +65,6 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
   }
 }
 
-/*******************************/
-/*        Dense Matrix         */
-/*******************************/
-
 // use cblas_dgemm to multiply two matrices
 static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
                                                 const DoubleMatrix *mat2) {
@@ -83,10 +79,6 @@ static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
   return product;
 }
 
-/*******************************/
-/*       Sparse Matrix         */
-/*******************************/
-
 static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
                                                const DoubleMatrix *matrixB) {
 
@@ -97,7 +89,7 @@ static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
       matrixB->nnz; // Estimate for the non-zero elements in the result matrix
 
   if (nnz_estimate > result->capacity) {
-    dm_realloc_sparse(result, nnz_estimate);
+    dm_realloc_coo(result, nnz_estimate);
   }
   result->nnz = 0;
 
@@ -163,3 +155,74 @@ static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
 
 //   return product;
 // }
+
+/*******************************/
+/*       Matrix * scalar       */
+/*******************************/
+
+/**
+ * @brief Multiply a matrix with a scalar
+ *
+ * @param mat
+ * @param scalar
+ * @return DoubleMatrix
+ */
+void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
+  switch (mat->format) {
+  case DENSE:
+    dm_multiply_by_scalar_dense(mat, scalar);
+    break;
+  case COO:
+    dm_multiply_by_scalar_sparse(mat, scalar);
+    break;
+  // case CSC:
+  //   dm_multiply_by_scalar_sparse(mat, scalar);
+  //   break; // not implemented yet
+  case VECTOR:
+    dv_multiply_by_scalar(mat, scalar);
+    break; // not relevant
+  }
+}
+
+void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar) {
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      mat->values[i * mat->cols + j] *= scalar;
+    }
+  }
+}
+
+static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
+                                         const double scalar) {
+  for (size_t i = 0; i < mat->nnz; i++) {
+    mat->values[i] *= scalar;
+  }
+}
+
+/*******************************/
+/*       Matrix * Vector       */
+/*******************************/
+
+/**
+ * @brief Matrix-Vector Multiplication (n x m) x (n x 1)
+ *
+ * @param vec
+ * @param mat
+ * @return DoubleVector*
+ */
+DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
+                                    const DoubleVector *vec) {
+  if (vec->rows != mat->cols) {
+    return NULL; // dimensions are incompatible, return NULL
+  }
+
+  DoubleVector *vec_result = dv_create(mat->rows);
+  for (size_t i = 0; i < mat->rows; i++) {
+    dv_set(vec_result, i, 0.0);
+    for (size_t j = 0; j < vec->rows; j++) {
+      dv_set(vec_result, i,
+             dv_get(vec_result, i) + dm_get(mat, i, j) * dv_get(vec, j));
+    }
+  }
+  return vec_result;
+}

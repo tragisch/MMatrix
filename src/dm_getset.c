@@ -37,6 +37,8 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   case CSC:
     dm_set_csc(mat, i, j, value);
     break;
+  case CSR:
+    break; // not implemented yet
   case DENSE:
     dm_set_dense(mat, i, j, value);
     break;
@@ -103,7 +105,7 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
                     size_t position) {
   // Increase the capacity if needed
   if (matrix->nnz == matrix->capacity) {
-    dm_realloc_sparse(matrix, matrix->capacity * 2);
+    dm_realloc_coo(matrix, matrix->capacity * 2);
   }
 
   // Shift the existing elements to make space for the new element
@@ -154,7 +156,7 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
     break;
   case CSC:
     return dm_get_csc(mat, i, j);
-    break; // not implemented yet
+    break;
   case VECTOR:
     return dv_get(mat, i);
     break;
