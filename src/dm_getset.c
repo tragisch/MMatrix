@@ -37,8 +37,6 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   case CSC:
     dm_set_csc(mat, i, j, value);
     break;
-  case CSR:
-    break; // not implemented yet
   case DENSE:
     dm_set_dense(mat, i, j, value);
     break;

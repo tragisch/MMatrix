@@ -175,9 +175,9 @@ void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
   case COO:
     dm_multiply_by_scalar_sparse(mat, scalar);
     break;
-  // case CSC:
-  //   dm_multiply_by_scalar_sparse(mat, scalar);
-  //   break; // not implemented yet
+  case CSC:
+    dm_multiply_by_scalar_sparse(mat, scalar);
+    break;
   case VECTOR:
     dv_multiply_by_scalar(mat, scalar);
     break; // not relevant
