@@ -19,28 +19,6 @@ test_suite(
 
 unity_test(
     name = "test_dm_create",
-    srcs = [
-        "test_dm_create.c",
-    ],
-    deps = [
-        "//src:matrix",
-    ],
-    tags = ["smoke"],
-)
-
-unity_test(
-    name = "test_dm_create_special",
-    srcs = [
-        "test_dm_create_special.c",
-    ],
-    deps = [
-        "//src:matrix",
-    ],
-    tags = ["smoke"],
-)
-
-unity_test(
-    name = "test_dm_create",
     srcs = ["test_dm_create.c",],
     my_config = ["my_config.yml"],
     deps = ["//src:matrix",],

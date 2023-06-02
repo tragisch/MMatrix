@@ -17,7 +17,6 @@
 /* Support for Meta Test Rig */
 #define TEST_CASE(...)
 
-
 #include "unity.h"
 #include "unity_internals.h"
 
@@ -87,12 +86,9 @@ void test_dm_create_identity_csc(void) {
   dm_destroy(matrix);
 }
 
-void test_dm_create_identity_COO(void) {
-  set_default_matrix_format(COO);
-
- /****************************** 
- ** Test Random Matrix Creation
- *******************************/
+/******************************
+** Test Random Matrix Creation
+*******************************/
 
 // dm_create_rand
 TEST_CASE(0)
@@ -149,9 +145,6 @@ void test_dm_create_identity(matrix_format format) {
   dm_destroy(matrix);
 }
 
-
-void test_dm_create_from_array() {
-
 /******************************
  ** Test Array Matrix Creation
  *******************************/
@@ -186,8 +179,6 @@ void test_dm_create_from_array(matrix_format format) {
   dm_destroy(matrix);
 }
 
-
-
 /******************************
  ** Test Diagonal Matrix Creation
  *******************************/
@@ -217,4 +208,3 @@ void test_dm_create_diagonal(matrix_format format) {
   // Clean up resources
   dm_destroy(diagonal_mat);
 }
-
