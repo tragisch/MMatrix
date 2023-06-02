@@ -122,7 +122,7 @@ DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
     }
   }
 
-  if ((mat->format == COO) || (mat->format == CSR)) {
+  if ((mat->format == COO) || (mat->format == CSC)) {
     dm_drop_small_entries(mat);
   }
 

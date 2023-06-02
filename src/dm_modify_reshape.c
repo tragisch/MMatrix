@@ -11,6 +11,7 @@
 
 #include "dm.h"
 #include "dm_modify.h"
+#include <string.h>
 
 /*******************************/
 /*         Reshape Matrix      */
@@ -33,7 +34,7 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
   case COO:
     dm_reshape_coo(mat, new_rows, new_cols);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     break;
@@ -53,6 +54,7 @@ static void dm_reshape_dense(DoubleMatrix *matrix, size_t new_rows,
 /*******************************/
 /*       Reshape COO        */
 /*******************************/
+
 static void dm_reshape_coo(DoubleMatrix *matrix, size_t new_rows,
                            size_t new_cols) {
 
@@ -84,3 +86,4 @@ static void dm_reshape_coo(DoubleMatrix *matrix, size_t new_rows,
   matrix->col_indices = new_col_indices;
   matrix->values = new_values;
 }
+

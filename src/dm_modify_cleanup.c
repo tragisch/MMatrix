@@ -27,7 +27,7 @@ void dm_drop_small_entries(DoubleMatrix *mat) {
   case COO:
     dm_drop_coo(mat);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case DENSE:
     dm_drop_dense(mat);

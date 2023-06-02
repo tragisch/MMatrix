@@ -1,4 +1,5 @@
 #include "dm.h"
+
 #include "dm_convert.h"
 #include "dm_internals.h"
 #include "dm_io.h"
@@ -35,6 +36,7 @@ void test_double_precision(void) {
   // precision specified by UNITY_DOUBLE_PRECISION.
 }
 
+
 /******************************
  ** Test if set_default_matrix_format works
  *******************************/
@@ -69,6 +71,7 @@ TEST_CASE(1)
 // TEST_CASE(2)
 void test_dm_create(matrix_format format) {
   set_default_matrix_format(format);
+  
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   size_t cols = 4;
@@ -78,14 +81,61 @@ void test_dm_create(matrix_format format) {
   TEST_ASSERT_EQUAL(rows, matrix->rows);
   TEST_ASSERT_EQUAL(cols, matrix->cols);
 
+  TEST_ASSERT_EQUAL(0, matrix->nnz);
+  TEST_ASSERT_EQUAL(rows * cols, matrix->capacity);
+ 
   for (size_t i = 0; i < matrix->rows; i++) {
     for (size_t j = 0; j < matrix->cols; j++) {
       TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(matrix, i, j));
+
     }
   }
   // Free the memory allocated for the matrix.
   dm_destroy(matrix);
 }
+
+
+void test_dm_create_coo(void) {
+  set_default_matrix_format(COO);
+  // Test case 1: Create a matrix with valid dimensions
+  size_t rows = 3;
+  size_t cols = 4;
+  DoubleMatrix *matrix = dm_create(rows, cols);
+
+  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
+  TEST_ASSERT_EQUAL(rows, matrix->rows);
+  TEST_ASSERT_EQUAL(cols, matrix->cols);
+  TEST_ASSERT_EQUAL(0, matrix->nnz);
+  TEST_ASSERT_NULL(matrix->col_ptr);
+  TEST_ASSERT_EQUAL(INIT_CAPACITY, matrix->capacity);
+  TEST_ASSERT_EQUAL(1, matrix->format);
+
+  // Free the memory allocated for the matrix.
+  dm_destroy(matrix);
+}
+
+void test_dm_create_csc(void) {
+  set_default_matrix_format(CSC);
+  // Test case 1: Create a matrix with valid dimensions
+  size_t rows = 3;
+  size_t cols = 4;
+  DoubleMatrix *matrix = dm_create(rows, cols);
+
+  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
+  TEST_ASSERT_EQUAL(rows, matrix->rows);
+  TEST_ASSERT_EQUAL(cols, matrix->cols);
+  TEST_ASSERT_EQUAL(0, matrix->nnz);
+  TEST_ASSERT_NULL(matrix->col_indices);
+  TEST_ASSERT_EQUAL(INIT_CAPACITY, matrix->capacity);
+  TEST_ASSERT_EQUAL(2, matrix->format);
+
+  // Free the memory allocated for the matrix.
+  dm_destroy(matrix);
+}
+
+/****************************** /
+ ** Simple deconstructor tests:
+ *******************************/
 
 TEST_CASE(0)
 TEST_CASE(1)
@@ -261,6 +311,7 @@ void test_dm_create_diagonal(matrix_format format) {
   dm_destroy(diagonal_mat);
 }
 
+
 void test_dm_destroy() {
   size_t rows = 10;
   size_t cols = 10;
@@ -275,6 +326,7 @@ void test_dm_destroy() {
   TEST_ASSERT_NULL(sp_matrix->col_indices);
   TEST_ASSERT_NULL(sp_matrix->values);
 }
+
 
 void test_dm_convert_dense_to_coo() {
   // create dense matrix
@@ -338,3 +390,4 @@ void test_dm_convert_coo_to_dense() {
   // destroy matrix
   dm_destroy(sparse_mat);
 }
+

@@ -28,7 +28,7 @@ void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
   case COO:
     dm_remove_entry_coo(mat, i, j);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   default:
     perror("This function is only implemented for sparse matrices");
@@ -38,6 +38,7 @@ void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
 // remove nnz value at index i,j of sparse matrix in COO format:
 // TODO: if removed element is last of row, col --> remove row, col
 // Due to performance reasons, there is an overall check during odering COO
+
 static void dm_remove_entry_coo(DoubleMatrix *mat, size_t i, size_t j) {
   for (int k = 0; k < mat->nnz; k++) {
     if ((mat->row_indices[k] == i) && (mat->col_indices[k] == j)) {
@@ -66,16 +67,16 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
     dm_remove_column_dense(mat, column_idx);
     break;
   case COO:
-    dm_remove_column_sparse(mat, column_idx);
+    dm_remove_column_coo(mat, column_idx);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     break;
   }
 }
 
-static void dm_remove_column_sparse(DoubleMatrix *mat, size_t column_idx) {
+static void dm_remove_column_coo(DoubleMatrix *mat, size_t column_idx) {
   // shift all columns to the left:
   for (size_t i = 0; i < mat->nnz; i++) {
     if (mat->col_indices[i] == column_idx - 1) {
@@ -115,16 +116,16 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
     dm_remove_row_dense(mat, row_idx);
     break;
   case COO:
-    dm_remove_row_sparse(mat, row_idx);
+    dm_remove_row_coo(mat, row_idx);
     break;
-  case CSR:
+  case CSC:
     break; // not implemented yet
   case VECTOR:
     break;
   }
 }
 
-static void dm_remove_row_sparse(DoubleMatrix *mat, size_t row_idx) {
+static void dm_remove_row_coo(DoubleMatrix *mat, size_t row_idx) {
   size_t *temp_row_index = calloc(mat->nnz, sizeof(size_t));
   size_t *temp_col_index = calloc(mat->nnz, sizeof(size_t));
   double *temp_values = calloc(mat->nnz, sizeof(double));

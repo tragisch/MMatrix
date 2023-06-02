@@ -2,7 +2,6 @@
 #define DM_CONVERT_H
 
 #include "dm.h"
-#include "khash.h"
 #include <stdbool.h>
 
 /*******************************/
@@ -11,7 +10,16 @@
 
 void dm_convert(DoubleMatrix *mat, matrix_format format);
 
-static void dm_convert_sparse_to_dense(DoubleMatrix *mat);
-static void dm_convert_dense_to_sparse(DoubleMatrix *mat);
+// coo --> dense, csc
+static void dm_convert_coo_to_dense(DoubleMatrix *mat);
+static void dm_convert_coo_to_csc(DoubleMatrix *mat);
+
+// dense --> coo, csc
+static void dm_convert_dense_to_coo(DoubleMatrix *mat);
+static void dm_convert_dense_to_csc(DoubleMatrix *mat);
+
+// csc --> coo, dense
+static void dm_convert_csc_to_coo(DoubleMatrix *mat);
+static void dm_convert_csc_to_dense(DoubleMatrix *mat);
 
 #endif //  DM_CONVERT_H

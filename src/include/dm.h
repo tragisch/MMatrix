@@ -1,7 +1,6 @@
 #ifndef DM_H
 #define DM_H
 
-#include "khash.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,9 +9,10 @@
 /*     Define & Types          */
 /*******************************/
 
+enum { INIT_CAPACITY = 1000U };
+
 // sparse matrix formats
 typedef enum { DENSE, COO, CSC, VECTOR } matrix_format;
-KHASH_MAP_INIT_INT64(entry, double)
 
 extern matrix_format default_matrix_format;
 
@@ -22,9 +22,10 @@ typedef struct DoubleMatrix {
   size_t cols;          // Number of columns
   size_t capacity;      // Capacity of row_indices and col_indices
   size_t nnz;           // Number of non-zero elements
-  size_t *row_indices;  // Array of row indices of non-zero elements
+  size_t *row_indices;  // COO: Array of row indices of non-zero elements,
+  size_t *col_ptr;      // CSR: Array of row pointers
   size_t *col_indices;  // Array of column indices of non-zero elements
-  matrix_format format; // COO, CSR, DENSE or VECTOR
+  matrix_format format; // COO, CSC, DENSE or VECTOR
   double *values;       // Values
 } DoubleMatrix;
 

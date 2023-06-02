@@ -14,8 +14,6 @@
 #include "dm_internals.h"
 #include "dm_math.h"
 
-enum { INIT_CAPACITY = 1000U };
-
 /*******************************/
 /*  Double Vector (Dynamic)    */
 /*******************************/

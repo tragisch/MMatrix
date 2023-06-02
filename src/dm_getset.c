@@ -32,7 +32,10 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
   }
   switch (mat->format) {
   case COO:
-    dm_set_sparse(mat, i, j, value);
+    dm_set_coo(mat, i, j, value);
+    break;
+  case CSC:
+    dm_set_csc(mat, i, j, value);
     break;
   case CSR:
     break; // not implemented yet
@@ -62,8 +65,7 @@ static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j,
 /*         Set COO          */
 /*******************************/
 
-static void dm_set_sparse(DoubleMatrix *matrix, size_t i, size_t j,
-                          double value) {
+static void dm_set_coo(DoubleMatrix *matrix, size_t i, size_t j, double value) {
   // Find the position of the element (i, j) in the matrix
   size_t position = binary_search(matrix, i, j);
 
@@ -123,6 +125,12 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
 }
 
 /*******************************/
+/*          Set CSC          */
+/*******************************/
+
+static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {}
+
+/*******************************/
 /*          Get Value          */
 /*******************************/
 
@@ -144,11 +152,11 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
     return dm_get_dense(mat, i, j);
     break;
   case COO:
-    return dm_get_sparse(mat, i, j);
+    return dm_get_coo(mat, i, j);
     break;
-  case CSR:
-    return 0.0;
-    break; // not implemented yet
+  case CSC:
+    return dm_get_csc(mat, i, j);
+    break;
   case VECTOR:
     return dv_get(mat, i);
     break;
@@ -165,10 +173,24 @@ static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j) {
 }
 
 /*******************************/
+/*         Get CSC             */
+/*******************************/
+
+static double dm_get_csc(const DoubleMatrix *matrix, size_t i, size_t j) {
+  /// search for the element with row i and column j
+  for (int k = 0; k < matrix->nnz; k++) {
+    if (matrix->row_indices[k] == i && matrix->col_indices[k] == j) {
+      return matrix->values[k];
+    }
+  }
+  return 0.0;
+}
+
+/*******************************/
 /*         Get COO          */
 /*******************************/
 
-static double dm_get_sparse(const DoubleMatrix *matrix, size_t i, size_t j) {
+static double dm_get_coo(const DoubleMatrix *matrix, size_t i, size_t j) {
   if (i >= matrix->rows || j >= matrix->cols) {
     // Invalid position, handle error accordingly
     return 0.0; // Assuming 0.0 represents the default value

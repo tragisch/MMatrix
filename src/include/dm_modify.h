@@ -34,22 +34,22 @@ static void dm_remove_entry_coo(DoubleMatrix *mat, size_t i, size_t j);
 
 // insert column vector
 void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec);
-static void dm_insert_column_sparse(DoubleMatrix *mat, size_t column_idx);
+static void dm_insert_column_coo(DoubleMatrix *mat, size_t column_idx);
 static void dm_insert_column_dense(DoubleMatrix *mat, size_t column_idx);
 
 // insert row vector
 void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec);
-static void dm_insert_row_sparse(DoubleMatrix *mat, size_t row_idx);
+static void dm_insert_row_coo(DoubleMatrix *mat, size_t row_idx);
 static void dm_insert_row_dense(DoubleMatrix *mat, size_t row_idx);
 
 // remove column vector
 void dm_remove_column(DoubleMatrix *mat, size_t column_idx);
-static void dm_remove_column_sparse(DoubleMatrix *mat, size_t column_idx);
+static void dm_remove_column_coo(DoubleMatrix *mat, size_t column_idx);
 static void dm_remove_column_dense(DoubleMatrix *mat, size_t column_idx);
 
 // remove row vector
 void dm_remove_row(DoubleMatrix *mat, size_t row_idx);
-static void dm_remove_row_sparse(DoubleMatrix *mat, size_t row_idx);
+static void dm_remove_row_coo(DoubleMatrix *mat, size_t row_idx);
 static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx);
 
 /*******************************/

@@ -12,6 +12,7 @@
 #include "dm_modify.h"
 #include "dm.h"
 #include "dm_vector.h"
+#include <string.h>
 
 /*******************************/
 /*      Get Row and Column     */

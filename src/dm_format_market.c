@@ -13,6 +13,7 @@
 #include "dm_io.h"
 #include "dm_modify.h"
 #include "dm_utils.h"
+#include <string.h>
 
 /*******************************/
 /*     Matrix Market Format    */
