@@ -11,7 +11,7 @@
 /*******************************/
 
 // sparse matrix formats
-typedef enum { DENSE, COO, CSR, VECTOR } matrix_format;
+typedef enum { DENSE, COO, CSC, VECTOR } matrix_format;
 KHASH_MAP_INIT_INT64(entry, double)
 
 extern matrix_format default_matrix_format;
