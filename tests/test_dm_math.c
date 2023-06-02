@@ -29,7 +29,7 @@
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_transpose(matrix_format format) {
   set_default_matrix_format(format);
   // Create a test matrix
@@ -58,7 +58,7 @@ void test_dm_transpose(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_multiply_by_vector(matrix_format format) {
   set_default_matrix_format(format);
   // Create test matrix and vector
@@ -92,7 +92,7 @@ void test_dm_multiply_by_vector(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_multiply_by_matrix(matrix_format format) {
   set_default_matrix_format(format);
   // Create two test matrices
@@ -121,7 +121,7 @@ void test_dm_multiply_by_matrix(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_determinant(matrix_format format) {
   set_default_matrix_format(format);
 
@@ -142,7 +142,7 @@ void test_dm_determinant(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_inverse(matrix_format format) {
   set_default_matrix_format(format);
   // Test case 1: 2x2 matrix
@@ -177,7 +177,7 @@ void test_dm_inverse(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_rank_dense(matrix_format format) {
   set_default_matrix_format(format);
   double values[3][3] = {{1.0, 2.0, 3.0}, {0.0, 1.0, 4.0}, {5.0, 6.0, 0.0}};
@@ -188,7 +188,7 @@ void test_dm_rank_dense(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_multiply_by_scalar(matrix_format format) {
   set_default_matrix_format(format);
   // Create a 2x2 matrix
@@ -214,7 +214,7 @@ void test_dm_multiply_by_scalar(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_trace(matrix_format format) {
   set_default_matrix_format(format);
   // Create a 3x3 matrix

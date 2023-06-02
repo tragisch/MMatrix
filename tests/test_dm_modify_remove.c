@@ -25,7 +25,7 @@
  *******************************/
 
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_remove_entry(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with some initial values
@@ -63,7 +63,7 @@ void test_dm_remove_entry(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_remove_column(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with some initial values
@@ -103,7 +103,7 @@ void test_dm_remove_column(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_remove_row(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with some initial values

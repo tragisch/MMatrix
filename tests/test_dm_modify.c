@@ -25,7 +25,7 @@
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_get_row(matrix_format format) {
   set_default_matrix_format(format);
   // create test matrix
@@ -56,7 +56,7 @@ void test_dm_get_row(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_get_column(matrix_format format) {
   set_default_matrix_format(format);
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
@@ -76,7 +76,7 @@ void test_dm_get_column(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_get_sub_matrix(matrix_format format) {
   set_default_matrix_format(format);
   // Create a sample matrix

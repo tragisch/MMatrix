@@ -42,7 +42,7 @@ void test_double_precision(void) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_set_default_matrix_format(matrix_format format) {
   set_default_matrix_format(format);
   DoubleMatrix *mat = dm_create(2, 3);
@@ -130,7 +130,7 @@ void test_dm_create_csc(void) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_create2(matrix_format format) {
   set_default_matrix_format(format);
   // Create  3x3 double matrix
@@ -162,7 +162,7 @@ void test_dm_create2(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_get_row(matrix_format format) {
   set_default_matrix_format(format);
   // create test matrix
@@ -189,7 +189,7 @@ void test_dm_get_row(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_get_column(matrix_format format) {
   set_default_matrix_format(format);
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
@@ -205,7 +205,7 @@ void test_dm_get_column(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_set(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with 2 rows and 3 columns.
@@ -223,7 +223,7 @@ void test_dm_set(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_get(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with 2 rows and 3 columns.
@@ -244,7 +244,7 @@ void test_dm_get(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_get_sub_matrix(matrix_format format) {
   set_default_matrix_format(format);
   // Create a sample matrix
@@ -278,7 +278,7 @@ void test_dm_get_sub_matrix(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-// TEST_CASE(2)
+TEST_CASE(2)
 void test_dm_create_diagonal(matrix_format format) {
   set_default_matrix_format(format);
   // Create a sample diagonal matrix
