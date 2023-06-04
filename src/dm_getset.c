@@ -9,6 +9,7 @@
  *
  */
 
+#include "dbg.h"
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
@@ -126,7 +127,40 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
 /*          Set CSC          */
 /*******************************/
 
-static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {}
+static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {
+  if (mat->nnz == mat->capacity) {
+    dm_realloc_csc(mat, mat->capacity * 2);
+  }
+
+  // check if i and j are valid indices
+  size_t col_start = mat->col_ptrs[j];
+  size_t col_end = mat->col_ptrs[j + 1];
+
+  // check if the entry (i,j) already exists and just change it:
+  for (size_t k = col_start; k < col_end; k++) {
+    if (mat->row_indices[k] == i) {
+      mat->values[k] = value;
+      return;
+    }
+  }
+
+  // entry (i,j) does not exist, so add it
+  size_t nnz = mat->nnz;
+
+  for (size_t k = nnz; k > col_end; k--) {
+    mat->row_indices[k] = mat->row_indices[k - 1];
+    mat->values[k] = mat->values[k - 1];
+  }
+
+  mat->row_indices[col_end] = i;
+  mat->values[col_end] = value;
+  mat->nnz++;
+
+  // update nnz counts for all subsequent columns
+  for (size_t k = j + 1; k <= mat->cols; k++) {
+    mat->col_ptrs[k]++;
+  }
+}
 
 /*******************************/
 /*          Get Value          */
@@ -174,13 +208,17 @@ static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j) {
 /*         Get CSC             */
 /*******************************/
 
-static double dm_get_csc(const DoubleMatrix *matrix, size_t i, size_t j) {
-  /// search for the element with row i and column j
-  for (int k = 0; k < matrix->nnz; k++) {
-    if (matrix->row_indices[k] == i && matrix->col_indices[k] == j) {
-      return matrix->values[k];
+static double dm_get_csc(const DoubleMatrix *mat, size_t i, size_t j) {
+  size_t col_start = mat->col_ptrs[j];
+  size_t col_end = mat->col_ptrs[j + 1];
+
+  for (size_t k = col_start; k < col_end; k++) {
+    if (mat->row_indices[k] == i) {
+      return mat->values[k];
     }
   }
+
+  // Element not found, return 0.0
   return 0.0;
 }
 

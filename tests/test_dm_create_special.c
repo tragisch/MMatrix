@@ -179,9 +179,9 @@ void test_dm_create_from_array(matrix_format format) {
   dm_destroy(matrix);
 }
 
-/******************************
- ** Test Diagonal Matrix Creation
- *******************************/
+// /******************************
+//  ** Test Diagonal Matrix Creation
+//  *******************************/
 
 TEST_CASE(0)
 TEST_CASE(1)

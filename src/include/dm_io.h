@@ -26,20 +26,27 @@
 char grid[HEIGHT][WIDTH];
 
 /*******************************/
-/*     I/O Functions           */
+/*     Pretty Print Matrix      */
 /*******************************/
 
-
-
-
 // print stdout:
-void dm_brief(const DoubleMatrix *mat);
 void dm_print(const DoubleMatrix *matrix);
 
-void dm_brief_sparse(const DoubleMatrix *mat);
+// test braille
 void sp_print_braille(const DoubleMatrix *mat);
+
+/*******************************/
+/*   Print brief information   */
+/*******************************/
+
+void dm_brief(const DoubleMatrix *mat);
+static void dm_brief_sparse(const DoubleMatrix *mat);
+
 void dm_print_condensed(DoubleMatrix *mat);
-void dm_print_structure(DoubleMatrix *mat, double strength);
+
+/*******************************/
+/*         Print Vector        */
+/*******************************/
 
 void dv_print(const DoubleVector *vec);
 static void dv_print_col(const DoubleVector *vec);
@@ -47,7 +54,24 @@ static void dv_print_row(const DoubleVector *vec);
 static void print_matrix_dimension(const DoubleMatrix *mat);
 
 /*******************************/
-/*     Plot structure         */
+/*        STRUCTURE PLOT       */
+/*******************************/
+
+void dm_print_structure(DoubleMatrix *mat, double strength);
+
+static void print_structure_csc(DoubleMatrix *mat, DoubleMatrix *count,
+                                double density);
+static void print_structure_coo(DoubleMatrix *mat, DoubleMatrix *count,
+                                double density);
+static void print_structure_dense(DoubleMatrix *mat, DoubleMatrix *count,
+                                  double density);
+static void print_element(DoubleMatrix *mat, DoubleMatrix *count, size_t x,
+                          size_t y);
+static void print_matrix_dimension(const DoubleMatrix *mat);
+static void print_matrix_info(DoubleMatrix *mat, double density);
+
+/*******************************/
+/*     Help Function Plot      */
 /*******************************/
 
 int plot(int x, int y, char c);

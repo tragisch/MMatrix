@@ -35,6 +35,7 @@ void dm_reshape(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
     dm_reshape_coo(mat, new_rows, new_cols);
     break;
   case CSC:
+    dm_reshape_csc(mat, new_rows, new_cols);
     break; // not implemented yet
   case VECTOR:
     break;
@@ -52,7 +53,7 @@ static void dm_reshape_dense(DoubleMatrix *matrix, size_t new_rows,
 }
 
 /*******************************/
-/*       Reshape COO        */
+/*         Reshape COO         */
 /*******************************/
 
 static void dm_reshape_coo(DoubleMatrix *matrix, size_t new_rows,
@@ -87,3 +88,31 @@ static void dm_reshape_coo(DoubleMatrix *matrix, size_t new_rows,
   matrix->values = new_values;
 }
 
+/*******************************/
+/*         Reshape CSC         */
+/*******************************/
+
+static void dm_reshape_csc(DoubleMatrix *matrix, size_t new_rows,
+                           size_t new_cols) {
+  // Update matrix properties
+  matrix->rows = new_rows;
+  matrix->cols = new_cols;
+
+  // Resize col_ptrs array
+  size_t col_ptrs_size = (new_cols + 1) * sizeof(size_t);
+  size_t *new_col_ptrs = realloc(matrix->col_ptrs, col_ptrs_size);
+  if (new_col_ptrs == NULL) {
+    perror("Error: memory allocation failed.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  matrix->col_ptrs = new_col_ptrs;
+
+  // Adjust col_ptrs values based on the new matrix size
+  double scale_factor =
+      (double)new_cols /
+      (double)matrix->cols; // TODO: scaling not euqal to other methods?
+  for (size_t i = 0; i <= new_cols; i++) {
+    matrix->col_ptrs[i] = (size_t)((double)matrix->col_ptrs[i] * scale_factor);
+  }
+}

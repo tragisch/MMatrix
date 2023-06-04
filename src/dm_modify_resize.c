@@ -32,6 +32,7 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
     dm_resize_coo(mat, new_row, new_col);
     break;
   case CSC:
+    dm_resize_csc(mat, new_row, new_col);
     break; // not implemented yet
   case VECTOR:
     dm_resize_dense(mat, new_row, 1);
@@ -89,4 +90,47 @@ static void dm_resize_coo(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   mat->values = values;
   mat->rows = new_row;
   mat->cols = new_col;
+}
+
+// resize matrix of CSC format:
+static void dm_resize_csc(DoubleMatrix *mat, size_t new_rows, size_t new_cols) {
+  if (mat == NULL || mat->format != CSC) {
+    // Invalid matrix or incorrect format
+    return;
+  }
+
+  // Resize row_indices and values arrays
+  size_t nnz = mat->col_ptrs[mat->cols] - mat->col_ptrs[0];
+
+  // realloc
+  size_t *new_row_indices = realloc(mat->row_indices, nnz * sizeof(size_t));
+  double *new_values = realloc(mat->values, nnz * sizeof(double));
+
+  if (new_row_indices == NULL || new_values == NULL) {
+    printf("Error allocating memory!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  mat->row_indices = new_row_indices;
+  mat->values = new_values;
+
+  // Update matrix properties
+  mat->rows = new_rows;
+  mat->cols = new_cols;
+
+  // Resize col_ptrs array
+  size_t col_ptrs_size = (new_cols + 1) * sizeof(size_t);
+  size_t *new_col_ptrs = realloc(mat->col_ptrs, col_ptrs_size);
+  if (new_col_ptrs == NULL) {
+    printf("Error allocating memory!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  mat->col_ptrs = new_col_ptrs;
+
+  // Adjust col_ptrs values based on the new matrix size
+  double scale_factor = (double)new_rows / (double)mat->rows;
+  for (size_t i = 0; i <= new_cols; i++) {
+    mat->col_ptrs[i] = (size_t)((double)mat->col_ptrs[i] * scale_factor);
+  }
 }

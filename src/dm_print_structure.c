@@ -26,53 +26,93 @@ const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
 /*        STRUCTURE PLOT       */
 /*******************************/
 
+/**
+ * @brief Prints the structure of a matrix to the console.
+ *
+ * @param mat
+ * @param strength
+ */
 void dm_print_structure(DoubleMatrix *mat, double strength) {
-  if (mat->format == DENSE) {
-    printf("Matrix is not in COO or CSR format, no structure to print\n");
-    return;
-  }
-  // set up grid
   init_grid();
 
-  double density = dm_density(mat);
-  // information about the matrix
+  double density = dm_density(mat) * strength;
+
+  print_matrix_info(mat, density);
+
+  DoubleMatrix *count = dm_create_format(WIDTH, HEIGHT, DENSE);
+
+  switch (mat->format) {
+  case DENSE:
+    print_structure_dense(mat, count, density);
+    break;
+  case COO:
+    print_structure_coo(mat, count, density);
+    break;
+  case CSC:
+    print_structure_csc(mat, count, density);
+    break;
+  default:
+    break;
+  }
+
+  show_grid(count);
+}
+
+static void print_matrix_info(DoubleMatrix *mat, double density) {
   printf("Structure of the matrix:\n");
   printf("Matrix (%zu x %zu, %zu), density: %lf\n", mat->rows, mat->cols,
          mat->nnz, density);
+}
 
-  // increase density for better visualization:
-  density *= strength;
+static void print_element(DoubleMatrix *mat, DoubleMatrix *count, size_t x,
+                          size_t y) {
+  dm_set(count, x, y, dm_get(count, x, y) + 1);
+  plot(x, y, '*');
+}
 
-  // setup a small dense matrix to count the appearance of each element
-  DoubleMatrix *count = dm_create_format(WIDTH, HEIGHT, DENSE);
-
-  // in case of sparse matrix:
-  if (mat->format == COO) {
-    for (size_t i = 0; i < mat->nnz; i++) {
-      // not every element is printed
-      if (randomDouble() < density) {
-        int x = get_x_coord(mat->row_indices[i], mat->rows);
-        int y = get_y_coord(mat->col_indices[i], mat->cols);
-
-        // track the number of elements in each cell
-        dm_set(count, x, y, dm_get(count, x, y) + 1);
-        plot(x, y, '*');
+static void print_structure_dense(DoubleMatrix *mat, DoubleMatrix *count,
+                                  double density) {
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      if (mat->values[i * mat->cols + j] != 0 && randomDouble() < density) {
+        int x = get_x_coord(i, mat->rows);
+        int y = get_y_coord(mat->col_indices[j], mat->cols);
+        print_element(mat, count, x, y);
       }
     }
   }
+}
 
-  // print the grid
-  show_grid(count);
+static void print_structure_coo(DoubleMatrix *mat, DoubleMatrix *count,
+                                double density) {
+  for (size_t i = 0; i < mat->nnz; i++) {
+    if (randomDouble() < density) {
+      int x = get_x_coord(mat->row_indices[i], mat->rows);
+      int y = get_y_coord(mat->col_indices[i], mat->cols);
+      print_element(mat, count, x, y);
+    }
+  }
+}
+
+static void print_structure_csc(DoubleMatrix *mat, DoubleMatrix *count,
+                                double density) {
+  for (size_t i = 0; i < mat->cols; i++) {
+    for (size_t j = mat->col_ptrs[i]; j < mat->col_ptrs[i + 1]; j++) {
+      if (randomDouble() < density) {
+        int x = get_x_coord(mat->row_indices[j], mat->rows);
+        int y = get_y_coord(i, mat->cols);
+        print_element(mat, count, x, y);
+      }
+    }
+  }
 }
 
 /*******************************/
 /*          GRID PLOT          */
 /*******************************/
-
 // from: https://c-for-dummies.com/blog/?p=761
 
 void show_grid(DoubleMatrix *count) {
-
   for (int y = 0; y < HEIGHT; y++) {
     for (int x = 0; x < WIDTH; x++) {
       // Check if the character has a color escape code

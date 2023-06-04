@@ -1,9 +1,9 @@
 #include "dm.h"
-
 #include "dm_convert.h"
 #include "dm_internals.h"
 #include "dm_io.h"
 #include "dm_math.h"
+#include "dm_modify.h"
 #include "dm_vector.h"
 #include <stddef.h>
 #include <stdlib.h>
@@ -14,11 +14,10 @@
 #define UNITY_INCLUDE_DOUBLE
 #define UNITY_DOUBLE_PRECISION 10
 
-/* Support for Meta Test Rig */
-#define TEST_CASE(...)
-
 #include "unity.h"
 #include "unity_internals.h"
+
+void setUp(void) { set_default_matrix_format(HASHTABLE); }
 
 /******************************
  ** Test if precision works
@@ -37,46 +36,18 @@ void test_double_precision(void) {
 }
 
 /******************************
- ** Test if set_default_matrix_format works
- *******************************/
-
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_set_default_matrix_format(matrix_format format) {
-  set_default_matrix_format(format);
-  DoubleMatrix *mat = dm_create(2, 3);
-  switch (format) {
-  case DENSE:
-    TEST_ASSERT_EQUAL(0, mat->format);
-    break;
-  case COO:
-    TEST_ASSERT_EQUAL(1, mat->format);
-    break;
-  case CSC:
-    TEST_ASSERT_EQUAL(2, mat->format);
-    break;
-  default:
-    break;
-  }
-}
-
-/******************************
  ** Creation of matrices:
  *******************************/
 
-void test_dm_create_dense(void) {
-
+void test_dm_create(void) {
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   size_t cols = 4;
-  DoubleMatrix *matrix = dm_create_format(rows, cols, DENSE);
+  DoubleMatrix *matrix = dm_create(rows, cols);
 
   TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
   TEST_ASSERT_EQUAL(rows, matrix->rows);
   TEST_ASSERT_EQUAL(cols, matrix->cols);
-  TEST_ASSERT_EQUAL(rows * cols, matrix->capacity);
-  TEST_ASSERT_EQUAL(0, matrix->nnz);
 
   for (size_t i = 0; i < matrix->rows; i++) {
     for (size_t j = 0; j < matrix->cols; j++) {
@@ -87,52 +58,28 @@ void test_dm_create_dense(void) {
   dm_destroy(matrix);
 }
 
-void test_dm_create_coo(void) {
-  // Test case 1: Create a matrix with valid dimensions
-  size_t rows = 3;
-  size_t cols = 4;
-  DoubleMatrix *matrix = dm_create_format(rows, cols, COO);
+// dm_create_rand
+void test_dm_create_rand(void) {
 
-  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
-  TEST_ASSERT_EQUAL(rows, matrix->rows);
-  TEST_ASSERT_EQUAL(cols, matrix->cols);
-  TEST_ASSERT_EQUAL(0, matrix->nnz);
-  TEST_ASSERT_NULL(matrix->col_ptrs);
-  TEST_ASSERT_EQUAL(INIT_CAPACITY, matrix->capacity);
-  TEST_ASSERT_EQUAL(1, matrix->format);
+  // Create a random matrix with 2 rows and 3 columns.
+  DoubleMatrix *mat = dm_create_rand(2, 3, 0.8);
 
+  // Check that the matrix was created successfully.
+  TEST_ASSERT_NOT_NULL(mat);
+  TEST_ASSERT_NOT_NULL(mat->hash_table->vals);
+  TEST_ASSERT_EQUAL_UINT(2, mat->rows);
+  TEST_ASSERT_EQUAL_UINT(3, mat->cols);
+
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      TEST_ASSERT_DOUBLE_WITHIN(1.0, 0.0, dm_get(mat, i, j));
+    }
+  }
   // Free the memory allocated for the matrix.
-  dm_destroy(matrix);
+  dm_destroy(mat);
 }
 
-void test_dm_create_csc(void) {
-  set_default_matrix_format(CSC);
-  // Test case 1: Create a matrix with valid dimensions
-  size_t rows = 3;
-  size_t cols = 4;
-  DoubleMatrix *matrix = dm_create(rows, cols);
-
-  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
-  TEST_ASSERT_EQUAL(rows, matrix->rows);
-  TEST_ASSERT_EQUAL(cols, matrix->cols);
-  TEST_ASSERT_EQUAL(0, matrix->nnz);
-  TEST_ASSERT_NULL(matrix->col_indices);
-  TEST_ASSERT_EQUAL(INIT_CAPACITY, matrix->capacity);
-  TEST_ASSERT_EQUAL(2, matrix->format);
-
-  // Free the memory allocated for the matrix.
-  dm_destroy(matrix);
-}
-
-/****************************** /
- ** Simple deconstructor tests:
- *******************************/
-
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_dm_create2(matrix_format format) {
-  set_default_matrix_format(format);
+void test_dm_create2(void) {
   // Create  3x3 double matrix
   DoubleMatrix *mat = dm_create(3, 3);
   dm_set(mat, 0, 0, 1.0);
@@ -160,11 +107,59 @@ void test_dm_create2(matrix_format format) {
   dm_destroy(mat);
 }
 
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_dm_get_row(matrix_format format) {
-  set_default_matrix_format(format);
+// dm_create
+void test_dm_create_identity(void) {
+  // Test case 1: Create a matrix with valid dimensions
+  size_t rows = 3;
+  DoubleMatrix *matrix = dm_create_identity(rows);
+
+  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
+  TEST_ASSERT_EQUAL(rows, matrix->rows);
+  TEST_ASSERT_EQUAL(matrix->rows, matrix->cols);
+
+  for (size_t i = 0; i < matrix->rows; i++) {
+    for (size_t j = 0; j < matrix->cols; j++) {
+      if (i == j) {
+        TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(matrix, i, j));
+      } else {
+        TEST_ASSERT_EQUAL_DOUBLE(0.0, dm_get(matrix, i, j));
+      }
+    }
+  }
+  // Free the memory allocated for the matrix.
+  dm_destroy(matrix);
+}
+
+/******************************
+ ** Operations on matrices:
+ *******************************/
+
+void test_dm_create_from_array() {
+  // Test input data
+  double array[2][3] = {
+      {1.1, 2.2, 3.3},
+      {4.4, 5.5, 6.6},
+  };
+  size_t rows = 2;
+  size_t cols = 3;
+
+  // Call the function being tested
+  DoubleMatrix *matrix = dm_create_from_array(rows, cols, array);
+
+  // Verify the output
+  TEST_ASSERT_EQUAL(rows, matrix->rows);
+  TEST_ASSERT_EQUAL(cols, matrix->cols);
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      TEST_ASSERT_EQUAL_DOUBLE(array[i][j], dm_get(matrix, i, j));
+    }
+  }
+
+  // Free the input data and output matrix
+  dm_destroy(matrix);
+}
+
+void test_dv_get_row(void) {
   // create test matrix
   double values[3][4] = {
       {1.0, 2.0, 3.0, 4.0}, {5.0, 6.0, 7.0, 8.0}, {9.9, 10.0, 11.0, 12.0}};
@@ -187,11 +182,8 @@ void test_dm_get_row(matrix_format format) {
   dv_destroy(vec);
 }
 
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_dm_get_column(matrix_format format) {
-  set_default_matrix_format(format);
+void test_dv_get_column(void) {
+
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
   DoubleMatrix *mat = dm_create_from_array(3, 2, values);
   DoubleVector *vec = dm_get_column(mat, 1);
@@ -203,11 +195,7 @@ void test_dm_get_column(matrix_format format) {
   dv_destroy(vec);
 }
 
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_dm_set(matrix_format format) {
-  set_default_matrix_format(format);
+void test_dm_set(void) {
   // Create a matrix with 2 rows and 3 columns.
   DoubleMatrix *mat = dm_create(2, 3);
 
@@ -221,11 +209,7 @@ void test_dm_set(matrix_format format) {
   dm_destroy(mat);
 }
 
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_dm_get(matrix_format format) {
-  set_default_matrix_format(format);
+void test_dm_get(void) {
   // Create a matrix with 2 rows and 3 columns.
   DoubleMatrix *mat = dm_create(2, 3);
 
@@ -242,11 +226,7 @@ void test_dm_get(matrix_format format) {
   dm_destroy(mat);
 }
 
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_dm_get_sub_matrix(matrix_format format) {
-  set_default_matrix_format(format);
+void test_dm_get_sub_matrix(void) {
   // Create a sample matrix
   DoubleMatrix *mat = dm_create(5, 5);
 
@@ -260,7 +240,7 @@ void test_dm_get_sub_matrix(matrix_format format) {
 
   // Get the sub-matrix
   DoubleMatrix *sub_mat = dm_get_sub_matrix(mat, 1, 3, 1, 3);
-
+  dm_drop_small_entries(sub_mat);
   // Verify the properties of the sub-matrix
   TEST_ASSERT_EQUAL(3, sub_mat->rows);
   TEST_ASSERT_EQUAL(3, sub_mat->cols);
@@ -276,11 +256,7 @@ void test_dm_get_sub_matrix(matrix_format format) {
   dm_destroy(sub_mat);
 }
 
-TEST_CASE(0)
-TEST_CASE(1)
-TEST_CASE(2)
-void test_dm_create_diagonal(matrix_format format) {
-  set_default_matrix_format(format);
+void test_dm_create_diagonal(void) {
   // Create a sample diagonal matrix
   size_t rows = 4;
   size_t cols = 4;
@@ -317,7 +293,7 @@ void test_dm_destroy() {
   TEST_ASSERT_NULL(sp_matrix->values);
 }
 
-void test_dm_convert_dense_to_coo() {
+void test_dm_convert_to_sparse() {
   // create dense matrix
   DoubleMatrix *mat = dm_create_format(3, 3, DENSE);
   dm_set(mat, 0, 0, 1);
@@ -351,7 +327,7 @@ void test_dm_convert_dense_to_coo() {
   dm_destroy(mat);
 }
 
-void test_dm_convert_coo_to_dense() {
+void test_dm_convert_to_dense() {
   // create a sparse matrix
   DoubleMatrix *sparse_mat = dm_create_format(3, 3, COO);
   dm_set(sparse_mat, 0, 0, 1);

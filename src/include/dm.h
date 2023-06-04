@@ -23,7 +23,7 @@ typedef struct DoubleMatrix {
   size_t capacity;      // Capacity of row_indices and col_indices
   size_t nnz;           // Number of non-zero elements
   size_t *row_indices;  // COO: Array of row indices of non-zero elements,
-  size_t *col_ptr;      // CSR: Array of row pointers
+  size_t *col_ptrs;     // CSR: Array of row pointers
   size_t *col_indices;  // Array of column indices of non-zero elements
   matrix_format format; // COO, CSC, DENSE or VECTOR
   double *values;       // Values
@@ -53,6 +53,9 @@ void dm_destroy(DoubleMatrix *mat);
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
 size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j);
+
+void dm_realloc_csc(DoubleMatrix *mat, size_t new_capacity);
+void dm_realloc_coo(DoubleMatrix *mat, size_t new_capacity);
 
 /*******************************/
 /*     Special Matrices        */

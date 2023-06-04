@@ -141,7 +141,7 @@ static DoubleMatrix *dm_create_coo(size_t rows, size_t cols) {
   mat->cols = cols;
   mat->capacity = INIT_CAPACITY;
   mat->nnz = 0;
-  mat->col_ptr = NULL;
+  mat->col_ptrs = NULL;
   mat->row_indices =
       calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
   mat->col_indices =
@@ -163,7 +163,7 @@ static DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
   matrix->nnz = 0;
   matrix->format = DENSE;
   matrix->capacity = rows * cols;
-  matrix->col_ptr = NULL;
+  matrix->col_ptrs = NULL;
   matrix->row_indices = NULL;
   matrix->col_indices = NULL;
   matrix->values = (double *)calloc(rows * cols, sizeof(double));
@@ -187,12 +187,14 @@ static DoubleMatrix *dm_create_csc(size_t rows, size_t cols) {
   matrix->col_indices = NULL; // Not used in CSC format
 
   // Allocate memory for column pointers, row indices, and values
-  matrix->col_ptr = malloc((cols + 1) * sizeof(size_t));
+  matrix->col_ptrs = malloc((cols + 1) * sizeof(size_t));
   matrix->row_indices = malloc(matrix->capacity * sizeof(size_t));
   matrix->values = (double *)calloc(matrix->capacity, sizeof(double));
 
-  matrix->col_ptr[0] = 0; // First column pointer is always 0
-  matrix->format = CSC;   // Set matrix format to CSC
+  matrix->col_ptrs[0] = 0; // First column pointer is always 0
+  matrix->col_ptrs[cols + 1] = matrix->nnz;
+
+  matrix->format = CSC; // Set matrix format to CSC
 
   return matrix;
 }
