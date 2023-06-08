@@ -52,7 +52,7 @@ void dm_destroy(DoubleMatrix *mat);
 
 double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
-size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j);
+size_t binary_search_coo(const DoubleMatrix *matrix, size_t i, size_t j);
 
 void dm_realloc_csc(DoubleMatrix *mat, size_t new_capacity);
 void dm_realloc_coo(DoubleMatrix *mat, size_t new_capacity);

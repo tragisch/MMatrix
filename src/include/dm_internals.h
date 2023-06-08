@@ -20,6 +20,7 @@ static void dm_set_coo(DoubleMatrix *mat, size_t i, size_t j, double value);
 void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
                     size_t position);
 static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value);
+static size_t binary_search_csc(const size_t *arr, size_t size, size_t target);
 
 static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j, double value);
 

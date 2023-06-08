@@ -121,7 +121,7 @@ static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
 
 static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
                               double value) {
-  size_t position = binary_search(result, row, col);
+  size_t position = binary_search_coo(result, row, col);
 
   if (position < result->nnz && result->row_indices[position] == row &&
       result->col_indices[position] == col) {

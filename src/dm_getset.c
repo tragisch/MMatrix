@@ -9,7 +9,6 @@
  *
  */
 
-#include "dbg.h"
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
@@ -66,7 +65,7 @@ static void dm_set_dense(DoubleMatrix *mat, size_t i, size_t j,
 
 static void dm_set_coo(DoubleMatrix *matrix, size_t i, size_t j, double value) {
   // Find the position of the element (i, j) in the matrix
-  size_t position = binary_search(matrix, i, j);
+  size_t position = binary_search_coo(matrix, i, j);
 
   if (position < matrix->nnz && matrix->row_indices[position] == i &&
       matrix->col_indices[position] == j) {
@@ -79,7 +78,7 @@ static void dm_set_coo(DoubleMatrix *matrix, size_t i, size_t j, double value) {
   }
 }
 
-size_t binary_search(const DoubleMatrix *matrix, size_t i, size_t j) {
+size_t binary_search_coo(const DoubleMatrix *matrix, size_t i, size_t j) {
   size_t low = 0;
   size_t high = matrix->nnz;
 
@@ -128,7 +127,7 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
 /*******************************/
 
 static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {
-  if (mat->nnz == mat->capacity) {
+  if (mat->nnz == mat->capacity - 1) {
     dm_realloc_csc(mat, mat->capacity * 2);
   }
 
@@ -137,29 +136,55 @@ static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {
   size_t col_end = mat->col_ptrs[j + 1];
 
   // check if the entry (i,j) already exists and just change it:
-  for (size_t k = col_start; k < col_end; k++) {
-    if (mat->row_indices[k] == i) {
-      mat->values[k] = value;
-      return;
-    }
+  size_t idx = binary_search_csc(mat->row_indices, col_end - col_start, i);
+
+  if (mat->row_indices[col_start + idx] == i) {
+    mat->values[col_start + idx] = value;
+    return;
   }
 
   // entry (i,j) does not exist, so add it
   size_t nnz = mat->nnz;
 
-  for (size_t k = nnz; k > col_end; k--) {
+  for (size_t k = nnz; k > col_start + idx; k--) {
     mat->row_indices[k] = mat->row_indices[k - 1];
     mat->values[k] = mat->values[k - 1];
   }
 
-  mat->row_indices[col_end] = i;
-  mat->values[col_end] = value;
+  mat->row_indices[col_start + idx] = i;
+  mat->values[col_start + idx] = value;
   mat->nnz++;
 
   // update nnz counts for all subsequent columns
   for (size_t k = j + 1; k <= mat->cols; k++) {
     mat->col_ptrs[k]++;
   }
+}
+
+static size_t binary_search_csc(const size_t *arr, size_t size, size_t target) {
+  // special case for empty array
+  if (size == 0) {
+    return 0;
+  }
+
+  size_t start = 0;
+  size_t end = size - 1;
+
+  while (start <= end) {
+    size_t mid = start + (end - start) / 2;
+
+    if (arr[mid] == target) {
+      return mid;
+    }
+    if (arr[mid] < target) {
+      start = mid + 1;
+    } else {
+      end = mid - 1;
+    }
+  }
+
+  // return end of array if not found
+  return start;
 }
 
 /*******************************/
@@ -232,7 +257,7 @@ static double dm_get_coo(const DoubleMatrix *matrix, size_t i, size_t j) {
     return 0.0; // Assuming 0.0 represents the default value
   }
 
-  size_t position = binary_search(matrix, i, j);
+  size_t position = binary_search_coo(matrix, i, j);
 
   if (position < matrix->nnz && matrix->row_indices[position] == i &&
       matrix->col_indices[position] == j) {

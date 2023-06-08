@@ -3,6 +3,7 @@
 
 #include "dm.h"
 #include "dm_internals.h"
+#include <cc_io.h>
 
 /*******************************/
 /*     Plot DEFINES            */
@@ -52,6 +53,9 @@ void dv_print(const DoubleVector *vec);
 static void dv_print_col(const DoubleVector *vec);
 static void dv_print_row(const DoubleVector *vec);
 static void print_matrix_dimension(const DoubleMatrix *mat);
+
+// test
+void print_ccs(DoubleMatrix *mat);
 
 /*******************************/
 /*        STRUCTURE PLOT       */
