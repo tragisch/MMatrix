@@ -70,6 +70,19 @@ static void dv_print_col(const DoubleVector *vec) {
 }
 
 /*******************************/
+/*      Print CCS Matrix       */
+/*******************************/
+
+void print_ccs(DoubleMatrix *mat) {
+  if (mat->format != CSC) {
+    return;
+  }
+  cc_print((int)mat->rows, (int)mat->cols, (int)mat->nnz,
+           (int *)mat->row_indices, (int *)mat->col_ptrs, mat->values,
+           "CCS Matrix");
+}
+
+/*******************************/
 /*    Pretty print Matrix      */
 /*******************************/
 
