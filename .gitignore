@@ -99,10 +99,11 @@ user.bazelrc
 # Style-Guide
 StyleGuide.md
 
-// my own
+# my own
 /examples/*
+/coverage/*
 /data/*
 /lib/*
 *.in
-*.clang_tidy
+*.clang-tidy
 *.png
