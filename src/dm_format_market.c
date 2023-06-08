@@ -10,9 +10,11 @@
  */
 
 #include "dm.h"
+#include "dm_format.h"
 #include "dm_io.h"
 #include "dm_modify.h"
 #include "dm_utils.h"
+#include <mm_io.h>
 #include <string.h>
 
 /*******************************/
@@ -119,4 +121,31 @@ void dm_write_matrix_market(const DoubleMatrix *mat, const char *filename) {
   }
 
   fclose(fp);
+}
+
+void dm_read_matrix_market2(const char *filename) {
+
+  FILE *fp = NULL;
+  int error = 0;
+  int m = 0;
+  int n = 0;
+  int nz = 0;
+  MM_typecode matcode;
+
+  // Open the Matrix Market file for reading
+  fp = fopen(filename, "r");
+  if (fp == NULL) {
+    printf("Error: Unable to open file.\n");
+    exit(1);
+  }
+
+  mm_read_banner(fp, &matcode);
+  error = mm_read_mtx_crd_size(fp, &m, &n, &nz);
+
+  if (error != 0) {
+    printf("Error: Unable to read Matrix Market file.\n");
+    exit(1);
+  }
+
+  
 }
