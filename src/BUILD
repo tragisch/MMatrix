@@ -12,6 +12,7 @@ cc_library(
     deps = [
         "@dbg-macro",
         "@cblas",
+        "//third_party/jburkardt:c_src",
     ],
 )
 
