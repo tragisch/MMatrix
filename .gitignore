@@ -96,9 +96,13 @@ user.bazelrc
 
 /tmp/*
 
-
-
 # Style-Guide
 StyleGuide.md
 
+// my own
 /examples/*
+/data/*
+/lib/*
+*.in
+*.clang_tidy
+*.png
