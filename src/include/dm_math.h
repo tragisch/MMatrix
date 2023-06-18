@@ -24,24 +24,51 @@ uint32_t randomInt_betweenBounds(uint32_t min, uint32_t max);
 uint32_t randomInt_upperBound(uint32_t limit);
 
 /*******************************/
-/*      Double Matrix Math     */
+/* Matrix*Matrix Multiplication*/
 /*******************************/
 
 DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
                                     const DoubleMatrix *mat2);
-static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
+
+// use cblas_dgemm to multiply two matrices
+static DoubleMatrix *dm_multiply_by_matrix_blas(const DoubleMatrix *mat1,
                                                 const DoubleMatrix *mat2);
+
 static DoubleMatrix *dm_multiply_by_matrix_coo(const DoubleMatrix *matrixA,
                                                const DoubleMatrix *matrixB);
+
+// general but naive apprach (not used, too slow)
+static DoubleMatrix *dm_multiply_by_matrix_naive(const DoubleMatrix *mat1,
+                                                 const DoubleMatrix *mat2);
+
+// helper for coo
 static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
                               double value);
 
+/*******************************/
+/* Matrix*Vector Multiplication */
+/*******************************/
+
 DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
                                     const DoubleVector *vec);
+static DoubleVector *dm_multiply_by_vector_naive(const DoubleMatrix *mat,
+                                                 const DoubleVector *vec);
+static DoubleVector *dm_multiply_by_vector_blas(const DoubleMatrix *mat,
+                                                const DoubleVector *vec);
+
+/*******************************/
+/* Matrix*Scalar Multiplication */
+/*******************************/
+
 void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar);
 static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
                                          const double scalar);
-void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar);
+static void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar);
+
+/*******************************/
+/* Matrix*Scalar Multiplication */
+/*******************************/
+
 bool dm_equal(const DoubleMatrix *m1, const DoubleMatrix *m2);
 void dm_transpose(DoubleMatrix *mat);
 double dm_determinant(const DoubleMatrix *mat);
@@ -51,12 +78,6 @@ double dm_trace(const DoubleMatrix *mat);
 // principles
 DoubleMatrix *dm_inverse(DoubleMatrix *mat);
 size_t dm_rank(const DoubleMatrix *mat);
-
-/*******************************/
-/*      Sparse Matrix Math     */
-/*******************************/
-
-double dm_density(const DoubleMatrix *mat);
 
 /*******************************/
 /*      Double Vector Math     */

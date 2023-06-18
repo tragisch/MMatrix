@@ -9,7 +9,7 @@
 /*     Define & Types          */
 /*******************************/
 
-enum { INIT_CAPACITY = 1000U };
+enum { INIT_CAPACITY = 100U };
 
 // sparse matrix formats
 typedef enum { DENSE, COO, CSC, VECTOR } matrix_format;
