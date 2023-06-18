@@ -51,13 +51,13 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
 
   switch (mat1->format) {
   case DENSE:
-    return dm_blas_multiply_by_matrix(mat1, mat2);
+    return dm_multiply_by_matrix_blas(mat1, mat2);
     break;
   case COO:
     return dm_multiply_by_matrix_coo(mat1, mat2);
     break;
   case CSC:
-    return NULL;
+    return dm_multiply_by_matrix_naive(mat1, mat2);
     break; // not implemented yet
   case VECTOR:
     return NULL;
@@ -65,8 +65,8 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
   }
 }
 
-// use cblas_dgemm to multiply two matrices
-static DoubleMatrix *dm_blas_multiply_by_matrix(const DoubleMatrix *mat1,
+// use cblas_dgemm to multiply two dense matrices
+static DoubleMatrix *dm_multiply_by_matrix_blas(const DoubleMatrix *mat1,
                                                 const DoubleMatrix *mat2) {
 
   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
@@ -133,28 +133,23 @@ static void accumulate_result(DoubleMatrix *result, size_t row, size_t col,
   }
 }
 
-/*******************************/
-/*      Naive Approach         */
-/*******************************/
+// naiver Algorithmus
+static DoubleMatrix *dm_multiply_by_matrix_naive(const DoubleMatrix *mat1,
+                                                 const DoubleMatrix *mat2) {
+  DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
 
-// static DoubleMatrix *dm_naive_multiply_by_matrix(const DoubleMatrix *mat1,
-//                                                     const DoubleMatrix *mat2)
-//                                                     {
-//   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
+  // Multiplying first and second matrices and storing it in product
+  for (size_t i = 0; i < mat1->rows; ++i) {
+    for (size_t j = 0; j < mat2->cols; ++j) {
+      for (size_t k = 0; k < mat1->cols; ++k) {
+        dm_set(product, i, j,
+               dm_get(product, i, j) + dm_get(mat1, i, k) * dm_get(mat2, k, j));
+      }
+    }
+  }
 
-//   // Multiplying first and second matrices and storing it in product
-//   for (size_t i = 0; i < mat1->rows; ++i) {
-//     for (size_t j = 0; j < mat2->cols; ++j) {
-//       for (size_t k = 0; k < mat1->cols; ++k) {
-//         dm_set(product, i, j,
-//                dm_get(product, i, j) + dm_get(mat1, i, k) * dm_get(mat2, k,
-//                j));
-//       }
-//     }
-//   }
-
-//   return product;
-// }
+  return product;
+}
 
 /*******************************/
 /*       Matrix * scalar       */
@@ -184,12 +179,15 @@ void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
   }
 }
 
-void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar) {
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      mat->values[i * mat->cols + j] *= scalar;
-    }
-  }
+static void dm_multiply_by_scalar_dense(DoubleMatrix *mat,
+                                        const double scalar) {
+  // for (size_t i = 0; i < mat->rows; i++) {
+  //   for (size_t j = 0; j < mat->cols; j++) {
+  //     mat->values[i * mat->cols + j] *= scalar;
+  //   }
+  // }
+
+  cblas_dscal((blasint)(mat->rows * mat->cols), scalar, mat->values, 1);
 }
 
 static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
@@ -212,6 +210,26 @@ static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
  */
 DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
                                     const DoubleVector *vec) {
+  switch (mat->format) {
+  case DENSE:
+    return dm_multiply_by_vector_blas(mat, vec);
+    break;
+  case COO:
+    return dm_multiply_by_vector_naive(mat, vec);
+    break;
+  case CSC:
+    return dm_multiply_by_vector_naive(mat, vec);
+    break;
+  default:
+    break;
+  }
+
+  return NULL;
+}
+
+// naiver Algorithmus
+static DoubleVector *dm_multiply_by_vector_naive(const DoubleMatrix *mat,
+                                                 const DoubleVector *vec) {
   if (vec->rows != mat->cols) {
     return NULL; // dimensions are incompatible, return NULL
   }
@@ -224,5 +242,18 @@ DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
              dv_get(vec_result, i) + dm_get(mat, i, j) * dv_get(vec, j));
     }
   }
+  return vec_result;
+}
+
+// using blas for dense matrices
+static DoubleVector *dm_multiply_by_vector_blas(const DoubleMatrix *mat,
+                                                const DoubleVector *vec) {
+
+  DoubleVector *vec_result = dv_create(mat->rows);
+
+  cblas_dgemv(CblasRowMajor, CblasNoTrans, (blasint)mat->rows,
+              (blasint)mat->cols, 1.0, mat->values, (blasint)mat->cols,
+              vec->values, 1, 0.0, vec_result->values, 1);
+
   return vec_result;
 }
