@@ -10,7 +10,9 @@
  */
 
 #include "dm_modify.h"
+#include "dbg.h"
 #include "dm.h"
+#include "dm_io.h"
 #include "dm_vector.h"
 #include <string.h>
 
@@ -118,19 +120,25 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
                                 size_t col_end) {
   if (row_start < 0 || row_start > mat->rows || row_end < 0 ||
       row_end > mat->rows || col_start < 0 || col_start > mat->cols ||
-      col_end < 0 || col_end > mat->cols) {
+      col_end < 0 || col_end > mat->cols || row_start > row_end ||
+      col_start > col_end) {
     perror("Error: matrix index out of bounds.\n");
     exit(EXIT_FAILURE);
   }
-  if (row_start > row_end || col_start > col_end) {
-    perror("Error: matrix index out of bounds.\n");
-    exit(EXIT_FAILURE);
-  }
+
   DoubleMatrix *sub_mat = dm_create_format(
       row_end - row_start + 1, col_end - col_start + 1, mat->format);
+
+ // dbga(sub_mat->col_ptrs, sub_mat->cols + 1);
+ // dbga(sub_mat->row_indices, 4);
+  // dbga(sub_mat->values, 4);
+
   for (size_t i = row_start; i <= row_end; i++) {
     for (size_t j = col_start; j <= col_end; j++) {
       dm_set(sub_mat, i - row_start, j - col_start, dm_get(mat, i, j));
+      dbg(i);
+      dbg(j);
+      dbga(sub_mat->values, 9);
     }
   }
   dm_drop_small_entries(sub_mat);
