@@ -29,14 +29,29 @@ TEST_CASE(2)
 void test_dm_set(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with 2 rows and 3 columns.
-  DoubleMatrix *mat = dm_create(2, 3);
+  DoubleMatrix *mat = dm_create(3, 3);
 
   // Set the value of the element at row 0, column 1 to 1.23.
-  dm_set(mat, 0, 1, 1.23);
-  dm_set(mat, 1, 2, 0.0);
+  dm_set(mat, 0, 0, 0.0);
+  dm_set(mat, 0, 1, 1.0);
+  dm_set(mat, 0, 2, 2.0);
+  dm_set(mat, 1, 0, 3.0);
+  dm_set(mat, 1, 1, 4.0);
+  dm_set(mat, 1, 2, 5.0);
+  dm_set(mat, 2, 0, 6.0);
+  dm_set(mat, 2, 1, 7.0);
+  dm_set(mat, 2, 2, 8.0);
 
   // Check that the value was set correctly.
-  TEST_ASSERT_EQUAL_DOUBLE(1.23, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(0.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 1, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(mat, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(mat, 2, 2));
 
   // Free the memory allocated for the matrix.
   dm_destroy(mat);

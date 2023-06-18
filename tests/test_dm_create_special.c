@@ -40,31 +40,11 @@ void test_double_precision(void) {
  ** Test identity matrix creation:
  *******************************/
 
-void test_dm_create_identity_dense(void) {
-  set_default_matrix_format(DENSE);
-  // Test case 1: Create a matrix with valid dimensions
-  size_t rows = 3;
-  DoubleMatrix *matrix = dm_create_identity(rows);
-
-  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
-  TEST_ASSERT_EQUAL(rows, matrix->rows);
-  TEST_ASSERT_EQUAL(matrix->rows, matrix->cols);
-
-  for (size_t i = 0; i < matrix->rows; i++) {
-    for (size_t j = 0; j < matrix->cols; j++) {
-      if (i == j) {
-        TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(matrix, i, j));
-      } else {
-        TEST_ASSERT_EQUAL_DOUBLE(0.0, dm_get(matrix, i, j));
-      }
-    }
-  }
-  // Free the memory allocated for the matrix.
-  dm_destroy(matrix);
-}
-
-void test_dm_create_identity_csc(void) {
-  set_default_matrix_format(CSC);
+TEST_CASE(0)
+TEST_CASE(1)
+TEST_CASE(2)
+void test_dm_create_identity_csc(matrix_format format) {
+  set_default_matrix_format(format);
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   DoubleMatrix *matrix = dm_create_identity(rows);

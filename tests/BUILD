@@ -35,6 +35,22 @@ unity_test(
 )
 
 unity_test(
+    name = "test_dm_math_linalg",
+    srcs = ["test_dm_math_linalg.c",],
+    my_config = ["my_config.yml"],
+    deps = ["//src:matrix",],
+    tags = ["math"],
+)
+
+unity_test(
+    name = "test_dm_math_mult",
+    srcs = ["test_dm_math_mult.c",],
+    my_config = ["my_config.yml"],
+    deps = ["//src:matrix",],
+    tags = ["math"],
+)
+
+unity_test(
     name = "test_dm_math_vector",
     srcs = ["test_dm_math_vector.c",],
     my_config = ["my_config.yml"],
