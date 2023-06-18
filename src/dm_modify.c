@@ -129,16 +129,16 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
   DoubleMatrix *sub_mat = dm_create_format(
       row_end - row_start + 1, col_end - col_start + 1, mat->format);
 
- // dbga(sub_mat->col_ptrs, sub_mat->cols + 1);
- // dbga(sub_mat->row_indices, 4);
+  // dbga(sub_mat->col_ptrs, sub_mat->cols + 1);
+  // dbga(sub_mat->row_indices, 4);
   // dbga(sub_mat->values, 4);
 
   for (size_t i = row_start; i <= row_end; i++) {
     for (size_t j = col_start; j <= col_end; j++) {
-      dm_set(sub_mat, i - row_start, j - col_start, dm_get(mat, i, j));
-      dbg(i);
-      dbg(j);
-      dbga(sub_mat->values, 9);
+      double value = dm_get(mat, i, j);
+      if (value != 0) {
+        dm_set(sub_mat, i - row_start, j - col_start, value);
+      }
     }
   }
   dm_drop_small_entries(sub_mat);

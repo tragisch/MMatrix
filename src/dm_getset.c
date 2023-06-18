@@ -9,8 +9,10 @@
  *
  */
 
+#include "dbg.h"
 #include "dm.h"
 #include "dm_internals.h"
+#include "dm_io.h"
 #include "dm_math.h"
 #include "dm_vector.h"
 
@@ -138,7 +140,7 @@ static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {
   // check if the entry (i,j) already exists and just change it:
   size_t idx = binary_search_csc(mat->row_indices, col_end - col_start, i);
 
-  if (mat->row_indices[col_start + idx] == i) {
+  if (mat->row_indices[col_start + idx] == i && col_start > 0) {
     mat->values[col_start + idx] = value;
     return;
   }
@@ -238,6 +240,7 @@ static double dm_get_csc(const DoubleMatrix *mat, size_t i, size_t j) {
   size_t col_end = mat->col_ptrs[j + 1];
 
   for (size_t k = col_start; k < col_end; k++) {
+
     if (mat->row_indices[k] == i) {
       return mat->values[k];
     }

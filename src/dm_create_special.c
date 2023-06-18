@@ -112,8 +112,6 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols,
 DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
   DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
 
-  dm_print(mat);
-
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
       if (i == j) {
