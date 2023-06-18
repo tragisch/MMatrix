@@ -29,6 +29,7 @@ void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec) {
       dm_insert_column_coo(mat, column_idx);
       break;
     case CSC:
+      // TODO: implement for CSC
       break; // not implemented yet
     case VECTOR:
       break;
@@ -78,8 +79,6 @@ static void dm_insert_column_dense(DoubleMatrix *mat, size_t column_idx) {
   }
 }
 
-
-
 /*******************************/
 /*         Insert Row          */
 /*******************************/
@@ -96,6 +95,7 @@ void dm_insert_row(DoubleMatrix *mat, size_t row_idx, DoubleVector *vec) {
       dm_insert_row_coo(mat, row_idx);
       break;
     case CSC:
+      // TODO: implement for CSC
       break; // not implemented yet
     case VECTOR:
       break;
@@ -144,4 +144,3 @@ static void dm_insert_row_dense(DoubleMatrix *mat, size_t row_idx) {
     }
   }
 }
-

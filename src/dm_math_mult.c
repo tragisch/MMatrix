@@ -168,10 +168,10 @@ void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
     dm_multiply_by_scalar_dense(mat, scalar);
     break;
   case COO:
-    dm_multiply_by_scalar_sparse(mat, scalar);
+    dm_multiply_by_scalar_coo(mat, scalar);
     break;
   case CSC:
-    dm_multiply_by_scalar_sparse(mat, scalar);
+    dm_multiply_by_scalar_csc(mat, scalar);
     break;
   case VECTOR:
     dv_multiply_by_scalar(mat, scalar);
@@ -190,6 +190,15 @@ static void dm_multiply_by_scalar_dense(DoubleMatrix *mat,
   cblas_dscal((blasint)(mat->rows * mat->cols), scalar, mat->values, 1);
 }
 
+static void dm_multiply_by_scalar_coo(DoubleMatrix *mat, const double scalar) {
+  dm_multiply_by_scalar_sparse(mat, scalar);
+}
+
+static void dm_multiply_by_scalar_csc(DoubleMatrix *mat, const double scalar) {
+  dm_multiply_by_scalar_sparse(mat, scalar);
+}
+
+// naiver Algorithmus
 static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
                                          const double scalar) {
   for (size_t i = 0; i < mat->nnz; i++) {
@@ -215,34 +224,16 @@ DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
     return dm_multiply_by_vector_blas(mat, vec);
     break;
   case COO:
-    return dm_multiply_by_vector_naive(mat, vec);
+    return dm_multiply_by_vector_coo(mat, vec);
     break;
   case CSC:
-    return dm_multiply_by_vector_naive(mat, vec);
+    return dm_multiply_by_vector_csc(mat, vec);
     break;
   default:
     break;
   }
 
   return NULL;
-}
-
-// naiver Algorithmus
-static DoubleVector *dm_multiply_by_vector_naive(const DoubleMatrix *mat,
-                                                 const DoubleVector *vec) {
-  if (vec->rows != mat->cols) {
-    return NULL; // dimensions are incompatible, return NULL
-  }
-
-  DoubleVector *vec_result = dv_create(mat->rows);
-  for (size_t i = 0; i < mat->rows; i++) {
-    dv_set(vec_result, i, 0.0);
-    for (size_t j = 0; j < vec->rows; j++) {
-      dv_set(vec_result, i,
-             dv_get(vec_result, i) + dm_get(mat, i, j) * dv_get(vec, j));
-    }
-  }
-  return vec_result;
 }
 
 // using blas for dense matrices
@@ -255,5 +246,33 @@ static DoubleVector *dm_multiply_by_vector_blas(const DoubleMatrix *mat,
               (blasint)mat->cols, 1.0, mat->values, (blasint)mat->cols,
               vec->values, 1, 0.0, vec_result->values, 1);
 
+  return vec_result;
+}
+
+static DoubleVector *dm_multiply_by_vector_coo(const DoubleMatrix *mat,
+                                               const DoubleVector *vec) {
+  return dm_multiply_by_vector_naive(mat, vec);
+}
+
+static DoubleVector *dm_multiply_by_vector_csc(const DoubleMatrix *mat,
+                                               const DoubleVector *vec) {
+  return dm_multiply_by_vector_naive(mat, vec);
+}
+
+// naiver Algorithmus
+static DoubleVector *dm_multiply_by_vector_naive(const DoubleMatrix *mat,
+                                                 const DoubleVector *vec) {
+  if (vec->rows != mat->cols) {
+    return NULL; // dimensions are incompatible, return NULL
+  }
+
+  DoubleVector *vec_result = dv_create(mat->rows);
+  for (size_t i = 0; i < mat->rows; i++) {
+    // dv_set(vec_result, i, 0.0);
+    for (size_t j = 0; j < vec->rows; j++) {
+      dv_set(vec_result, i,
+             dv_get(vec_result, i) + dm_get(mat, i, j) * dv_get(vec, j));
+    }
+  }
   return vec_result;
 }

@@ -55,6 +55,10 @@ static DoubleVector *dm_multiply_by_vector_naive(const DoubleMatrix *mat,
                                                  const DoubleVector *vec);
 static DoubleVector *dm_multiply_by_vector_blas(const DoubleMatrix *mat,
                                                 const DoubleVector *vec);
+static DoubleVector *dm_multiply_by_vector_coo(const DoubleMatrix *mat,
+                                               const DoubleVector *vec);
+static DoubleVector *dm_multiply_by_vector_csc(const DoubleMatrix *mat,
+                                               const DoubleVector *vec);
 
 /*******************************/
 /* Matrix*Scalar Multiplication */
@@ -64,6 +68,8 @@ void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar);
 static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
                                          const double scalar);
 static void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar);
+static void dm_multiply_by_scalar_coo(DoubleMatrix *mat, const double scalar);
+static void dm_multiply_by_scalar_csc(DoubleMatrix *mat, const double scalar);
 
 /*******************************/
 /* Matrix*Scalar Multiplication */
