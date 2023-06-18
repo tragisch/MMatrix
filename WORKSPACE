@@ -54,6 +54,15 @@ http_archive(
     url = "https://github.com/eerimoq/dbg-macro/archive/refs/tags/0.12.1.zip",
 )
 
+
+http_archive(
+	name = "openblas",
+	url = "http://github.com/xianyi/OpenBLAS/archive/v0.2.20.zip",
+	sha256 = "bb5499049cf60b07274740a4ddd756daa0fe2c817d981d7fe7e5898dcf411fdc",
+	strip_prefix = "OpenBLAS-0.2.20",
+	build_file = "@//:third_party/openblas/openblas.BUILD"
+)
+
 ##########################
 ## LOCAL REPOSITORIES (e.g. BREW)
 ##########################
