@@ -173,36 +173,36 @@ void dm_brief(const DoubleMatrix *mat) {
 // print all fields of a SparseMatrix *mat
 static void dm_brief_sparse(const DoubleMatrix *mat) {
 
-  printf("values: ");
+  printf("values: [");
   for (size_t i = 0; i < mat->nnz; i++) {
-    printf("%.2lf ", mat->values[i]);
+    printf("%.2lf, ", mat->values[i]);
   }
+  printf("]\n");
 
-  printf("\n");
-  printf("row_indices: ");
+  printf("row_indices: [");
   if (mat->row_indices != NULL) {
     for (size_t i = 0; i < mat->nnz; i++) {
-      printf("%zu ", mat->row_indices[i]);
+      printf("%zu, ", mat->row_indices[i]);
     }
   }
+  printf("]\n");
 
-  printf("\n");
   if (mat->format == COO) {
-    printf("col_indices: ");
+    printf("col_indices: [");
     if (mat->col_indices != NULL) {
       for (size_t i = 0; i < mat->nnz; i++) {
-        printf("%zu ", mat->col_indices[i]);
+        printf("%zu, ", mat->col_indices[i]);
       }
     }
   } else if (mat->format == CSC) {
-    printf("col_ptrs: ");
+    printf("col_ptrs: [");
     if (mat->col_ptrs != NULL) {
       for (size_t i = 0; i < mat->cols + 1; i++) {
-        printf("%zu ", mat->col_ptrs[i]);
+        printf("%zu, ", mat->col_ptrs[i]);
       }
     }
   }
-  printf("\n");
+  printf("]\n");
 }
 
 // print a sparse matrix in condensed form
