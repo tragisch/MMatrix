@@ -129,64 +129,41 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
 /*******************************/
 
 static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {
-  if (mat->nnz == mat->capacity - 1) {
-    dm_realloc_csc(mat, mat->capacity * 2);
-  }
 
-  // check if i and j are valid indices
   size_t col_start = mat->col_ptrs[j];
   size_t col_end = mat->col_ptrs[j + 1];
 
-  // check if the entry (i,j) already exists and just change it:
-  size_t idx = binary_search_csc(mat->row_indices, col_end - col_start, i);
-
-  if (mat->row_indices[col_start + idx] == i && col_start > 0) {
-    mat->values[col_start + idx] = value;
-    return;
+  // Check if the element already exists in the column
+  for (size_t k = col_start; k < col_end; k++) {
+    if (mat->row_indices[k] == i) {
+      mat->values[k] = value;
+      return;
+    }
   }
 
-  // entry (i,j) does not exist, so add it
-  size_t nnz = mat->nnz;
+  // The element doesn't exist, so we need to insert it
 
-  for (size_t k = nnz; k > col_start + idx; k--) {
+  // Check if there is enough capacity to insert a new element
+  if (mat->nnz + 1 > mat->capacity) {
+    dm_realloc_csc(mat, mat->capacity * 2);
+  }
+
+  // Shift the elements after the insertion point to make space
+  for (size_t k = mat->nnz; k > col_start; k--) {
     mat->row_indices[k] = mat->row_indices[k - 1];
     mat->values[k] = mat->values[k - 1];
   }
 
-  mat->row_indices[col_start + idx] = i;
-  mat->values[col_start + idx] = value;
-  mat->nnz++;
+  // Insert the new element
+  mat->row_indices[col_start] = i;
+  mat->values[col_start] = value;
 
-  // update nnz counts for all subsequent columns
+  // Update the column pointers after the insertion point
   for (size_t k = j + 1; k <= mat->cols; k++) {
     mat->col_ptrs[k]++;
   }
-}
 
-static size_t binary_search_csc(const size_t *arr, size_t size, size_t target) {
-  // special case for empty array
-  if (size == 0) {
-    return 0;
-  }
-
-  size_t start = 0;
-  size_t end = size - 1;
-
-  while (start <= end) {
-    size_t mid = start + (end - start) / 2;
-
-    if (arr[mid] == target) {
-      return mid;
-    }
-    if (arr[mid] < target) {
-      start = mid + 1;
-    } else {
-      end = mid - 1;
-    }
-  }
-
-  // return end of array if not found
-  return start;
+  mat->nnz++;
 }
 
 /*******************************/
