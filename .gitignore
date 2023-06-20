@@ -107,3 +107,5 @@ StyleGuide.md
 *.in
 *.clang-tidy
 *.png
+third_party/spmatrix/*
+third_party/gsl/*
