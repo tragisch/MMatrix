@@ -3,5 +3,5 @@
 A simple implementation for a double matrix library.  
 Features;
 - Hides different formats for user.
-- Support of COO, CSC and DENSE matrices.
+- Support of SPARSE (ordered COO) and DENSE matrices.
 
