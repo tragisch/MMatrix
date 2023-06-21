@@ -28,7 +28,7 @@
  *******************************/
 
 void test_dm_read_matrix_market(void) {
-  set_default_matrix_format(COO);
+  set_default_matrix_format(SPARSE);
   // Create a sample matrix market file for testing
   const char *filename = "test_matrix.mtx";
   FILE *file = fopen(filename, "w");

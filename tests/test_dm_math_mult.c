@@ -29,7 +29,6 @@
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_multiply_by_vector(matrix_format format) {
   set_default_matrix_format(format);
   // Create test matrix and vector
@@ -63,7 +62,6 @@ void test_dm_multiply_by_vector(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_multiply_by_matrix(matrix_format format) {
   set_default_matrix_format(format);
   // Create two test matrices
@@ -92,7 +90,6 @@ void test_dm_multiply_by_matrix(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_multiply_by_scalar(matrix_format format) {
   set_default_matrix_format(format);
   // Create a 2x2 matrix

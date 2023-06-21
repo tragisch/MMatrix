@@ -53,12 +53,9 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
   case DENSE:
     return dm_multiply_by_matrix_blas(mat1, mat2);
     break;
-  case COO:
+  case SPARSE:
     return dm_multiply_by_matrix_coo(mat1, mat2);
     break;
-  case CSC:
-    return dm_multiply_by_matrix_naive(mat1, mat2);
-    break; // not implemented yet
   case VECTOR:
     return NULL;
     break; // not relevant
@@ -167,11 +164,8 @@ void dm_multiply_by_scalar(DoubleMatrix *mat, const double scalar) {
   case DENSE:
     dm_multiply_by_scalar_dense(mat, scalar);
     break;
-  case COO:
+  case SPARSE:
     dm_multiply_by_scalar_coo(mat, scalar);
-    break;
-  case CSC:
-    dm_multiply_by_scalar_csc(mat, scalar);
     break;
   case VECTOR:
     dv_multiply_by_scalar(mat, scalar);
@@ -223,11 +217,8 @@ DoubleVector *dm_multiply_by_vector(const DoubleMatrix *mat,
   case DENSE:
     return dm_multiply_by_vector_blas(mat, vec);
     break;
-  case COO:
+  case SPARSE:
     return dm_multiply_by_vector_coo(mat, vec);
-    break;
-  case CSC:
-    return dm_multiply_by_vector_csc(mat, vec);
     break;
   default:
     break;
@@ -254,10 +245,6 @@ static DoubleVector *dm_multiply_by_vector_coo(const DoubleMatrix *mat,
   return dm_multiply_by_vector_naive(mat, vec);
 }
 
-static DoubleVector *dm_multiply_by_vector_csc(const DoubleMatrix *mat,
-                                               const DoubleVector *vec) {
-  return dm_multiply_by_vector_naive(mat, vec);
-}
 
 // naiver Algorithmus
 static DoubleVector *dm_multiply_by_vector_naive(const DoubleMatrix *mat,

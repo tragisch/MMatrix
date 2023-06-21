@@ -146,6 +146,4 @@ void dm_read_matrix_market2(const char *filename) {
     printf("Error: Unable to read Matrix Market file.\n");
     exit(1);
   }
-
-  
 }

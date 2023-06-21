@@ -42,7 +42,6 @@ void test_double_precision(void) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_set_default_matrix_format(matrix_format format) {
   set_default_matrix_format(format);
   DoubleMatrix *mat = dm_create(2, 3);
@@ -50,11 +49,8 @@ void test_set_default_matrix_format(matrix_format format) {
   case DENSE:
     TEST_ASSERT_EQUAL(0, mat->format);
     break;
-  case COO:
+  case SPARSE:
     TEST_ASSERT_EQUAL(1, mat->format);
-    break;
-  case CSC:
-    TEST_ASSERT_EQUAL(2, mat->format);
     break;
   default:
     break;
@@ -91,34 +87,14 @@ void test_dm_create_coo(void) {
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   size_t cols = 4;
-  DoubleMatrix *matrix = dm_create_format(rows, cols, COO);
+  DoubleMatrix *matrix = dm_create_format(rows, cols, SPARSE);
 
   TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
   TEST_ASSERT_EQUAL(rows, matrix->rows);
   TEST_ASSERT_EQUAL(cols, matrix->cols);
   TEST_ASSERT_EQUAL(0, matrix->nnz);
-  TEST_ASSERT_NULL(matrix->col_ptrs);
   TEST_ASSERT_EQUAL(INIT_CAPACITY, matrix->capacity);
   TEST_ASSERT_EQUAL(1, matrix->format);
-
-  // Free the memory allocated for the matrix.
-  dm_destroy(matrix);
-}
-
-void test_dm_create_csc(void) {
-  set_default_matrix_format(CSC);
-  // Test case 1: Create a matrix with valid dimensions
-  size_t rows = 3;
-  size_t cols = 4;
-  DoubleMatrix *matrix = dm_create(rows, cols);
-
-  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
-  TEST_ASSERT_EQUAL(rows, matrix->rows);
-  TEST_ASSERT_EQUAL(cols, matrix->cols);
-  TEST_ASSERT_EQUAL(0, matrix->nnz);
-  TEST_ASSERT_NULL(matrix->col_indices);
-  TEST_ASSERT_EQUAL(INIT_CAPACITY, matrix->capacity);
-  TEST_ASSERT_EQUAL(2, matrix->format);
 
   // Free the memory allocated for the matrix.
   dm_destroy(matrix);
@@ -130,7 +106,6 @@ void test_dm_create_csc(void) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_create2(matrix_format format) {
   set_default_matrix_format(format);
   // Create  3x3 double matrix
@@ -162,7 +137,6 @@ void test_dm_create2(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_get_row(matrix_format format) {
   set_default_matrix_format(format);
   // create test matrix
@@ -189,7 +163,6 @@ void test_dm_get_row(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_get_column(matrix_format format) {
   set_default_matrix_format(format);
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
@@ -205,7 +178,6 @@ void test_dm_get_column(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_set(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with 2 rows and 3 columns.
@@ -223,7 +195,6 @@ void test_dm_set(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_get(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with 2 rows and 3 columns.
@@ -244,7 +215,6 @@ void test_dm_get(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_get_sub_matrix(matrix_format format) {
   set_default_matrix_format(format);
   // Create a sample matrix
@@ -278,7 +248,6 @@ void test_dm_get_sub_matrix(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_create_diagonal(matrix_format format) {
   set_default_matrix_format(format);
   // Create a sample diagonal matrix
@@ -331,10 +300,10 @@ void test_dm_convert_dense_to_coo() {
   dm_set(mat, 2, 2, 6);
 
   // convert to sparse matrix
-  dm_convert(mat, COO);
+  dm_convert(mat, SPARSE);
 
   // check if matrix is in sparse format
-  TEST_ASSERT_EQUAL(COO, mat->format);
+  TEST_ASSERT_EQUAL(SPARSE, mat->format);
 
   // check matrix values
   TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
@@ -353,7 +322,7 @@ void test_dm_convert_dense_to_coo() {
 
 void test_dm_convert_coo_to_dense() {
   // create a sparse matrix
-  DoubleMatrix *sparse_mat = dm_create_format(3, 3, COO);
+  DoubleMatrix *sparse_mat = dm_create_format(3, 3, SPARSE);
   dm_set(sparse_mat, 0, 0, 1);
   dm_set(sparse_mat, 0, 1, 0);
   dm_set(sparse_mat, 0, 2, 0);

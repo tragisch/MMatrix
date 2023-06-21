@@ -24,8 +24,7 @@
  ** realloc_coo
  *******************************/
 
-TEST_CASE(1)
-TEST_CASE(2)
+TEST_CASE(0)
 void test_dm_realloc(matrix_format format) {
 
   // Set the default matrix format
@@ -34,12 +33,12 @@ void test_dm_realloc(matrix_format format) {
   // Create a matrix with initial capacity 3
   DoubleMatrix *mat = dm_create(3, 3);
 
-  // Reallocate the COO matrix with a new capacity of 5
+  // Reallocate the COO matrix with a new capacity of 5000
   size_t new_capacity = 5000;
   dm_realloc_coo(mat, new_capacity);
 
   // Check if the COO matrix has been reallocated correctly
-  TEST_ASSERT_EQUAL(new_capacity + INIT_CAPACITY, mat->capacity);
+  TEST_ASSERT_EQUAL(new_capacity, mat->capacity);
 
   // Clean up
   dm_destroy(mat);

@@ -28,11 +28,8 @@
  */
 void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j) {
   switch (mat->format) {
-  case COO:
+  case SPARSE:
     dm_remove_entry_coo(mat, i, j);
-    break;
-  case CSC:
-    dm_remove_entry_csc(mat, i, j);
     break;
   default:
     perror("This function is only implemented for sparse matrices");
@@ -58,43 +55,6 @@ static void dm_remove_entry_coo(DoubleMatrix *mat, size_t i, size_t j) {
   }
 }
 
-static void dm_remove_entry_csc(DoubleMatrix *mat, size_t i, size_t j) {
-  size_t idx = 0;
-
-  // Search for the row i in column j
-  for (size_t k = mat->col_ptrs[j]; k < mat->col_ptrs[j + 1]; k++) {
-    if (mat->row_indices[k] == i) {
-      idx = k;
-      break;
-    }
-  }
-
-  // Shift entries in values[] and rowIndices[] to remove the entry at idx
-  for (size_t k = idx; k < mat->col_ptrs[mat->cols] - 1; k++) {
-    mat->values[k] = mat->values[k + 1];
-    mat->row_indices[k] = mat->row_indices[k + 1];
-  }
-
-  // Update colPointers[] for all columns j' > j
-  for (size_t k = j + 1; k <= mat->cols; k++) {
-    mat->col_ptrs[k]--;
-  }
-
-  mat->nnz--;
-
-  double *new_values = realloc(mat->values, mat->nnz * sizeof(double));
-  size_t *new_row_indices =
-      realloc(mat->row_indices, mat->nnz * sizeof(size_t));
-
-  if (new_values == NULL || new_row_indices == NULL) {
-    perror("Could not reallocate memory");
-    exit(EXIT_FAILURE);
-  }
-
-  mat->values = new_values;
-  mat->row_indices = new_row_indices;
-}
-
 /*******************************/
 /*         Remove Column       */
 /*******************************/
@@ -107,11 +67,8 @@ void dm_remove_column(DoubleMatrix *mat, size_t column_idx) {
   case DENSE:
     dm_remove_column_dense(mat, column_idx);
     break;
-  case COO:
+  case SPARSE:
     dm_remove_column_coo(mat, column_idx);
-    break;
-  case CSC:
-    dm_remove_column_csc(mat, column_idx);
     break;
   case VECTOR:
     break;
@@ -171,53 +128,6 @@ static void dm_remove_column_coo(DoubleMatrix *mat, size_t column_idx) {
   dm_resize(mat, mat->rows, mat->cols - 1);
 }
 
-static void dm_remove_column_csc(DoubleMatrix *mat, size_t col_idx) {
-  // nnz of column to be removed
-  size_t nnz_col_idx = (mat->col_ptrs[col_idx + 1] - mat->col_ptrs[col_idx]);
-
-  if (col_idx == mat->cols - 1) {
-    mat->cols--;
-    mat->col_ptrs[mat->cols] = mat->nnz - nnz_col_idx;
-    mat->nnz -= nnz_col_idx;
-    // mat->cols--;
-  } else {
-
-    size_t bytes_after_remove_col_idx = (mat->cols - 1) * sizeof(size_t);
-    size_t remove_start = mat->col_ptrs[col_idx] - nnz_col_idx;
-    size_t remove_end = mat->col_ptrs[col_idx + 1] - nnz_col_idx;
-    size_t bytes_after_remove_end = (mat->nnz - remove_end) * sizeof(size_t);
-
-    memmove(&mat->col_ptrs[col_idx], &mat->col_ptrs[col_idx + 1],
-            bytes_after_remove_col_idx);
-    memmove(&mat->row_indices[remove_start], &mat->row_indices[remove_end],
-            bytes_after_remove_end);
-    bytes_after_remove_end = (mat->nnz - remove_end) * sizeof(double);
-    memmove(&mat->values[remove_start], &mat->values[remove_end],
-            bytes_after_remove_end);
-
-    mat->nnz -= nnz_col_idx;
-    mat->cols--;
-    for (size_t i = col_idx; i < mat->cols; i++) {
-      mat->col_ptrs[i] -= nnz_col_idx;
-    }
-    mat->col_ptrs[mat->cols] = mat->nnz;
-  }
-
-  // Optionally, reallocate memory to free unused space
-  size_t *new_col_ptrs =
-      realloc(mat->col_ptrs, (mat->cols + 1) * sizeof(size_t));
-  size_t *new_row_indices =
-      realloc(mat->row_indices, mat->nnz * sizeof(size_t));
-  double *new_values = realloc(mat->values, mat->nnz * sizeof(double));
-
-  if ((new_col_ptrs != NULL) || (new_row_indices != NULL) ||
-      (new_values != NULL)) {
-    mat->col_ptrs = new_col_ptrs;
-    mat->row_indices = new_row_indices;
-    mat->values = new_values;
-  }
-}
-
 static void dm_remove_column_dense(DoubleMatrix *mat, size_t column_idx) {
   // shift all columns to the left:
   for (size_t i = column_idx; i < mat->cols - 1; i++) {
@@ -242,11 +152,8 @@ void dm_remove_row(DoubleMatrix *mat, size_t row_idx) {
   case DENSE:
     dm_remove_row_dense(mat, row_idx);
     break;
-  case COO:
+  case SPARSE:
     dm_remove_row_coo(mat, row_idx);
-    break;
-  case CSC:
-    dm_remove_row_csc(mat, row_idx);
     break;
   case VECTOR:
     break;
@@ -337,62 +244,4 @@ static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx) {
 
   // resize the matrix:
   dm_resize(mat, mat->rows - 1, mat->cols);
-}
-
-/*******************************/
-/*     Remove Column CSC       */
-/*******************************/
-
-static void dm_remove_row_csc(DoubleMatrix *mat, size_t row_idx) {
-  // Check for invalid row index
-  if (row_idx >= mat->rows) {
-    fprintf(stderr, "Invalid row index: %zu\n", row_idx);
-    return;
-  }
-
-  // Check for empty matrix
-  if (mat->rows == 0) {
-    fprintf(stderr, "Cannot remove row from empty matrix\n");
-    return;
-  }
-
-  size_t nnz_removed = 0;
-
-  // Iterate over each column
-  for (size_t col_idx = 0; col_idx < mat->cols; col_idx++) {
-    size_t col_start = mat->col_ptrs[col_idx];
-    size_t col_end = mat->col_ptrs[col_idx + 1];
-
-    // Iterate over each element in the column
-    for (size_t i = col_start; i < col_end; i++) {
-      if (mat->row_indices[i] == row_idx) {
-        // This element belongs to the row to be removed
-        nnz_removed++;
-
-        // Shift the remaining elements up
-        memmove(&mat->row_indices[i], &mat->row_indices[i + 1],
-                (mat->nnz - i - 1) * sizeof(size_t));
-        memmove(&mat->values[i], &mat->values[i + 1],
-                (mat->nnz - i - 1) * sizeof(double));
-
-        // Update the end of the column
-        col_end--;
-        i--;
-      } else if (mat->row_indices[i] > row_idx) {
-        // Decrement the row index
-        mat->row_indices[i]--;
-      }
-    }
-
-    // Update the column pointer
-    mat->col_ptrs[col_idx + 1] -= nnz_removed;
-  }
-
-  // Update rows and nnz
-  mat->rows--;
-  mat->nnz -= nnz_removed;
-
-  // Optionally, reallocate memory to free unused space
-  mat->row_indices = realloc(mat->row_indices, mat->nnz * sizeof(size_t));
-  mat->values = realloc(mat->values, mat->nnz * sizeof(double));
 }

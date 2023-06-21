@@ -19,49 +19,27 @@ void dm_realloc_coo(DoubleMatrix *mat, size_t new_capacity) {
 
   if (new_capacity <= mat->capacity) {
     printf("Can not resize matrix to smaller capacity!\n");
-    return;
+    exit(EXIT_FAILURE);
+  }
+
+  if (new_capacity == 0) {
+    new_capacity = mat->capacity * 2;
   }
 
   // resize matrix:
-  size_t *row_indices = (size_t *)realloc(
-      mat->row_indices, (mat->capacity + new_capacity) * sizeof(size_t));
-  size_t *col_indices = (size_t *)realloc(
-      mat->col_indices, (mat->capacity + new_capacity) * sizeof(size_t));
-  double *values = (double *)realloc(
-      mat->values, (mat->capacity + new_capacity) * sizeof(double));
+  size_t *row_indices =
+      (size_t *)realloc(mat->row_indices, (new_capacity) * sizeof(size_t));
+  size_t *col_indices =
+      (size_t *)realloc(mat->col_indices, (new_capacity) * sizeof(size_t));
+  double *values =
+      (double *)realloc(mat->values, (new_capacity) * sizeof(double));
   if (row_indices == NULL || col_indices == NULL || values == NULL) {
     printf("Error allocating memory!\n");
     exit(EXIT_FAILURE);
   }
 
-  mat->capacity += new_capacity;
+  mat->capacity = new_capacity;
   mat->row_indices = row_indices;
   mat->col_indices = col_indices;
-  mat->values = values;
-}
-
-/*******************************/
-/*       Realloc CSC         */
-/*******************************/
-
-void dm_realloc_csc(DoubleMatrix *mat, size_t new_capacity) {
-
-  if (new_capacity <= mat->capacity) {
-    printf("Can not resize matrix to smaller capacity!\n");
-    return;
-  }
-
-  // resize matrix:
-  size_t *row_indices = (size_t *)realloc(
-      mat->row_indices, (mat->capacity + new_capacity) * sizeof(size_t));
-  double *values = (double *)realloc(
-      mat->values, (mat->capacity + new_capacity) * sizeof(double));
-  if (row_indices == NULL || values == NULL) {
-    printf("Error allocating memory!\n");
-    exit(EXIT_FAILURE);
-  }
-
-  mat->capacity += new_capacity;
-  mat->row_indices = row_indices;
   mat->values = values;
 }

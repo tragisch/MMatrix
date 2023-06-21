@@ -33,11 +33,8 @@ void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value) {
     exit(EXIT_FAILURE);
   }
   switch (mat->format) {
-  case COO:
+  case SPARSE:
     dm_set_coo(mat, i, j, value);
-    break;
-  case CSC:
-    dm_set_csc(mat, i, j, value);
     break;
   case DENSE:
     dm_set_dense(mat, i, j, value);
@@ -125,48 +122,6 @@ void insert_element(DoubleMatrix *matrix, size_t i, size_t j, double value,
 }
 
 /*******************************/
-/*          Set CSC          */
-/*******************************/
-
-static void dm_set_csc(DoubleMatrix *mat, size_t i, size_t j, double value) {
-
-  size_t col_start = mat->col_ptrs[j];
-  size_t col_end = mat->col_ptrs[j + 1];
-
-  // Check if the element already exists in the column
-  for (size_t k = col_start; k < col_end; k++) {
-    if (mat->row_indices[k] == i) {
-      mat->values[k] = value;
-      return;
-    }
-  }
-
-  // The element doesn't exist, so we need to insert it
-
-  // Check if there is enough capacity to insert a new element
-  if (mat->nnz + 1 > mat->capacity) {
-    dm_realloc_csc(mat, mat->capacity * 2);
-  }
-
-  // Shift the elements after the insertion point to make space
-  for (size_t k = mat->nnz; k > col_start; k--) {
-    mat->row_indices[k] = mat->row_indices[k - 1];
-    mat->values[k] = mat->values[k - 1];
-  }
-
-  // Insert the new element
-  mat->row_indices[col_start] = i;
-  mat->values[col_start] = value;
-
-  // Update the column pointers after the insertion point
-  for (size_t k = j + 1; k <= mat->cols; k++) {
-    mat->col_ptrs[k]++;
-  }
-
-  mat->nnz++;
-}
-
-/*******************************/
 /*          Get Value          */
 /*******************************/
 
@@ -187,11 +142,8 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   case DENSE:
     return dm_get_dense(mat, i, j);
     break;
-  case COO:
+  case SPARSE:
     return dm_get_coo(mat, i, j);
-    break;
-  case CSC:
-    return dm_get_csc(mat, i, j);
     break;
   case VECTOR:
     return dv_get(mat, i);
@@ -206,25 +158,6 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
 // get value from dense matrix:
 static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j) {
   return mat->values[i * mat->cols + j];
-}
-
-/*******************************/
-/*         Get CSC             */
-/*******************************/
-
-static double dm_get_csc(const DoubleMatrix *mat, size_t i, size_t j) {
-  size_t col_start = mat->col_ptrs[j];
-  size_t col_end = mat->col_ptrs[j + 1];
-
-  for (size_t k = col_start; k < col_end; k++) {
-
-    if (mat->row_indices[k] == i) {
-      return mat->values[k];
-    }
-  }
-
-  // Element not found, return 0.0
-  return 0.0;
 }
 
 /*******************************/

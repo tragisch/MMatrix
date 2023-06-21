@@ -18,7 +18,7 @@
 /*        DEFAULT FORMAT       */
 /*******************************/
 
-matrix_format default_matrix_format = COO; // default format
+matrix_format default_matrix_format = DENSE; // default format
 
 /**
  * @brief Set the Default Matrix Format object
@@ -53,18 +53,15 @@ void dm_destroy(DoubleMatrix *mat) {
  *
  * @param rows
  * @param cols
- * @param format (COO, CSR, DENSE, VECTOR)
+ * @param format (SPARSE, DENSE, VECTOR)
  * @return DoubleMatrix*
  */
 DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
   DoubleMatrix *mat = NULL;
 
   switch (format) {
-  case COO:
+  case SPARSE:
     mat = dm_create_coo(rows, cols);
-    break;
-  case CSC:
-    mat = dm_create_csc(rows, cols);
     break;
   case DENSE:
     mat = dm_create_dense(rows, cols);
@@ -105,8 +102,8 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
  */
 DoubleMatrix *dm_create_nnz(size_t rows, size_t cols, size_t nnz) {
   DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
-  if (mat->format == COO) {
-    dm_realloc_coo(mat, nnz);
+  if (mat->format == SPARSE) {
+    dm_realloc_coo(mat, nnz + INIT_CAPACITY);
   }
   return mat;
 }
@@ -141,12 +138,11 @@ static DoubleMatrix *dm_create_coo(size_t rows, size_t cols) {
   mat->cols = cols;
   mat->capacity = INIT_CAPACITY;
   mat->nnz = 0;
-  mat->col_ptrs = NULL;
   mat->row_indices =
       calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
   mat->col_indices =
       calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(size_t));
-  mat->format = COO;
+  mat->format = SPARSE;
   mat->values = calloc(max_int(INIT_CAPACITY, (int)mat->nnz), sizeof(double));
   return mat;
 }
@@ -163,38 +159,8 @@ static DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
   matrix->nnz = 0;
   matrix->format = DENSE;
   matrix->capacity = rows * cols;
-  matrix->col_ptrs = NULL;
   matrix->row_indices = NULL;
   matrix->col_indices = NULL;
   matrix->values = (double *)calloc(rows * cols, sizeof(double));
-  return matrix;
-}
-
-/*******************************/
-/*        CSC MATRIX        */
-/*******************************/
-
-static DoubleMatrix *dm_create_csc(size_t rows, size_t cols) {
-  DoubleMatrix *matrix = malloc(sizeof(DoubleMatrix));
-  if (matrix == NULL) {
-    return NULL; // Failed to allocate memory
-  }
-
-  matrix->rows = rows;
-  matrix->cols = cols;
-  matrix->capacity = INIT_CAPACITY;
-  matrix->nnz = 0;
-  matrix->col_indices = NULL; // Not used in CSC format
-
-  // Allocate memory for column pointers, row indices, and values
-  matrix->col_ptrs = malloc((cols + 1) * sizeof(size_t));
-  matrix->row_indices = malloc(matrix->capacity * sizeof(size_t));
-  matrix->values = (double *)calloc(matrix->capacity, sizeof(double));
-
-  matrix->col_ptrs[0] = 0; // First column pointer is always 0
-  matrix->col_ptrs[cols + 1] = matrix->nnz;
-
-  matrix->format = CSC; // Set matrix format to CSC
-
   return matrix;
 }

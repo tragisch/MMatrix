@@ -25,7 +25,6 @@
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_set(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with 2 rows and 3 columns.
@@ -63,7 +62,6 @@ void test_dm_set(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_get(matrix_format format) {
   set_default_matrix_format(format);
   // Create a matrix with 2 rows and 3 columns.

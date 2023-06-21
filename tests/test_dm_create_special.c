@@ -42,7 +42,6 @@ void test_double_precision(void) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_create_identity_csc(matrix_format format) {
   set_default_matrix_format(format);
   // Test case 1: Create a matrix with valid dimensions
@@ -73,7 +72,6 @@ void test_dm_create_identity_csc(matrix_format format) {
 // dm_create_rand
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_create_rand(matrix_format format) {
   set_default_matrix_format(format);
   // Create a random matrix with 2 rows and 3 columns.
@@ -100,7 +98,6 @@ void test_dm_create_rand(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_create_identity(matrix_format format) {
   set_default_matrix_format(format);
 
@@ -131,7 +128,6 @@ void test_dm_create_identity(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_create_from_array(matrix_format format) {
   set_default_matrix_format(format);
 
@@ -165,7 +161,6 @@ void test_dm_create_from_array(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_create_diagonal(matrix_format format) {
   set_default_matrix_format(format);
   // Create a sample diagonal matrix

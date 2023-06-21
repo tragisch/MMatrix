@@ -123,7 +123,7 @@ DoubleMatrix *dm_create_diagonal(size_t rows, size_t cols, double array[rows]) {
   }
 
   // remove small entries
-  if ((mat->format == COO) || (mat->format == CSC)) {
+  if (mat->format == SPARSE) {
     dm_drop_small_entries(mat);
   }
 

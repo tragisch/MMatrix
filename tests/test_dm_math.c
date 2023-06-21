@@ -29,7 +29,6 @@
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_transpose(matrix_format format) {
   set_default_matrix_format(format);
   // Create a test matrix
@@ -58,7 +57,6 @@ void test_dm_transpose(matrix_format format) {
 
 TEST_CASE(0)
 TEST_CASE(1)
-TEST_CASE(2)
 void test_dm_trace(matrix_format format) {
   set_default_matrix_format(format);
   // Create a 3x3 matrix

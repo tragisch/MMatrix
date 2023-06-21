@@ -24,11 +24,8 @@
 
 void dm_drop_small_entries(DoubleMatrix *mat) {
   switch (mat->format) {
-  case COO:
+  case SPARSE:
     dm_drop_coo(mat);
-    break;
-  case CSC:
-    dm_drop_csc(mat);
     break;
   case DENSE:
     dm_drop_dense(mat);
@@ -44,18 +41,6 @@ static void dm_drop_coo(DoubleMatrix *mat) {
     if (fabs(mat->values[i]) < EPSILON) {
       dm_remove_entry(mat, mat->row_indices[i], mat->col_indices[i]);
       i--;
-    }
-  }
-}
-
-static void dm_drop_csc(DoubleMatrix *mat) {
-  // remove all entries with absolute value < EPSILON:
-  for (size_t i = 0; i < mat->cols; i++) {
-    for (size_t j = mat->col_ptrs[i]; j < mat->col_ptrs[i + 1]; j++) {
-      if (fabs(mat->values[j]) < EPSILON) {
-        dm_remove_entry(mat, mat->row_indices[j], i);
-        j--;
-      }
     }
   }
 }

@@ -31,7 +31,6 @@ DoubleMatrix *dm_get_sub_matrix(DoubleMatrix *mat, size_t row_start,
 // remove entry from matrix (COO only)
 void dm_remove_entry(DoubleMatrix *mat, size_t i, size_t j);
 static void dm_remove_entry_coo(DoubleMatrix *mat, size_t i, size_t j);
-static void dm_remove_entry_csc(DoubleMatrix *mat, size_t i, size_t j);
 
 // insert column vector
 void dm_insert_column(DoubleMatrix *mat, size_t column_idx, DoubleVector *vec);
@@ -46,13 +45,11 @@ static void dm_insert_row_dense(DoubleMatrix *mat, size_t row_idx);
 // remove column vector
 void dm_remove_column(DoubleMatrix *mat, size_t column_idx);
 static void dm_remove_column_coo(DoubleMatrix *mat, size_t column_idx);
-static void dm_remove_column_csc(DoubleMatrix *mat, size_t col_idx);
 static void dm_remove_column_dense(DoubleMatrix *mat, size_t column_idx);
 
 // remove row vector
 void dm_remove_row(DoubleMatrix *mat, size_t row_idx);
 static void dm_remove_row_coo(DoubleMatrix *mat, size_t row_idx);
-static void dm_remove_row_csc(DoubleMatrix *mat, size_t row_idx);
 static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx);
 
 /*******************************/
@@ -63,8 +60,6 @@ static void dm_remove_row_dense(DoubleMatrix *mat, size_t row_idx);
 void dm_reshape(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_reshape_coo(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_reshape_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
-static void dm_reshape_csc(DoubleMatrix *matrix, size_t new_rows,
-                           size_t new_cols);
 
 /*******************************/
 /*           Resize            */
@@ -74,7 +69,6 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
 
 static void dm_resize_dense(DoubleMatrix *mat, size_t new_row, size_t new_col);
 static void dm_resize_coo(DoubleMatrix *mat, size_t new_row, size_t new_col);
-static void dm_resize_csc(DoubleMatrix *mat, size_t new_rows, size_t new_cols);
 
 /*******************************/
 /*     Drop Small Entries      */
@@ -83,7 +77,6 @@ static void dm_resize_csc(DoubleMatrix *mat, size_t new_rows, size_t new_cols);
 void dm_drop_small_entries(DoubleMatrix *mat);
 static void dm_drop_dense(DoubleMatrix *mat);
 static void dm_drop_coo(DoubleMatrix *mat);
-static void dm_drop_csc(DoubleMatrix *mat);
 
 /*******************************/
 /*          Order COO          */

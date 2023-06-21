@@ -45,11 +45,8 @@ void dm_print_structure(DoubleMatrix *mat, double strength) {
   case DENSE:
     print_structure_dense(mat, count, density);
     break;
-  case COO:
+  case SPARSE:
     print_structure_coo(mat, count, density);
-    break;
-  case CSC:
-    print_structure_csc(mat, count, density);
     break;
   default:
     break;
@@ -94,18 +91,6 @@ static void print_structure_coo(DoubleMatrix *mat, DoubleMatrix *count,
   }
 }
 
-static void print_structure_csc(DoubleMatrix *mat, DoubleMatrix *count,
-                                double density) {
-  for (size_t i = 0; i < mat->cols; i++) {
-    for (size_t j = mat->col_ptrs[i]; j < mat->col_ptrs[i + 1]; j++) {
-      if (randomDouble() < density) {
-        int x = get_x_coord(mat->row_indices[j], mat->rows);
-        int y = get_y_coord(i, mat->cols);
-        print_element(mat, count, x, y);
-      }
-    }
-  }
-}
 
 /*******************************/
 /*          GRID PLOT          */
