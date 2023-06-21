@@ -14,6 +14,7 @@
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
+#include <cblas.h>
 
 /*******************************/
 /*         Determinant         */
@@ -36,6 +37,7 @@ double dm_determinant(const DoubleMatrix *mat) {
     return dm_get(mat, 0, 0) * dm_get(mat, 1, 1) -
            dm_get(mat, 0, 1) * dm_get(mat, 1, 0);
   }
+
   double det = 0;
   for (size_t i = 0; i < mat->cols; i++) {
     DoubleMatrix *sub_mat = dm_create(mat->cols - 1, mat->cols - 1);

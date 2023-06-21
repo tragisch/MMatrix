@@ -74,5 +74,11 @@ new_local_repository(
     path = "/opt/homebrew/Cellar/openblas/0.3.23",
 )
 
+new_local_repository(
+    name = "gsl",
+    build_file = "./third_party/gsl/BUILD",
+    path = "/opt/homebrew/Cellar/gsl/2.7.1",
+)
+
 
 
