@@ -2,21 +2,47 @@ workspace(name = "DoubleMatrix")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 ##########################
-## Code Coverage
+## C++ Toolchain
 ##########################
-# How to use:
-# 1. Generate coverage data with bazel coverage //your/targets/... --instrumentation_filter=<...>
-# 2. Build the coverage report generator: bazel build @hchauvin_bazel_coverage_report//report:bin
-# 3. Generate the report: bazel-bin/external/hchauvin_bazel_coverage_report/report/bin --dest_dir=<dest dir>
 
-# git_repository(
-#     name = "hchauvin_bazel_coverage_report",
-#     remote = "https://github.com/hchauvin/bazel-coverage-report.git",
-#     commit = "{HEAD}",
+# http_archive(
+#     name = "rules_cc",
+#     urls = ["https://github.com/bazelbuild/rules_cc/releases/download/0.0.6/rules_cc-0.0.6.tar.gz"],
+#     sha256 = "3d9e271e2876ba42e114c9b9bc51454e379cbf0ec9ef9d40e2ae4cec61a31b40",
+#     strip_prefix = "rules_cc-0.0.6",
 # )
-# load("@hchauvin_bazel_coverage_report//report:defs.bzl", "bazel_coverage_report_repositories")
-# bazel_coverage_report_repositories()  # lcov, ...
 
+# load("@rules_cc//cc:repositories.bzl", "rules_cc_dependencies", "rules_cc_toolchains")
+# rules_cc_dependencies()
+# rules_cc_toolchains()
+
+##########################
+## Foreign Build Tool Repositories
+##########################
+
+http_archive(
+    name = "rules_foreign_cc",
+    sha256 = "2a4d07cd64b0719b39a7c12218a3e507672b82a97b98c6a89d38565894cf7c51",
+    strip_prefix = "rules_foreign_cc-0.9.0",
+    url = "https://github.com/bazelbuild/rules_foreign_cc/archive/refs/tags/0.9.0.tar.gz",
+)
+
+load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_dependencies")
+
+# This sets up some common toolchains for building targets. For more details, please see
+# https://bazelbuild.github.io/rules_foreign_cc/0.9.0/flatten.html#rules_foreign_cc_dependencies
+rules_foreign_cc_dependencies()
+
+##########################
+## Git Bazel Repositories
+##########################
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
+    name = "com_google_benchmark",
+    remote = "https://github.com/google/benchmark.git",
+    tag = "v1.8.0",
+)
 
 ##########################
 ## Http Archives
@@ -60,7 +86,7 @@ http_archive(
 	url = "http://github.com/xianyi/OpenBLAS/archive/v0.2.20.zip",
 	sha256 = "bb5499049cf60b07274740a4ddd756daa0fe2c817d981d7fe7e5898dcf411fdc",
 	strip_prefix = "OpenBLAS-0.2.20",
-	build_file = "@//:third_party/openblas/openblas.BUILD"
+	build_file = "@//:third_party/openblas/BUILD"
 )
 
 ##########################
@@ -78,6 +104,17 @@ new_local_repository(
     name = "gsl",
     build_file = "./third_party/gsl/BUILD",
     path = "/opt/homebrew/Cellar/gsl/2.7.1",
+)
+
+new_local_repository(
+    name = "accelerate",
+    build_file = "./third_party/accelerate/BUILD",
+    path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Versions/",
+)
+
+local_repository(
+    name = "fortran_rules",
+    path = "third_party/openblas/tools/fortran_rules",
 )
 
 
