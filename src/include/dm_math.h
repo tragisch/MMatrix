@@ -69,7 +69,7 @@ static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
                                          const double scalar);
 static void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar);
 static void dm_multiply_by_scalar_coo(DoubleMatrix *mat, const double scalar);
-static void dm_multiply_by_scalar_csc(DoubleMatrix *mat, const double scalar);
+
 
 /*******************************/
 /* Matrix*Scalar Multiplication */
