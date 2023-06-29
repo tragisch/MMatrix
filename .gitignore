@@ -107,5 +107,11 @@ StyleGuide.md
 *.in
 *.clang-tidy
 *.png
+
+# exclude third_party libraries for testing
 third_party/spmatrix/*
 third_party/gsl/*
+third_party/mesch12b/*
+third_party/openblas/*
+third_party/spblas/*
+third_party/csparse/*
