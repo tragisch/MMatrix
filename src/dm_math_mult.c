@@ -78,12 +78,6 @@ static DoubleMatrix *dm_multiply_by_matrix_blas(const DoubleMatrix *mat1,
 
   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
 
-#ifdef __APPLE__
-  printf("Using Apple's Accelerate Framework\n");
-#else
-  printf("Using OpenBLAS\n");
-#endif
-
   cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (BLASINT)mat1->rows,
               (BLASINT)mat2->cols, (BLASINT)mat1->cols, 1.0, mat1->values,
               (BLASINT)mat1->cols, mat2->values, (BLASINT)mat2->cols, 0.0,
