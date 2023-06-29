@@ -14,7 +14,16 @@
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
+
+/*******************************/
+/*  Using Apples Accelarator   */
+/*******************************/
+
+#ifdef __APPLE__
+#include <Accelerate/Accelerate.h>
+#else
 #include <cblas.h>
+#endif
 
 /*******************************/
 /*         Determinant         */

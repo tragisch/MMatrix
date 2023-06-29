@@ -2,6 +2,10 @@
 # ld: warning: -undefined dynamic_lookup may not work with chained fixups
 # temporary solution: https://github.com/bazelbuild/bazel/issues/16413
 build --linkopt=-Wl,-no_fixup_chains
+build --cpu=darwin_arm64
+#Gcov config
+build:gcov --copt -fprofile-arcs 
+build:gcov --copt -ftest-coverage
 
 # buildbuddy
 # build --bes_results_url=https://app.buildbuddy.io/invocation/
