@@ -8,7 +8,7 @@
 /*******************************/
 
 static DoubleMatrix *dm_create_coo(size_t rows, size_t cols);
-static DoubleMatrix *dm_create_dense(size_t rows, size_t cols);
+static DoubleMatrix *dm_create_dense_intern(size_t rows, size_t cols);
 
 // static getter / setter
 static double dm_get_dense(const DoubleMatrix *mat, size_t i, size_t j);

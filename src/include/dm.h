@@ -30,6 +30,8 @@ typedef struct DoubleMatrix {
 
 // Definition of DoubleVector
 typedef DoubleMatrix DoubleVector;
+typedef DoubleMatrix DenseMatrix;
+typedef DoubleMatrix SparseMatrix;
 
 /*******************************/
 /*     Create  & convert       */
@@ -58,6 +60,9 @@ void dm_realloc_coo(DoubleMatrix *mat, size_t new_capacity);
 /*******************************/
 /*     Special Matrices        */
 /*******************************/
+
+DenseMatrix *dm_create_dense(size_t rows, size_t cols);
+SparseMatrix *dm_create_sparse(size_t rows, size_t cols);
 
 DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density);
 DoubleMatrix *dm_create_rand_between(size_t rows, size_t cols, size_t min,
