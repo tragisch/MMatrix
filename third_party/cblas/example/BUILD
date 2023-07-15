@@ -5,11 +5,3 @@ cc_binary(
         "@cblas",
     ],
 )
-
-cc_binary(
-    name = "cblas_example2",
-    srcs = ["cblas_example2.c"],
-    deps = [
-        "@cblas",
-    ],
-)

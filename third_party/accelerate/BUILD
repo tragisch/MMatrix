@@ -3,7 +3,7 @@
 
 cc_library(
     name = "accelerate",
-    hdrs = ["$(GENDIR)/external/accelerate/Accelerate.tbd"],
+  #  hdrs = ["$(GENDIR)/external/accelerate/Accelerate.tbd"],
     linkopts = [
         "-framework Accelerate",
     ],
