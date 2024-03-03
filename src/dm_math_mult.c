@@ -14,12 +14,11 @@
 #include "dm.h"
 #include "dm_internals.h"
 #include "dm_math.h"
-#include "dm_math_blas.h"
 #include "dm_vector.h"
 #include <stdint.h>
 
 /*******************************/
-/*  Using Apples Accelarator   */
+/*       Define BLASINT        */
 /*******************************/
 
 #ifdef __APPLE__
@@ -75,6 +74,12 @@ DoubleMatrix *dm_multiply_by_matrix(const DoubleMatrix *mat1,
 // use cblas_dgemm to multiply two dense matrices
 static DoubleMatrix *dm_multiply_by_matrix_blas(const DoubleMatrix *mat1,
                                                 const DoubleMatrix *mat2) {
+
+#ifdef APPLE_BLAS
+  printf("Using Apple's Accelerate.h'\n");
+#else
+  printf("Using OpenBLAS\n");
+#endif // APPLE_BLAS
 
   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
 

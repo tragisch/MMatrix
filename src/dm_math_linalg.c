@@ -9,7 +9,7 @@
  *
  */
 
-#include <assert.h>
+// #include <assert.h>
 
 #include "dm.h"
 #include "dm_internals.h"
@@ -19,7 +19,7 @@
 /*  Using Apples Accelarator   */
 /*******************************/
 
-#ifdef __APPLE__
+#ifdef APPLE_BLAS
 #include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>

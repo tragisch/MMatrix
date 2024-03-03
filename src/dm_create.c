@@ -64,7 +64,7 @@ DoubleMatrix *dm_create_format(size_t rows, size_t cols, matrix_format format) {
     mat = dm_create_coo(rows, cols);
     break;
   case DENSE:
-    mat = dm_create_dense(rows, cols);
+    mat = dm_create_dense_intern(rows, cols);
     break;
   case VECTOR:
     if (rows != 1 && cols != 1) {
@@ -151,7 +151,7 @@ static DoubleMatrix *dm_create_coo(size_t rows, size_t cols) {
 /*        DENSE MATRIX         */
 /*******************************/
 
-static DoubleMatrix *dm_create_dense(size_t rows, size_t cols) {
+static DoubleMatrix *dm_create_dense_intern(size_t rows, size_t cols) {
 
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->rows = rows;

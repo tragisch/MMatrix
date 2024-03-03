@@ -2,6 +2,7 @@
 #define DM_MATH_H
 
 #include "dm.h"
+#include "dm_math_blas.h"
 #include <math.h>
 
 /*******************************/
@@ -69,7 +70,6 @@ static void dm_multiply_by_scalar_sparse(DoubleMatrix *mat,
                                          const double scalar);
 static void dm_multiply_by_scalar_dense(DoubleMatrix *mat, const double scalar);
 static void dm_multiply_by_scalar_coo(DoubleMatrix *mat, const double scalar);
-
 
 /*******************************/
 /* Matrix*Scalar Multiplication */

@@ -1,3 +1,4 @@
+
 /**
  * @file sp_special.c
  * @author Uwe Röttgermann (uwe@roettgermann.de)
@@ -15,7 +16,25 @@
 #include "dm_modify.h"
 
 /*******************************/
-/*        Special Matrix        */
+/*        Dense Matrix         */
+/*******************************/
+
+DenseMatrix *dm_create_dense(size_t rows, size_t cols) {
+  DenseMatrix *mat = dm_create_format(rows, cols, DENSE);
+  return mat;
+}
+
+/*******************************/
+/*        Sparse Matrix        */
+/*******************************/
+
+SparseMatrix *dm_create_sparse(size_t rows, size_t cols) {
+  SparseMatrix *mat = dm_create_format(rows, cols, SPARSE);
+  return mat;
+}
+
+/*******************************/
+/*        Special Matrix       */
 /*******************************/
 
 /**

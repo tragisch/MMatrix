@@ -50,7 +50,7 @@ def generate_test_runner(file_name, my_config, name=None):
             "@Unity//:HelperScripts",
         ],
         visibility = ["//visibility:public"],
-        
+       
     )
 
 def strip_extension(file_name):

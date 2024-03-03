@@ -1,14 +1,6 @@
 load("//third_party/ThrowTheSwitch/Unity:unity.bzl", "unity_test")
 
 ## Generate a test suite with all the tests in the current directory.
-
-test_suite(
-    name = "smoke",
-    tags = ["smoke"],
-    visibility = ["//visibility:public"],
-    
-)
-
 test_suite(
     name = "math",
     tags = ["math"],

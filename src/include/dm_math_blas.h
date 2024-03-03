@@ -5,10 +5,15 @@
 /* Apples Accelarator or BLAS  */
 /*******************************/
 
-#ifdef __APPLE__
-#include <Accelerate/Accelerate.h> // instead of cblas.h
-#else
+#define APPLE_BLAS 1
+#define BLAS 1
+
+#ifdef BLAS
+#ifndef APPLE_BLAS
 #include "cblas.h"
+#else
+#include <Accelerate/Accelerate.h> // instead of cblas.h
+#endif
 #endif
 
 /*******************************/

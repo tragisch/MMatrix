@@ -8,11 +8,11 @@
 // from stackoverflow:
 // https://stackoverflow.com/questions/5248915/execution-time-of-c-program:
 #define CPUTIME(FCALL)                                                         \
-  ({                                                                           \
+  do {                                                                         \
     double START = clock();                                                    \
     FCALL;                                                                     \
     ((double)clock() - START) / CLOCKS_PER_SEC;                                \
-  })
+  } while (0)
 
 void write_double_to_file(char *filename, char *name, double data,
                           matrix_format format, double density);
