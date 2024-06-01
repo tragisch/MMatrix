@@ -3,9 +3,6 @@
 # temporary solution: https://github.com/bazelbuild/bazel/issues/16413
 build --linkopt=-Wl,-no_fixup_chains
 
-# u
-# build --define accelerate=yes
-
 # Gcov config
 # build:gcov --copt -fprofile-arcs 
 # build:gcov --copt -ftest-coverage
