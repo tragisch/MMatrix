@@ -60,8 +60,8 @@ DoubleMatrix *dm_create_identity(size_t rows) {
  * @param density
  * @return DoubleMatrix*
  */
-DoubleMatrix *dm_create_rand(size_t rows, size_t cols, double density) {
-  DoubleMatrix *mat = dm_create_format(rows, cols, default_matrix_format);
+DoubleMatrix *dm_rand(size_t rows, size_t cols, double density) {
+  DoubleMatrix *mat = dm_create(rows, cols);
 
   for (int i = 0; i < mat->rows; i++) {
     for (int j = 0; j < mat->cols; j++) {

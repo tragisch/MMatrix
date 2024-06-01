@@ -11,28 +11,15 @@
 
 #include "dm.h"
 #include "dm_internals.h"
-#include "dm_io.h"
+// #include "dm_io.h"
 #include "dm_math.h"
 
 #define BRAILLE_SIZE 10
-
-/*******************************/
-/*         I/O Functions       */
-/*******************************/
 #define MAX_ROW 20
 #define MAX_ROW_PRINT 5
 #define MAX_COLUMN 10
 #define MAX_COLUMN_PRINT 4
 
-/*******************************/
-/*   Pretty print  Vector      */
-/*******************************/
-
-/**
- * @brief printf DoubleArray pretty
- *
- * @param DoubleVector* vec
- */
 void dv_print(const DoubleVector *vec) {
   if (vec->rows >= vec->cols) {
     dv_print_row(vec);
@@ -41,7 +28,6 @@ void dv_print(const DoubleVector *vec) {
   }
 }
 
-// function to print DOubleVector as row vector
 static void dv_print_row(const DoubleVector *vec) {
 
   if (vec->rows >= vec->cols) {
@@ -57,7 +43,6 @@ static void dv_print_row(const DoubleVector *vec) {
   printf("Vector: %zu x %zu\n", vec->rows, vec->cols);
 }
 
-// function to print DOubleVector as column vector  (transposed)
 static void dv_print_col(const DoubleVector *vec) {
 
   if (vec->cols > vec->rows) {
@@ -69,17 +54,7 @@ static void dv_print_col(const DoubleVector *vec) {
   printf("Vector: %zu x %zu\n", vec->rows, vec->cols);
 }
 
-/*******************************/
-/*    Pretty print Matrix      */
-/*******************************/
-
-/**
- * @brief printf DoubleMatrix pretty
- *
- * @param matrix
- */
 void dm_print(const DoubleMatrix *matrix) {
-  // print to console a DoubleMatrix matrix row by row with 2 digits precision
   for (size_t i = 0; i < matrix->rows; i++) {
     printf("[ ");
     for (size_t j = 0; j < matrix->cols; j++) {
@@ -90,15 +65,6 @@ void dm_print(const DoubleMatrix *matrix) {
   print_matrix_dimension(matrix);
 }
 
-/*******************************/
-/*       Braille form          */
-/*******************************/
-
-/**
- * @brief printf SparseMatrix pretty in braille form
- *
- * @param matrix
- */
 void sp_print_braille(const DoubleMatrix *mat) {
   if (mat->format != SPARSE) {
     printf("Error: Matrix is not in sparse format.\n");
@@ -136,15 +102,6 @@ void sp_print_braille(const DoubleMatrix *mat) {
   print_matrix_dimension(mat);
 }
 
-/*******************************/
-/*       Brief information     */
-/*******************************/
-
-/**
- * @brief function print basic matrix information
- *
- * @param DoubleMatrix* mat
- */
 void dm_brief(const DoubleMatrix *mat) {
   print_matrix_dimension(mat);
   printf("Density: %lf\n", dm_density(mat));
@@ -153,11 +110,6 @@ void dm_brief(const DoubleMatrix *mat) {
   }
 }
 
-/*******************************/
-/*      COO MATRIX ONLY     */
-/*******************************/
-
-// print all fields of a SparseMatrix *mat
 static void dm_brief_sparse(const DoubleMatrix *mat) {
 
   printf("values: [");
@@ -206,10 +158,6 @@ void dm_print_condensed(DoubleMatrix *mat) {
     printf("\n");
   }
 }
-
-/*******************************/
-/*  Matrix Type and Dimension  */
-/*******************************/
 
 static void print_matrix_dimension(const DoubleMatrix *mat) {
   switch (mat->format) {

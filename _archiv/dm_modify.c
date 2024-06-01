@@ -10,9 +10,7 @@
  */
 
 #include "dm_modify.h"
-#include "dbg.h"
 #include "dm.h"
-#include "dm_io.h"
 #include "dm_vector.h"
 #include <string.h>
 

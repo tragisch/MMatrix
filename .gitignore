@@ -115,3 +115,6 @@ third_party/mesch12b/*
 third_party/openblas/*
 third_party/spblas/*
 third_party/csparse/*
+
+# exclude archive files
+_archive/*

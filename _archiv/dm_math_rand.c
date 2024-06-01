@@ -25,8 +25,8 @@
 /*         MIN/MAX DOUBLE          */
 /*******************************/
 
-double max_double(double a, double b) { return a > b ? a : b; }
-double min_double(double a, double b) { return a < b ? a : b; }
+double dms_max_double(double a, double b) { return a > b ? a : b; }
+double dms_min_double(double a, double b) { return a < b ? a : b; }
 int max_int(int a, int b) { return a > b ? a : b; }
 
 bool is_zero(double value) { return fabs(value) < DBL_EPSILON; }

@@ -1,56 +1,19 @@
 cc_library(
-    name = "matrix",
-    srcs = glob([
-        "dm_*.c",
-        "dv_*.c",
-    ]),
-    hdrs = glob([
-        "include/*.h",
-    ]),
+    name = "dm",
+    srcs = ["dm.c"],
+    hdrs = ["include/dm.h"],
     includes = ["include"],
-    copts = select({
-        ":accelerate": ["-DACCELERATE_NEW_LAPACK"],
-        ":blas": [],
-        "//conditions:default": [],
-    }),
+    copts = ["-DACCELERATE_NEW_LAPACK"],
     visibility = ["//visibility:public"],
-    deps = [] + select({
-        ":accelerate": [":apple_accelerate", "@dbg-macro", "//third_party/jburkardt:c_src"],
-        ":blas": ["@cblas", "@dbg-macro", "//third_party/jburkardt:c_src"],
-        "//conditions:default": ["@cblas","@dbg-macro", "//third_party/jburkardt:c_src"],
-    }),
+    deps = ["@accelerate"],
 )
-
-config_setting(
-    name = "accelerate",
-    values = {
-        "define": "accelerate=yes"
-    }
-)
-config_setting(
-    name = "blas",
-    values = {
-        "define": "blas=yes"
-    }
-)
-
-config_setting(
-    name = "macos",
-    values = {"cpu": "darwin_arm64"},
-)
-
-config_setting(
-    name = "windows",
-    values = {"cpu": "x64_windows"},
-)
-
 
 cc_library(
-    name = "apple_accelerate",
-    hdrs = glob(["src/include/*.h"]),
-    linkopts = [
-        "-framework Accelerate",
-    ],
+    name = "dms",
+    srcs = ["dms.c"],
+    hdrs = ["include/dms.h"],
+    includes = ["include"],
     visibility = ["//visibility:public"],
+    deps = ["@sparsesuite", "@dbg-macro",],
 )
 

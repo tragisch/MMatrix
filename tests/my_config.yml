@@ -1,7 +1,5 @@
 :unity:
   :includes:
     - stdio.h
-    - stdint.h
-    - stdlib.h
   :cexception: 0
   :use_param_tests: 1
