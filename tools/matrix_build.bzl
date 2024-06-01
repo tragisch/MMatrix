@@ -6,7 +6,7 @@ def matrix_cc_binary(name, srcs, deps = [], visibility = None):
         name = name,
         srcs = srcs,
         deps = deps + [
-            "//src:matrix"
+            "//src:dm"
         ],
         linkopts = ["-lc++abi"],
         visibility = visibility,    )
