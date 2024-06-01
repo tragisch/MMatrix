@@ -1,8 +1,7 @@
-/* cblas_example.c */
-
-#include "Accelerate/Accelerate.h"
 #include <stdio.h>
 #include <stdlib.h>
+/* cblas_example.c */
+#include "Accelerate/Accelerate.h"
 
 int main() {
   enum CBLAS_ORDER order;
