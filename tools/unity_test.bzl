@@ -1,3 +1,4 @@
+"""Module docstring describing the purpose of the file."""
 def unity_test(name,  srcs, my_config=None, deps=None,  **kwargs):
     """ Create a unity test.
 
