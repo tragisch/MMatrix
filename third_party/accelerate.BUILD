@@ -3,9 +3,10 @@
 
 cc_library(
     name = "accelerate",
-  #  hdrs = ["$(GENDIR)/external/accelerate/Accelerate.tbd"],
+    hdrs = ["Current/Headers/accelerate.h"],
     linkopts = [
         "-framework Accelerate",
     ],
+    includes = ["Current/Headers"],
     visibility = ["//visibility:public"],
 )

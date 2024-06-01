@@ -1,5 +1,4 @@
 #include "dms.h"
-#include "dbg.h"
 
 DoubleSparseMatrix *dms_create_test_matrix(size_t rows, size_t cols, size_t nnz,
                                            size_t *row_indices,
@@ -17,8 +16,6 @@ DoubleSparseMatrix *dms_create_test_matrix(size_t rows, size_t cols, size_t nnz,
 
 DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t nnz) {
   if (rows < 1 || cols < 1) {
-    dbg(rows);
-    dbg(cols);
     perror("Error: invalid matrix dimensions.\n");
     return NULL;
   }

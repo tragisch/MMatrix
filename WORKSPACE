@@ -11,7 +11,7 @@ git_repository(
 
 new_local_repository(
     name = "accelerate",
-    build_file = "@//:third_party/accelerate/BUILD",
+    build_file = "@//:third_party/accelerate.BUILD",
     path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Versions/",
 )
 

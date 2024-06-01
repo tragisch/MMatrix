@@ -5,7 +5,7 @@ cc_library(
     includes = ["src/include"],
     copts = ["-DACCELERATE_NEW_LAPACK"],
     visibility = ["//visibility:public"],
-    deps = ["@accelerate", "@sparsesuite", "@dbg-macro"],
+    deps = ["@accelerate", "@sparsesuite"],
 )
 
 
@@ -25,5 +25,5 @@ cc_library(
     hdrs = ["src/include/dms.h"],
     includes = ["src/include"],
     visibility = ["//visibility:public"],
-    deps = ["@sparsesuite", "@dbg-macro",],
+    deps = ["@sparsesuite",],
 )
