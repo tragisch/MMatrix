@@ -2,6 +2,6 @@
 
 A simple implementation for a double matrix library.  
 Features;
-- Hides different formats for user.
-- Support of SPARSE (ordered COO) and DENSE matrices.
+- dm: double matrix (using on MacOS Apples Accelerator Framework)
+- dms (DRAFT): double sparse matrix in COO format, but some time-consuming operations are calculated with SparseSuite
 
