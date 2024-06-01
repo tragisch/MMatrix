@@ -9,8 +9,8 @@
 /*      General stuff     */
 /*******************************/
 
-double max_double(double a, double b);
-double min_double(double a, double b);
+double dms_max_double(double a, double b);
+double dms_min_double(double a, double b);
 int max_int(int a, int b);
 bool is_zero(double value);
 

@@ -20,12 +20,6 @@
 
 matrix_format default_matrix_format = DENSE; // default format
 
-/**
- * @brief Set the Default Matrix Format object
- *
- * @param format
- */
-
 void set_default_matrix_format(matrix_format format) {
   default_matrix_format = format;
 }
