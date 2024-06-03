@@ -56,25 +56,25 @@ DoubleMatrix *dm_rand(size_t rows, size_t cols, double density) {
   return mat;
 }
 
-DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
-                               double array[rows][cols]) {
+// DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
+//                                double array[rows][cols]) {
+//   DoubleMatrix *mat = dm_create(rows, cols);
+
+//   for (size_t i = 0; i < mat->rows; i++) {
+//     for (size_t j = 0; j < mat->cols; j++) {
+//       dm_set(mat, i, j, array[i][j]);
+//     }
+//   }
+
+//   return mat;
+// }
+
+DoubleMatrix *dm_convert(size_t rows, size_t cols, double **array) {
   DoubleMatrix *mat = dm_create(rows, cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
       dm_set(mat, i, j, array[i][j]);
-    }
-  }
-
-  return mat;
-}
-
-DoubleMatrix *dm_convert_array2(size_t rows, size_t cols, double **__array) {
-  DoubleMatrix *mat = dm_create(rows, cols);
-
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      dm_set(mat, i, j, __array[i][j]);
     }
   }
 
