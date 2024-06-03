@@ -29,7 +29,6 @@
     ((double)clock() - START) / CLOCKS_PER_SEC;                                \
   } while (0)
 
-
 // struct of DoubleMatrix
 typedef struct {
   size_t rows;
@@ -45,6 +44,8 @@ DoubleMatrix *dm_rand(size_t rows, size_t cols, double density);
 
 DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
                                double array[rows][cols]);
+DoubleMatrix *dm_convert_array2(size_t rows, size_t cols, double **__array);
+
 // DoubleMatrix *dm_from_csv(const char *filename);
 // DoubleMatrix *dm_from_market(const char *filename);
 

@@ -9,15 +9,15 @@ git_repository(
     tag = "v1.8.0",
 )
 
-new_local_repository(
-    name = "accelerate",
-    build_file = "@//:third_party/accelerate.BUILD",
-    path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Versions/",
-)
+# new_local_repository(
+#     name = "accelerate",
+#     build_file = "@//:third_party/accelerate.BUILD",
+#     path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Versions/",
+# )
 
 new_local_repository(
     name = "sparsesuite",
-    build_file = "@//:third_party/sparsesuite.BUILD",
+    build_file = "@DoubleMatrix//third_party:sparsesuite.BUILD",
     path = "/opt/homebrew/Cellar/suite-sparse/7.7.0",
 )
 

@@ -69,6 +69,18 @@ DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
   return mat;
 }
 
+DoubleMatrix *dm_convert_array2(size_t rows, size_t cols, double **__array) {
+  DoubleMatrix *mat = dm_create(rows, cols);
+
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      dm_set(mat, i, j, __array[i][j]);
+    }
+  }
+
+  return mat;
+}
+
 DoubleMatrix *dm_get_row(const DoubleMatrix *mat, size_t i) {
   DoubleMatrix *row = dm_create(1, mat->cols);
   for (size_t j = 0; j < mat->cols; j++) {

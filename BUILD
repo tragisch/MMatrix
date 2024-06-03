@@ -1,12 +1,23 @@
 cc_library(
     name = "DoubleMatrix",
-    srcs = ["src/dm.c", "src/dms.c"],
-    hdrs = ["src/include/dm.h", 
-    "src/include/dms.h"],
+    srcs = [
+        "src/dm.c",
+        "src/dms.c"
+    ],
+    hdrs = [
+        "src/include/dm.h", 
+        "src/include/dms.h"
+    ],
     includes = ["src/include"],
-    copts = ["-DACCELERATE_NEW_LAPACK"],
+   
+    copts = [
+        "-DACCELERATE_NEW_LAPACK",
+    ],
+    linkopts = [
+        "-framework Accelerate",
+    ],
     visibility = ["//visibility:public"],
-    deps = ["@sparsesuite"],
+    deps = ["@sparsesuite//:sparsesuite"],
 )
 
 cc_library(
