@@ -1,7 +1,7 @@
 cc_library(
     name = "sparsesuite",
     srcs = glob([
-        "lib/*.dylib",
+        "lib/*.a",
     ]),
     hdrs = glob([
         "include/suitesparse/*.h",
