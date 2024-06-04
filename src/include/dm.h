@@ -44,7 +44,7 @@ DoubleMatrix *dm_rand(size_t rows, size_t cols, double density);
 
 // DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
 //                                double array[rows][cols]);
-DoubleMatrix *dm_convert(size_t rows, size_t cols, double **array);
+DoubleMatrix *dm_import_array(size_t rows, size_t cols, double **array);
 
 // DoubleMatrix *dm_from_csv(const char *filename);
 // DoubleMatrix *dm_from_market(const char *filename);
