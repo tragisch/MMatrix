@@ -1,7 +1,6 @@
 workspace(name = "DoubleMatrix")
-# load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
 
 git_repository(
     name = "com_google_benchmark",
@@ -9,30 +8,48 @@ git_repository(
     tag = "v1.8.0",
 )
 
-# new_local_repository(
-#     name = "accelerate",
-#     build_file = "@//:third_party/accelerate.BUILD",
-#     path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Versions/",
-# )
-
 new_local_repository(
     name = "sparsesuite",
     build_file = "@DoubleMatrix//third_party:sparsesuite.BUILD",
     path = "/opt/homebrew/Cellar/suite-sparse/7.7.0",
 )
 
+http_archive(
+    name = "zlib",
+    sha256 = "ff0ba4c292013dbc27530b3a81e1f9a813cd39de01ca5e0f8bf355702efa593e",
+    build_file = "@//:third_party/zlib.BUILD",
+    strip_prefix = "zlib-1.3",
+    urls = [
+        "https://github.com/madler/zlib/releases/download/v1.3/zlib-1.3.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "matio",
+    sha256 = "0a6aa00b18c4512b63a8d27906b079c8c6ed41d4b2844f7a4ae598e18d22d3b3",
+    build_file = "@//:third_party/matio.BUILD",
+    strip_prefix = "matio-1.5.27",
+    urls = [
+        "https://github.com/tbeu/matio/releases/download/v1.5.27/matio-1.5.27.tar.gz",
+    ],
+)
+
+local_repository(
+    name = "hdf5",
+    path = "lib/hdf5",
+)
 
 
 # # openblas
 # new_local_repository(
 #     name = "cblas",
-#     build_file = "@//third_party/cblas/BUILD",
+#     build_file = "@//:third_party/cblas.BUILD",
 #     path = "/opt/homebrew/Cellar/openblas/0.3.23",
 # )
 
 # new_local_repository(
 #     name = "gsl",
-#     build_file = "@//third_party/gsl/BUILD",
+#     build_file = "@//:third_party/gsl.BUILD",
 #     path = "/opt/homebrew/Cellar/gsl/2.7.1",
 # )
 
@@ -55,6 +72,10 @@ new_local_repository(
 #    strip_prefix = "eigen-git-mirror-3.3.5",
 #    urls = ["https://github.com/eigenteam/eigen-git-mirror/archive/3.3.5.tar.gz"],
 # )
+
+
+
+
 
 
 
