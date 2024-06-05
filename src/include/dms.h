@@ -46,8 +46,6 @@ DoubleSparseMatrix *cs_to_dms(const cs *A);
 
 DoubleSparseMatrix *dms_convert_array(size_t rows, size_t cols,
                                       double array[rows][cols]);
-// DoubleSparseMatrix *dms_from_csv(const char *filename);
-// DoubleSparseMatrix *dms_from_market(const char *filename);
 
 DoubleSparseMatrix *dms_get_row(const DoubleSparseMatrix *mat, size_t i);
 DoubleSparseMatrix *dms_get_last_row(const DoubleSparseMatrix *mat);
@@ -69,8 +67,13 @@ void dms_destroy(DoubleSparseMatrix *mat);
 void dms_set(DoubleSparseMatrix *mat, size_t i, size_t j, double value);
 double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j);
 
+DoubleSparseMatrix *dms_read_matrix_market(const char *filename);
+void dm_write_matrix_market(const DoubleSparseMatrix *mat,
+                            const char *filename);
+
 // private functions
 static size_t _dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
                                  size_t j);
 static void _dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
                                 double value, size_t position);
+static void __print_progress_bar(size_t progress, size_t total, int barWidth);

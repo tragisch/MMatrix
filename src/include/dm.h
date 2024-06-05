@@ -47,12 +47,13 @@ DoubleMatrix *dm_rand(size_t rows, size_t cols, double density);
 DoubleMatrix *dm_import_array(size_t rows, size_t cols, double **array);
 
 // DoubleMatrix *dm_from_csv(const char *filename);
-// DoubleMatrix *dm_from_market(const char *filename);
 
 DoubleMatrix *dm_get_row(const DoubleMatrix *mat, size_t i);
 DoubleMatrix *dm_get_last_row(const DoubleMatrix *mat);
 DoubleMatrix *dm_get_col(const DoubleMatrix *mat, size_t j);
 DoubleMatrix *dm_get_last_col(const DoubleMatrix *mat);
+void dm_reshape(DoubleMatrix *matrix, size_t new_rows, size_t new_cols);
+void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
 
 DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2);
 DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,

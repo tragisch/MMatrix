@@ -416,6 +416,109 @@ void dms_destroy(DoubleSparseMatrix *mat) {
   free(mat);
 }
 
+DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
+  FILE *fp = NULL;
+  size_t nrows = 0;
+  size_t ncols = 0;
+  size_t nnz = 0;
+
+  // Open the Matrix Market file for reading
+  fp = fopen(filename, "r");
+  if (fp == NULL) {
+    printf("Error: Unable to open file.\n");
+    exit(1);
+  }
+
+  char line[1024];
+  fgets(line, sizeof(line), fp);
+  if (strstr(line, "%%MatrixMarket matrix coordinate") == NULL) {
+    perror("Error: invalid header. No MatrixMarket matrix coordinate.\n");
+  }
+
+  // Skip all comment lines in the file
+  while (fgets(line, 1024, fp) != NULL) {
+    if (line[0] != '%') {
+      break;
+    }
+  }
+
+  // Read dimensions and number of non-zero values
+  sscanf(line, "%zu %zu %zu", &nrows, &ncols, &nnz);
+
+  // Create DoubleMatrix
+  DoubleSparseMatrix *mat = dms_create(nrows, ncols, nnz);
+
+  if (nnz > 500) {
+    printf("Reading Matrix Market file: %s\n", filename);
+  }
+
+  // Read non-zero values
+  for (size_t i = 0; i < nnz; i++) {
+    if (nnz > 500) {
+      __print_progress_bar(i, nnz, 50);
+    }
+    size_t row_idx = 0;
+    size_t col_idx = 0;
+    double val = 0.0;
+
+    fscanf(fp, "%zu %zu %lf", &row_idx, &col_idx, &val);
+
+    if (val != 0.0) {
+      mat->row_indices[i] = (size_t)(row_idx - 1);
+      mat->col_indices[i] = (size_t)(col_idx - 1);
+      mat->values[i] = (double)val;
+      mat->nnz++;
+    }
+  }
+
+  if (nnz > 500) {
+    printf("\n");
+  }
+
+  // Close the file
+  fclose(fp);
+
+  return mat;
+}
+
+// if file to read is very large, print a progress bar:
+static void __print_progress_bar(size_t progress, size_t total, int barWidth) {
+  float percentage = (float)progress / (float)total;
+  int filledWidth = (int)(percentage * (float)barWidth);
+
+  printf("[");
+  for (int i = 0; i < barWidth; i++) {
+    if (i < filledWidth) {
+      printf("=");
+    } else {
+      printf(" ");
+    }
+  }
+  printf("] %d%%\r", (int)(percentage * 100));
+  fflush(stdout);
+}
+
+void dm_write_matrix_market(const DoubleSparseMatrix *mat,
+                            const char *filename) {
+  FILE *fp = NULL;
+  fp = fopen(filename, "w");
+  if (fp == NULL) {
+    printf("Error: Unable to open file.\n");
+    exit(1);
+  }
+
+  fprintf(fp, "%%%%MatrixMarket matrix coordinate real general\n");
+  fprintf(fp, "%zu %zu %zu\n", mat->rows, mat->cols, mat->rows * mat->cols);
+
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      fprintf(fp, "%zu %zu %lf\n", i + 1, j + 1, dms_get(mat, i, j));
+    }
+  }
+
+  fclose(fp);
+}
+
 double dms_max_double(double a, double b) { return a > b ? a : b; }
 double dms_min_double(double a, double b) { return a < b ? a : b; }
 int dms_max_int(int a, int b) { return a > b ? a : b; }
