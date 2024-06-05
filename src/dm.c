@@ -394,6 +394,39 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
   return mat->values[i * mat->cols + j];
 }
 
+void dm_reshape(DoubleMatrix *matrix, size_t new_rows, size_t new_cols) {
+  matrix->rows = new_rows;
+  matrix->cols = new_cols;
+}
+
+void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
+
+  // allocate new memory for dense matrix:
+  double *new_values = (double *)calloc(new_row * new_col, sizeof(double));
+
+  if (new_values == NULL) {
+    perror("Error: could not reallocate memory for dense matrix.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // copy values from old matrix to new matrix:
+  for (int i = 0; i < new_row; i++) {
+    for (int j = 0; j < new_col; j++) {
+      if (i >= mat->rows || j >= mat->cols) {
+        new_values[i * new_col + j] = 0.0;
+      } else {
+        new_values[i * new_col + j] = mat->values[i * mat->cols + j];
+      }
+    }
+  }
+
+  // update matrix:
+  mat->values = new_values;
+  mat->rows = new_row;
+  mat->cols = new_col;
+  mat->capacity = new_row * new_col;
+}
+
 void dm_print(const DoubleMatrix *matrix) {
   for (size_t i = 0; i < matrix->rows; i++) {
     printf("[ ");
