@@ -16,6 +16,17 @@
  ** Creation of matrices:
  *******************************/
 
+void setUp(void) {
+  // Remove the test file if it exists
+  // remove("test_matrix.mat");
+}
+
+// Teardown function called after each test
+void tearDown(void) {
+  // Remove the test file if it exists
+  // remove("test_matrix.mat");
+}
+
 void test_dm_create(void) {
 
   // Test case 1: Create a matrix with valid dimensions
@@ -331,4 +342,62 @@ void test_dm_equal(void) {
   TEST_ASSERT_TRUE(dm_equal(mat1, mat2));
   dm_destroy(mat1);
   dm_destroy(mat2);
+}
+
+// Helper function to create a sample matrix
+DoubleMatrix *create_sample_matrix(size_t rows, size_t cols) {
+  DoubleMatrix *matrix = dm_create(rows, cols);
+  for (size_t i = 0; i < rows; ++i) {
+    for (size_t j = 0; j < cols; ++j) {
+      dm_set(matrix, i, j, (double)(i * cols + j));
+    }
+  }
+  return matrix;
+}
+
+// Test function for dm_write_to_file
+void test_dm_write_to_file(void) {
+  DoubleMatrix *matrix = create_sample_matrix(10, 10);
+  const char *filename = "test_matrix.mat";
+
+  // Write the matrix to a file
+  int result = dm_write_MAT_file(matrix, filename);
+  TEST_ASSERT_EQUAL(0, result);
+
+  // Clean up
+  dm_destroy(matrix);
+
+  // Check if the file was created
+  FILE *file = fopen(filename, "r");
+  TEST_ASSERT_NOT_NULL(file);
+  if (file) {
+    fclose(file);
+  }
+}
+
+// Test function for dm_read_from_file
+void test_dm_read_from_file(void) {
+  const char *filename = "test_matrix.mat";
+  const char *varname = "matrix";
+
+  // Read the matrix from the file
+  DoubleMatrix *matrix = dm_read_MAT_file(filename, varname);
+  TEST_ASSERT_NOT_NULL(matrix);
+
+  if (matrix) {
+    // Check the matrix dimensions
+    TEST_ASSERT_EQUAL(10, matrix->rows);
+    TEST_ASSERT_EQUAL(10, matrix->cols);
+
+    // Verify the matrix values
+    for (size_t i = 0; i < 10; ++i) {
+      for (size_t j = 0; j < 10; ++j) {
+        double expected_value = (double)(i * 10 + j);
+        TEST_ASSERT_EQUAL_DOUBLE(expected_value, dm_get(matrix, i, j));
+      }
+    }
+
+    // Clean up
+    dm_destroy(matrix);
+  }
 }

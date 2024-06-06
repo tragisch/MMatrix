@@ -81,6 +81,20 @@ DoubleMatrix *dm_import_array(size_t rows, size_t cols, double **array) {
   return mat;
 }
 
+DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
+                               double array[rows][cols]) {
+  DoubleMatrix *matrix = dm_create(rows, cols);
+  if (!matrix)
+    return NULL;
+
+  for (size_t i = 0; i < rows; ++i) {
+    for (size_t j = 0; j < cols; ++j) {
+      dm_set(matrix, i, j, array[i][j]);
+    }
+  }
+  return matrix;
+}
+
 DoubleMatrix *dm_get_row(const DoubleMatrix *mat, size_t i) {
   DoubleMatrix *row = dm_create(1, mat->cols);
   for (size_t j = 0; j < mat->cols; j++) {
@@ -524,6 +538,82 @@ size_t dm_rank(const DoubleMatrix *mat) {
   rank = dm_rank_euler(mat);
 #endif
   return rank;
+}
+
+int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
+  // Create a MAT file
+  mat_t *matfp = Mat_CreateVer(filename, NULL, MAT_FT_MAT5);
+  if (NULL == matfp) {
+    fprintf(stderr, "Error creating MAT file %s\n", filename);
+    return -1;
+  }
+
+  // Define the dimensions of the matrix
+  size_t dims[2] = {matrix->rows, matrix->cols};
+
+  // Create a Matio matrix variable
+  matvar_t *matvar = Mat_VarCreate("matrix", MAT_C_DOUBLE, MAT_T_DOUBLE, 2,
+                                   dims, matrix->values, 0);
+  if (NULL == matvar) {
+    fprintf(stderr, "Error creating matrix variable\n");
+    Mat_Close(matfp);
+    return -1;
+  }
+
+  // Write the variable to the MAT file
+  Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);
+
+  // Free the matrix variable and close the MAT file
+  Mat_VarFree(matvar);
+  Mat_Close(matfp);
+
+  return 0;
+}
+
+DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname) {
+  // Open the MAT file
+  mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
+  if (NULL == matfp) {
+    fprintf(stderr, "Error opening MAT file %s\n", filename);
+    return NULL;
+  }
+
+  // Read the variable
+  matvar_t *matvar = Mat_VarRead(matfp, varname);
+  if (NULL == matvar) {
+    fprintf(stderr, "Variable %s not found in MAT file %s\n", varname,
+            filename);
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  // Extract matrix dimensions
+  if (matvar->rank != 2) {
+    fprintf(stderr, "Variable %s is not a 2D matrix\n", varname);
+    Mat_VarFree(matvar);
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  size_t rows = matvar->dims[0];
+  size_t cols = matvar->dims[1];
+
+  // Create a DoubleMatrix and copy the data
+  DoubleMatrix *matrix = dm_create(rows, cols);
+  if (!matrix) {
+    fprintf(stderr, "Error allocating memory for matrix\n");
+    Mat_VarFree(matvar);
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  memcpy(matrix->values, matvar->data, rows * cols * sizeof(double));
+
+  // Free the matvar and close the MAT file
+  Mat_VarFree(matvar);
+  Mat_Close(matfp);
+
+  return matrix;
 }
 
 static size_t dm_rank_euler(const DoubleMatrix *mat) {

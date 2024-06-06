@@ -17,7 +17,10 @@ cc_library(
         "-framework Accelerate",
     ],
     visibility = ["//visibility:public"],
-    deps = ["@sparsesuite//:sparsesuite"],
+    deps = [
+        "@sparsesuite//:sparsesuite", 
+        "@matio//:matio"
+    ],
 )
 
 cc_library(
@@ -26,7 +29,11 @@ cc_library(
     hdrs = ["src/include/dm.h"],
     includes = ["src/include"],
     copts = ["-DACCELERATE_NEW_LAPACK"],
+     linkopts = [
+        "-framework Accelerate",
+    ],
     visibility = ["//visibility:public"],
+    deps = ["@matio//:matio"],
 )
 
 cc_library(
