@@ -93,6 +93,7 @@ Temporary Items
 /output/
 .bazelversion
 user.bazelrc
+MODULE.bazel.lock
 
 /tmp/*
 
