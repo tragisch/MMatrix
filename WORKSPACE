@@ -10,7 +10,7 @@ git_repository(
 
 new_local_repository(
     name = "sparsesuite",
-    build_file = "@DoubleMatrix//third_party:sparsesuite.BUILD",
+    build_file = "@//:third_party/sparsesuite.BUILD",
     path = "/opt/homebrew/Cellar/suite-sparse/7.7.0",
 )
 

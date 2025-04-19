@@ -1,3 +1,6 @@
+load("//:tools/install_library.bzl", "install_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 cc_library(
     name = "DoubleMatrix",
     srcs = [
@@ -29,7 +32,7 @@ cc_library(
     hdrs = ["src/include/dm.h"],
     includes = ["src/include"],
     copts = ["-DACCELERATE_NEW_LAPACK"],
-     linkopts = [
+    linkopts = [
         "-framework Accelerate",
     ],
     visibility = ["//visibility:public"],
@@ -43,4 +46,11 @@ cc_library(
     includes = ["src/include"],
     visibility = ["//visibility:public"],
     deps = ["@sparsesuite",],
+)
+
+install_library(
+    name = "install",
+    srcs = [":DoubleMatrix"],  # Reference the library target
+    hdrs = ["dms.h", "dm.h"],  # Explicitly list headers to include
+    target_dir = "/Users/uwe/",  # Specify your output directory
 )
