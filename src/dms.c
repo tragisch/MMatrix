@@ -49,6 +49,12 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity) {
   mat->nnz = 0;
   mat->capacity = capacity;
 
+  if (mat->capacity == 0) {
+    perror("Error: matrix capacity cannot be zero.");
+    free(mat);
+    return NULL;
+  }
+
   mat->row_indices = calloc(mat->capacity, sizeof(size_t));
   if (!mat->row_indices) {
     perror("Error allocating memory for row indices");
@@ -116,7 +122,8 @@ cs *dms_to_cs(const DoubleSparseMatrix *coo) {
 
   // Allocate a CSparse matrix in COO format
   cs *T = cs_spalloc(m, n, nz, 1, 1);
-  if (!T) return NULL;
+  if (!T)
+    return NULL;
 
   // Fill the CSparse matrix with the data from the DoubleSparseMatrix
   for (size_t k = 0; k < nz; k++) {
@@ -125,7 +132,7 @@ cs *dms_to_cs(const DoubleSparseMatrix *coo) {
 
   // Convert the COO matrix to CSC format
   cs *A = cs_compress(T);
-  cs_spfree(T);  // Free the temporary COO matrix
+  cs_spfree(T); // Free the temporary COO matrix
 
   return A;
 }
@@ -134,7 +141,8 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
   // Allocate memory for the DoubleSparseMatrix structure
   DoubleSparseMatrix *coo =
       (DoubleSparseMatrix *)malloc(sizeof(DoubleSparseMatrix));
-  if (!coo) return NULL;
+  if (!coo)
+    return NULL;
 
   coo->rows = A->m;
   coo->cols = A->n;
@@ -375,17 +383,17 @@ static size_t __dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
     size_t mid = (low + high) / 2;
 
     if (matrix->row_indices[mid] == i && matrix->col_indices[mid] == j) {
-      return mid;  // Element found at position (i, j)
+      return mid; // Element found at position (i, j)
     }
     if (matrix->row_indices[mid] < i ||
         (matrix->row_indices[mid] == i && matrix->col_indices[mid] < j)) {
-      low = mid + 1;  // Search in the upper half
+      low = mid + 1; // Search in the upper half
     } else {
-      high = mid;  // Search in the lower half
+      high = mid; // Search in the lower half
     }
   }
 
-  return low;  // Element not found, return the insertion position
+  return low; // Element not found, return the insertion position
 }
 
 static void __dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
