@@ -84,7 +84,8 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
   return mat;
 }
 
-DoubleMatrix *dm_2D_array(size_t rows, size_t cols, double array[rows][cols]) {
+DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
+                                      double array[rows][cols]) {
   DoubleMatrix *matrix = dm_create(rows, cols);
   if (!matrix)
     return NULL;
@@ -156,7 +157,7 @@ DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,
 
 #ifdef __APPLE__
   // Using Apple's Accelerate framework (= BLAS)
-  cblas_dscal((BLASINT)(product->rows * product->cols), number, mat->values, 1);
+  cblas_dscal((BLASINT)(product->rows * product->cols), number, product->values, 1);
 
 #else
 
@@ -325,48 +326,48 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   DoubleMatrix *inverse = dm_create_clone(mat);
 
 #ifdef __APPLE__
-BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
-if (ipiv == NULL) {
+  BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
+  if (ipiv == NULL) {
     free(inverse->values);
     free(inverse);
     perror("Error: Memory allocation for ipiv failed.\n");
     return NULL;
-}
-BLASINT info = 0;
-BLASINT n = (BLASINT)inverse->cols;
+  }
+  BLASINT info = 0;
+  BLASINT n = (BLASINT)inverse->cols;
 
-dgetrf_(&n, &n, inverse->values, &n, ipiv, &info);
-if (info != 0) {
+  dgetrf_(&n, &n, inverse->values, &n, ipiv, &info);
+  if (info != 0) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
     perror("Error: dgetrf failed.\n");
     return NULL;
-}
+  }
 
-BLASINT lwork = -1;
-double work_opt;
-dgetri_(&n, inverse->values, &n, ipiv, &work_opt, &lwork, &info);
+  BLASINT lwork = -1;
+  double work_opt;
+  dgetri_(&n, inverse->values, &n, ipiv, &work_opt, &lwork, &info);
 
-lwork = (BLASINT)work_opt;
-double *work = (double *)malloc(lwork * sizeof(double));
-if (work == NULL) {
+  lwork = (BLASINT)work_opt;
+  double *work = (double *)malloc(lwork * sizeof(double));
+  if (work == NULL) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
     perror("Error: Memory allocation for work array failed.\n");
     return NULL;
-}
+  }
 
-dgetri_(&n, inverse->values, &n, ipiv, work, &lwork, &info);
-free(work);
-free(ipiv);
-if (info != 0) {
+  dgetri_(&n, inverse->values, &n, ipiv, work, &lwork, &info);
+  free(work);
+  free(ipiv);
+  if (info != 0) {
     free(inverse->values);
     free(inverse);
     perror("Error: dgetri failed.\n");
     return NULL;
-}
+  }
 #else
 
   for (size_t i = 0; i < mat->cols; i++) {

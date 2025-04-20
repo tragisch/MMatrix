@@ -47,7 +47,8 @@ DoubleMatrix *dm_create_random(size_t rows, size_t cols);
 
 // Importing from array
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array);
-DoubleMatrix *dm_2D_array(size_t rows, size_t cols, double array[rows][cols]);
+DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
+                                      double array[rows][cols]);
 
 // Matrix slicing and reshaping
 DoubleMatrix *dm_get_row(const DoubleMatrix *mat, size_t i);

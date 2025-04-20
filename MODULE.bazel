@@ -125,11 +125,17 @@ git_repository(
 # define new_local_repository rule for local installed non-Bazel libraries:
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
+new_local_repository(
+    name = "libomp",
+    build_file = "@//:third_party/libomp.BUILD",
+    path = "/opt/homebrew/opt/libomp",
+)
+
 # GNU sientific lib: provides a wide range of mathematical routines.
 new_local_repository(
     name = "gsl",
-    build_file = "@//:third_party/homebrew/gsl.BUILD",
-    path = "/opt/homebrew",
+    build_file = "@//:third_party/gsl.BUILD",
+    path = "/opt/homebrew/opt/gsl",
 )
 
 # Accelerate is a framework that provides a collection of mathematical functions.
@@ -143,7 +149,7 @@ new_local_repository(
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
 new_local_repository(
     name = "openblas",
-    build_file = "@//:third_party/homebrew/openblas.BUILD",
+    build_file = "@//:third_party/openblas.BUILD",
     path = "/opt/homebrew/opt/openblas/",
 )
 
@@ -157,7 +163,7 @@ new_local_repository(
 # HDF5 is a data model, library, and file format for storing and managing data.
 new_local_repository(
     name = "hdf5",
-    build_file = "@//:third_party/homebrew/hdf5.BUILD",
+    build_file = "@//:third_party/hdf5.BUILD",
     path = "/opt/homebrew/opt/hdf5",
 )
 

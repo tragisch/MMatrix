@@ -1,16 +1,14 @@
 # Justfile
-
 # build dir and compiler flags
+
 BUILD_DIR := "bin"
 CFLAGS := env('CFLAGS') + " -g"
-DEPEND_LIBRARIES := " -DACCELERATE_NEW_LAPACK"
+DEPEND_LIBRARIES := " -DACCELERATE_NEW_LAPACK -DACCELERATE_LAPACK_ILP64 "
 BAZEL_INCLUDE := " -I" + `bazel info output_base` / 'external'
 BAZEL_BIN_MATIO_INCLUDE := " -I" + `bazel info bazel-bin` / 'external/matio'
 BAZEL_INCLUDE_MATIO := BAZEL_INCLUDE / "matio/src" + BAZEL_BIN_MATIO_INCLUDE
 BAZEL_INCLUDE_SUITESPARSE := BAZEL_INCLUDE / "suitesparse/include/suitesparse"
 INCLUDES := " -Iinclude" + BAZEL_INCLUDE_MATIO + BAZEL_INCLUDE_SUITESPARSE
-
-
 COPTS := CFLAGS + DEPEND_LIBRARIES + INCLUDES
 LINK_OPTS := " -framework Accelerate"
 
@@ -19,11 +17,11 @@ default:
 
 [private]
 echo:
-    echo {{COPTS}}
+    echo {{ COPTS }}
 
 # Erstelle das Build-Verzeichnis, falls nicht vorhanden
 @setup:
-    mkdir -p {{BUILD_DIR}}
+    mkdir -p {{ BUILD_DIR }}
 
 # Bazel-Build für externe Abhängigkeiten
 @build_deps:
@@ -32,24 +30,23 @@ echo:
 
 # Kompiliert die DoubleMatrix-Bibliothek
 @lib: setup build_deps
-    $CC -c dm.c -o {{BUILD_DIR}}/dm.o {{COPTS}}
-    $CC -c dm_convert.c -o {{BUILD_DIR}}/dm_convert.o {{COPTS}}
-    $CC -c dm_io.c -o {{BUILD_DIR}}/dm_io.o {{COPTS}}
-    $CC -c dms.c -o {{BUILD_DIR}}/dms.o {{COPTS}}
-    ar rcs {{BUILD_DIR}}/libDoubleMatrix.a {{BUILD_DIR}}/*.o
-    rm -f {{BUILD_DIR}}/*.o
+    $CC -c dm.c -o {{ BUILD_DIR }}/dm.o {{ COPTS }}
+    $CC -c dm_convert.c -o {{ BUILD_DIR }}/dm_convert.o {{ COPTS }}
+    $CC -c dm_io.c -o {{ BUILD_DIR }}/dm_io.o {{ COPTS }}
+    $CC -c dms.c -o {{ BUILD_DIR }}/dms.o {{ COPTS }}
+    ar rcs {{ BUILD_DIR }}/libDoubleMatrix.a {{ BUILD_DIR }}/*.o
+    rm -f {{ BUILD_DIR }}/*.o
 
 # Hauptprogramm mit DoubleMatrix-Bibliothek und externen Bibliotheken linken
 main: lib
-    $CC main.c -o {{BUILD_DIR}}/main {{COPTS}} -L{{BUILD_DIR}} -lDoubleMatrix {{LINK_OPTS}}
+    $CC main.c -o {{ BUILD_DIR }}/main {{ COPTS }} -L{{ BUILD_DIR }} -lDoubleMatrix {{ LINK_OPTS }}
     #  -L$(bazel info bazel-bin)/external/matio -lmatio \
     #  -L$(bazel info bazel-bin)/external/suitesparse -lsuitesparse
 
 # Ausführen des Hauptprogramms
 run:
-    ./{{BUILD_DIR}}/main
+    ./{{ BUILD_DIR }}/main
 
 # Bereinigen
 clean:
-    rm -rf {{BUILD_DIR}}
-
+    rm -rf {{ BUILD_DIR }}

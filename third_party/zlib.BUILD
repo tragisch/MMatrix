@@ -1,3 +1,5 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 licenses(["notice"])  # BSD/MIT-like license (for zlib)
 
 cc_library(

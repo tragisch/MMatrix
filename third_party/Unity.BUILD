@@ -1,3 +1,5 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 filegroup(
     name = "TestRunnerGenerator",
     srcs = ["auto/generate_test_runner.rb"],

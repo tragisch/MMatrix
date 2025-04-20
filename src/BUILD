@@ -17,16 +17,20 @@ cc_library(
     ],
     copts = [
         "-DACCELERATE_NEW_LAPACK",
-        "-DACCELERATE_LAPACK_ILP64",
+        "-Xpreprocessor", 
+        "-fopenmp"
     ],
     includes = ["include"],
     linkopts = [
         "-framework Accelerate",
+        "-lomp", 
+        "-I/opt/homebrew/include",
     ],
     visibility = ["//visibility:public"],
     deps = [
         "@matio",
         "@suitesparse",
+        "@libomp",
     ],
 )
 
