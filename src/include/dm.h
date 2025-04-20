@@ -1,5 +1,5 @@
 /*
- * dm.h - Double Matrix Library
+ * dm_create_empty.h - Double Matrix Library
  * author: uwe@roettgermann.de
  * for my private purpose: a simple (dense) matrix library using doubles
  * On MacOS it uses Apples Accelerate framework, BLAS
@@ -13,15 +13,11 @@
 #define DM_H
 
 #include <math.h>
-#include <matio.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-
-#define INIT_CAPACITY 100
-#define EPSILON 1e-10
 
 // Macro for measuring execution time of a function call
 #define CPUTIME(FCALL)                                                         \
@@ -32,7 +28,7 @@
   } while (0)
 
 // Struct for DoubleMatrix
-typedef struct {
+typedef struct DoubleMatrix {
   size_t rows;
   size_t cols;
   size_t capacity;
@@ -40,23 +36,25 @@ typedef struct {
 } DoubleMatrix;
 
 // Function declarations
+DoubleMatrix *dm_create_empty();
+DoubleMatrix *dm_create_with_values(size_t rows, size_t cols, double *values);
 
 // Matrix creation and initialization
 DoubleMatrix *dm_create(size_t rows, size_t cols);
-DoubleMatrix *dm_clone(const DoubleMatrix *m);
-DoubleMatrix *dm_identity(size_t n);
-DoubleMatrix *dm_rand(size_t rows, size_t cols, double density);
+DoubleMatrix *dm_create_clone(const DoubleMatrix *m);
+DoubleMatrix *dm_create_identity(size_t n);
+DoubleMatrix *dm_create_random(size_t rows, size_t cols);
 
 // Importing from array
-DoubleMatrix *dm_import_array(size_t rows, size_t cols, double **array);
-DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
-                               double array[rows][cols]);
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array);
+DoubleMatrix *dm_2D_array(size_t rows, size_t cols, double array[rows][cols]);
 
 // Matrix slicing and reshaping
 DoubleMatrix *dm_get_row(const DoubleMatrix *mat, size_t i);
 DoubleMatrix *dm_get_last_row(const DoubleMatrix *mat);
 DoubleMatrix *dm_get_col(const DoubleMatrix *mat, size_t j);
 DoubleMatrix *dm_get_last_col(const DoubleMatrix *mat);
+
 void dm_reshape(DoubleMatrix *matrix, size_t new_rows, size_t new_cols);
 void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
 
@@ -72,6 +70,8 @@ double dm_determinant(const DoubleMatrix *mat);
 double dm_trace(const DoubleMatrix *mat);
 size_t dm_rank(const DoubleMatrix *mat);
 double dm_norm(const DoubleMatrix *mat);
+size_t dm_rank_euler(const DoubleMatrix *mat);
+double dm_density(const DoubleMatrix *mat);
 
 // In-place operations
 void dm_multiply_me_by_number(DoubleMatrix *mat, const double scalar);
@@ -82,13 +82,10 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j);
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, double value);
 void dm_destroy(DoubleMatrix *mat);
 void dm_print(const DoubleMatrix *matrix);
-
-// File I/O with Matio library
-int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename);
-DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname);
+double dm_rand_number();
 
 // Private functions (should not be used outside this file)
-static size_t dm_rank_euler(const DoubleMatrix *mat);
+
 static void dm_gauss_elimination(DoubleMatrix *mat);
 
 #endif // DM_H

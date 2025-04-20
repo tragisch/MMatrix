@@ -1,3 +1,9 @@
+"""
+This module file is used to manage external dependencies using Bzlmod.
+Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
+For more details, please check https://github.com/bazelbuild/bazel/issues/18958
+"""
+
 ###############################################################################
 # Bazel now uses Bzlmod by default to manage external dependencies.
 # Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
@@ -5,15 +11,77 @@
 # For more details, please check https://github.com/bazelbuild/bazel/issues/18958
 ###############################################################################
 
-"""This is a module docstring."""
-http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+module(
+    name = "dm",
+    version = "0.0.1",
+)
 
-# Simple Unit Testing for C
-# https://github.com/ThrowTheSwitch/Unity/archive/v2.5.2.zip
-# LICENSE: MIT
+bazel_dep(name = "zlib", version = "1.3.1.bcr.4")
+bazel_dep(name = "libsodium", version = "1.0.19")
+bazel_dep(name = "xxhash", version = "0.8.2")
+bazel_dep(name = "c-ares", version = "1.16.1")
+bazel_dep(name = "lmdb", version = "0.9.29")
+bazel_dep(name = "sqlite3", version = "3.48.0")
+bazel_dep(name = "imath", version = "3.1.12.bcr.1")
+bazel_dep(name = "rules_cc", version = "0.1.1")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "cgrindel_bazel_starlib", version = "0.25.0")
+bazel_dep(name = "rules_shell", version = "0.4.0")
+bazel_dep(name = "rules_java", version = "8.10.0")
+
+bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
+
+# bazel_dep(name = "gsl", version = "4.0.0")
+bazel_dep(name = "glib", version = "2.82.2")
+bazel_dep(name = "boost.algorithm", version = "1.83.0.bcr.1")
+
+#############################
+# Hedron's Compile Commands Extractor for Bazel
+#############################
+
+# Hedron's Compile Commands Extractor for Bazel
+# https://github.com/hedronvision/bazel-compile-commands-extractor
+bazel_dep(name = "hedron_compile_commands", dev_dependency = True)
+git_override(
+    module_name = "hedron_compile_commands",
+    remote = "https://github.com/hedronvision/bazel-compile-commands-extractor.git",
+    commit = "4f28899228fb3ad0126897876f147ca15026151e",
+)
+
+#############################
+# Check license of external dependencies
+#############################
+
+bazel_dep(name = "phst_license_test", version = "0", dev_dependency = True)
+git_override(
+    module_name = "phst_license_test",
+    tag = "0.0.1",
+    remote = "https://github.com/phst/license_test.git",
+)
+
+#############################
+# Load external non-Bazel libraries
+#############################
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+
+# mpc - A C library for the arithmetic of complex numbers with arbitrarily high precision and correct rounding of the result.
+http_archive(
+    name = "mpc",
+    build_file = "@//:third_party/mpc.BUILD",
+    sha256 = "da6e798accec57d7b0512ecc38adc151961adefde09811c1c25ee993a653e47c",
+    strip_prefix = "mpc-0.9.0",
+    url = "https://github.com/orangeduck/mpc/archive/refs/tags/0.9.0.tar.gz",
+)
+
+
+
+# unity - A simple unit testing library for C.
 http_archive(
     name = "Unity",
-    build_file = "@//:third_party/throw_the_switch_unity.BUILD",
+    build_file = "@//:third_party/Unity.BUILD",
     sha256 = "4598298723ecca1f242b8c540a253ae4ab591f6810cbde72f128961007683034",
     strip_prefix = "Unity-2.5.2",
     urls = [
@@ -21,13 +89,75 @@ http_archive(
     ],
 )
 
-# A few macros that prints and returns the value of a given expression
-# for quick and dirty debugging, inspired by Rusts dbg!(…) macro and its C++ variant.
-# https://github.com/eerimoq/dbg-macro
+# matio - A C library for reading and writing MATLAB MAT files.
 http_archive(
-    name = "dbg-macro",
-    build_file = "@//:third_party/dbg-macro/BUILD",
-    sha256 = "2cd05a0ab0c93d115bf0ee476a5746189f3ced1d589abb098307daeaa57ef329",
-    strip_prefix = "dbg-macro-0.12.1",
-    url = "https://github.com/eerimoq/dbg-macro/archive/refs/tags/0.12.1.zip",
+    name = "matio",
+    sha256 = "0a6aa00b18c4512b63a8d27906b079c8c6ed41d4b2844f7a4ae598e18d22d3b3",
+    build_file = "@//:third_party/matio.BUILD",
+    strip_prefix = "matio-1.5.27",
+    urls = [
+        "https://github.com/tbeu/matio/releases/download/v1.5.27/matio-1.5.27.tar.gz",
+    ],
 )
+
+
+# csparse is a C library for sparse matrices.
+git_repository(
+    name = "csparse",
+    remote = "https://github.com/ibayer/CSparse.git",
+    commit = "c8d48ca8b1064ad38b220ea57e95249cf9f44e57",
+    build_file = "@//:third_party/csparse.BUILD",
+)
+
+# dbg-macro: A simple debug macro for C.
+git_repository(
+    name = "dbg-macro",
+    commit = "b949858d9dff4886e68f1049270aad1b3fa7ab81",
+    remote = "https://github.com/eerimoq/dbg-macro.git",
+    build_file = "@//:third_party/dbg-macro.BUILD",
+)
+
+
+#############################
+# Hombrew Local Libraries
+#############################
+
+# define new_local_repository rule for local installed non-Bazel libraries:
+new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
+
+# GNU sientific lib: provides a wide range of mathematical routines.
+new_local_repository(
+    name = "gsl",
+    build_file = "@//:third_party/homebrew/gsl.BUILD",
+    path = "/opt/homebrew",
+)
+
+# Accelerate is a framework that provides a collection of mathematical functions.
+# Apples OpenBLAS implementation
+new_local_repository(
+    name = "accelerate",
+    build_file = "@//:third_party/macos/accelerate.BUILD",
+    path = "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Accelerate.framework/Versions/",
+)
+
+# openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
+new_local_repository(
+    name = "openblas",
+    build_file = "@//:third_party/homebrew/openblas.BUILD",
+    path = "/opt/homebrew/opt/openblas/",
+)
+
+# suite-sparse is a collection of sparse matrix libraries
+new_local_repository(
+    name = "suitesparse",
+    build_file = "@//:third_party/suitesparse.BUILD",
+    path = "/opt/homebrew/opt/suite-sparse/",
+)
+
+# HDF5 is a data model, library, and file format for storing and managing data.
+new_local_repository(
+    name = "hdf5",
+    build_file = "@//:third_party/homebrew/hdf5.BUILD",
+    path = "/opt/homebrew/opt/hdf5",
+)
+

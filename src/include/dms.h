@@ -18,11 +18,15 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#ifndef INIT_CAPACITY
 #define INIT_CAPACITY 100
+#endif
+#ifndef EPSILON
 #define EPSILON 1e-10
+#endif
 
 // struct of DoubleMatrix
-typedef struct {
+typedef struct DoubleSparseMatrix {
   size_t rows;
   size_t cols;
   size_t nnz;
@@ -33,19 +37,23 @@ typedef struct {
 } DoubleSparseMatrix;
 
 #endif // DMMa_SPARSE_H
-
+DoubleSparseMatrix *dms();
 DoubleSparseMatrix *dms_create_test_matrix(size_t rows, size_t cols, size_t nnz,
                                            size_t *row_indices,
                                            size_t *col_indices, double *values);
-DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t nnz);
+DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity);
 DoubleSparseMatrix *dms_clone(const DoubleSparseMatrix *m);
 DoubleSparseMatrix *dms_identity(size_t n);
 DoubleSparseMatrix *dms_rand(size_t rows, size_t cols, double density);
+
+// Converting to cs-sparse format
 cs *dms_to_cs(const DoubleSparseMatrix *coo);
 DoubleSparseMatrix *cs_to_dms(const cs *A);
 
-DoubleSparseMatrix *dms_convert_array(size_t rows, size_t cols,
-                                      double array[rows][cols]);
+double *dms_to_array(const DoubleSparseMatrix *mat);
+DoubleSparseMatrix *dms_array(size_t rows, size_t cols, double *array);
+DoubleSparseMatrix *dms_2D_array(size_t rows, size_t cols,
+                                 double array[rows][cols]);
 
 DoubleSparseMatrix *dms_get_row(const DoubleSparseMatrix *mat, size_t i);
 DoubleSparseMatrix *dms_get_last_row(const DoubleSparseMatrix *mat);
@@ -66,14 +74,11 @@ int dms_max_int(int a, int b);
 void dms_destroy(DoubleSparseMatrix *mat);
 void dms_set(DoubleSparseMatrix *mat, size_t i, size_t j, double value);
 double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j);
-
-DoubleSparseMatrix *dms_read_matrix_market(const char *filename);
-void dm_write_matrix_market(const DoubleSparseMatrix *mat,
-                            const char *filename);
+double dms_density(const DoubleSparseMatrix *mat);
 
 // private functions
-static size_t _dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
-                                 size_t j);
-static void _dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
-                                double value, size_t position);
-static void __print_progress_bar(size_t progress, size_t total, int barWidth);
+
+static size_t __dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
+                                  size_t j);
+static void __dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
+                                 double value, size_t position);

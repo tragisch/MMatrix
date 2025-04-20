@@ -163,7 +163,7 @@ void test_dm_get_last_col(void) {
 void test_dm_clone(void) {
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
   DoubleMatrix *mat = dm_convert_array(3, 2, values);
-  DoubleMatrix *clone = dm_clone(mat);
+  DoubleMatrix *clone = dm_create_clone(mat);
   TEST_ASSERT_TRUE(dm_equal(mat, clone));
   dm_destroy(mat);
   dm_destroy(clone);
@@ -171,7 +171,7 @@ void test_dm_clone(void) {
 
 void test_dm_identity(void) {
   size_t n = 3;
-  DoubleMatrix *mat = dm_identity(n);
+  DoubleMatrix *mat = dm_create_identity(n);
   for (size_t i = 0; i < n; i++) {
     for (size_t j = 0; j < n; j++) {
       if (i == j) {
@@ -188,7 +188,7 @@ void test_dm_rand(void) {
   size_t rows = 3;
   size_t cols = 4;
   double density = 0.5;
-  DoubleMatrix *mat = dm_rand(rows, cols, density);
+  DoubleMatrix *mat = dm_create_random(rows, cols, density);
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
       double value = dm_get(mat, i, j);

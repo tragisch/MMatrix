@@ -7,10 +7,10 @@ extern "C" {
 
 // A benchmark function
 static void BM_dm_get(benchmark::State &state) {
-  DoubleMatrix *dm1 = dm_rand(50, 50, 0.001);
+  DoubleMatrix *dm1 = dm_create_random(50, 50, 0.001);
   dm_multiply_me_by_number(dm1, (double)arc4random_uniform(220));
 
-  DoubleMatrix *dm2 = dm_rand(50, 50, 0.001);
+  DoubleMatrix *dm2 = dm_create_random(50, 50, 0.001);
   dm_multiply_me_by_number(dm2, (double)arc4random_uniform(220));
 
   for (auto _ : state) {

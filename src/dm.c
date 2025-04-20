@@ -1,10 +1,30 @@
 #include "dm.h"
-#include <stdlib.h>
+
+#define INIT_CAPACITY 100
+#define EPSILON 1e-9
 
 #ifdef __APPLE__
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
 #endif
+
+DoubleMatrix *dm_create_empty() {
+  DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
+  matrix->rows = 0;
+  matrix->cols = 0;
+  matrix->capacity = 0;
+  matrix->values = NULL;
+  return matrix;
+}
+
+DoubleMatrix *dm_create_with_values(size_t rows, size_t cols, double *values) {
+  DoubleMatrix *matrix = dm_create(rows, cols);
+  matrix->cols = cols;
+  matrix->rows = rows;
+  matrix->capacity = rows * cols;
+  matrix->values = values;
+  return matrix;
+}
 
 DoubleMatrix *dm_create(size_t rows, size_t cols) {
   if (rows < 1 || cols < 1) {
@@ -19,7 +39,7 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
   return matrix;
 }
 
-DoubleMatrix *dm_clone(const DoubleMatrix *mat) {
+DoubleMatrix *dm_create_clone(const DoubleMatrix *mat) {
   DoubleMatrix *copy = dm_create(mat->rows, mat->cols);
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
@@ -29,7 +49,7 @@ DoubleMatrix *dm_clone(const DoubleMatrix *mat) {
   return copy;
 }
 
-DoubleMatrix *dm_identity(size_t n) {
+DoubleMatrix *dm_create_identity(size_t n) {
   DoubleMatrix *identity = dm_create(n, n);
   for (size_t i = 0; i < n; i++) {
     dm_set(identity, i, i, 1.0);
@@ -37,39 +57,22 @@ DoubleMatrix *dm_identity(size_t n) {
   return identity;
 }
 
-DoubleMatrix *dm_rand(size_t rows, size_t cols, double density) {
+double dm_rand_number();
+
+DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
   DoubleMatrix *mat = dm_create(rows, cols);
 
   for (int i = 0; i < mat->rows; i++) {
     for (int j = 0; j < mat->cols; j++) {
-#ifdef __APPLE__
-      if (arc4random() <= density) {
-        double value = arc4random_uniform(100) / 100.0;
-#else
-      if (rand() <= density) {
-        double value = rand() % 100 / 100.0;
-#endif
-        dm_set(mat, i, j, value);
-      }
+      double value = dm_rand_number();
+      dm_set(mat, i, j, value);
     }
   }
   return mat;
 }
 
-// DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
-//                                double array[rows][cols]) {
-//   DoubleMatrix *mat = dm_create(rows, cols);
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
 
-//   for (size_t i = 0; i < mat->rows; i++) {
-//     for (size_t j = 0; j < mat->cols; j++) {
-//       dm_set(mat, i, j, array[i][j]);
-//     }
-//   }
-
-//   return mat;
-// }
-
-DoubleMatrix *dm_import_array(size_t rows, size_t cols, double **array) {
   DoubleMatrix *mat = dm_create(rows, cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
@@ -81,8 +84,7 @@ DoubleMatrix *dm_import_array(size_t rows, size_t cols, double **array) {
   return mat;
 }
 
-DoubleMatrix *dm_convert_array(size_t rows, size_t cols,
-                               double array[rows][cols]) {
+DoubleMatrix *dm_2D_array(size_t rows, size_t cols, double array[rows][cols]) {
   DoubleMatrix *matrix = dm_create(rows, cols);
   if (!matrix)
     return NULL;
@@ -150,25 +152,22 @@ DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 
 DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,
                                     const double number) {
-  DoubleMatrix *product = dm_clone(mat);
-  dm_multiply_me_by_number(product, number);
-  return product;
-}
+  DoubleMatrix *product = dm_create_clone(mat);
 
-void dm_multiply_me_by_number(DoubleMatrix *mat, const double number) {
 #ifdef __APPLE__
   // Using Apple's Accelerate framework (= BLAS)
-  cblas_dscal((BLASINT)(mat->rows * mat->cols), number, mat->values, 1);
+  cblas_dscal((BLASINT)(product->rows * product->cols), number, mat->values, 1);
 
 #else
 
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      mat->values[i * mat->cols + j] *= number;
+  for (size_t i = 0; i < product->rows; i++) {
+    for (size_t j = 0; j < product->cols; j++) {
+      mat->values[i * product->cols + j] *= number;
     }
   }
 
 #endif
+  return product;
 }
 
 DoubleMatrix *dm_transpose(const DoubleMatrix *mat) {
@@ -218,7 +217,7 @@ DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return NULL;
   }
-  DoubleMatrix *sum = dm_clone(mat1);
+  DoubleMatrix *sum = dm_create_clone(mat1);
 
 #ifdef __APPLE__
   // Using Apple's Accelerate framework (= BLAS)
@@ -241,7 +240,7 @@ DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return NULL;
   }
-  DoubleMatrix *difference = dm_clone(mat1);
+  DoubleMatrix *difference = dm_create_clone(mat1);
 
 #ifdef __APPLE__
 
@@ -278,11 +277,10 @@ double dm_determinant(const DoubleMatrix *mat) {
           a[2] * (a[3] * a[7] - a[4] * a[6]);
     return det;
   } else {
-
 #ifdef __APPLE__
     // Using Apple's Accelerate framework (= BLAS)
     int *ipiv = (int *)malloc(mat->cols * sizeof(int));
-    DoubleMatrix *lu = dm_clone(mat);
+    DoubleMatrix *lu = dm_create_clone(mat);
     int info = 0;
     dgetrf_((BLASINT *)&lu->cols, (BLASINT *)&lu->rows, lu->values,
             (BLASINT *)&lu->cols, ipiv, (BLASINT *)&info);
@@ -318,11 +316,10 @@ double dm_determinant(const DoubleMatrix *mat) {
 }
 
 DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
-
   if (mat->cols != mat->rows) {
     perror("the Matrix has to be square!");
   }
-  DoubleMatrix *inverse = dm_clone(mat);
+  DoubleMatrix *inverse = dm_create_clone(mat);
 
 #ifdef __APPLE__
   // Using Apple's Accelerate framework (= BLAS)
@@ -414,7 +411,6 @@ void dm_reshape(DoubleMatrix *matrix, size_t new_rows, size_t new_cols) {
 }
 
 void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
-
   // allocate new memory for dense matrix:
   double *new_values = (double *)calloc(new_row * new_col, sizeof(double));
 
@@ -472,7 +468,6 @@ double dm_trace(const DoubleMatrix *mat) {
 }
 
 double dm_norm(const DoubleMatrix *mat) {
-
 #ifdef __APPLE__
   return cblas_dnrm2((BLASINT)(mat->rows * mat->cols), mat->values, 1);
 #else
@@ -540,85 +535,21 @@ size_t dm_rank(const DoubleMatrix *mat) {
   return rank;
 }
 
-int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
-  // Create a MAT file
-  mat_t *matfp = Mat_CreateVer(filename, NULL, MAT_FT_MAT5);
-  if (NULL == matfp) {
-    fprintf(stderr, "Error creating MAT file %s\n", filename);
-    return -1;
+double dm_density(const DoubleMatrix *mat) {
+  int counter = 0;
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      if (fabs(dm_get(mat, i, j)) > EPSILON) {
+        counter++;
+      }
+    }
   }
-
-  // Define the dimensions of the matrix
-  size_t dims[2] = {matrix->rows, matrix->cols};
-
-  // Create a Matio matrix variable
-  matvar_t *matvar = Mat_VarCreate("matrix", MAT_C_DOUBLE, MAT_T_DOUBLE, 2,
-                                   dims, matrix->values, 0);
-  if (NULL == matvar) {
-    fprintf(stderr, "Error creating matrix variable\n");
-    Mat_Close(matfp);
-    return -1;
-  }
-
-  // Write the variable to the MAT file
-  Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);
-
-  // Free the matrix variable and close the MAT file
-  Mat_VarFree(matvar);
-  Mat_Close(matfp);
-
-  return 0;
+  return (double)counter / (double)(mat->rows * mat->cols);
 }
 
-DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname) {
-  // Open the MAT file
-  mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
-  if (NULL == matfp) {
-    fprintf(stderr, "Error opening MAT file %s\n", filename);
-    return NULL;
-  }
-
-  // Read the variable
-  matvar_t *matvar = Mat_VarRead(matfp, varname);
-  if (NULL == matvar) {
-    fprintf(stderr, "Variable %s not found in MAT file %s\n", varname,
-            filename);
-    Mat_Close(matfp);
-    return NULL;
-  }
-
-  // Extract matrix dimensions
-  if (matvar->rank != 2) {
-    fprintf(stderr, "Variable %s is not a 2D matrix\n", varname);
-    Mat_VarFree(matvar);
-    Mat_Close(matfp);
-    return NULL;
-  }
-
-  size_t rows = matvar->dims[0];
-  size_t cols = matvar->dims[1];
-
-  // Create a DoubleMatrix and copy the data
-  DoubleMatrix *matrix = dm_create(rows, cols);
-  if (!matrix) {
-    fprintf(stderr, "Error allocating memory for matrix\n");
-    Mat_VarFree(matvar);
-    Mat_Close(matfp);
-    return NULL;
-  }
-
-  memcpy(matrix->values, matvar->data, rows * cols * sizeof(double));
-
-  // Free the matvar and close the MAT file
-  Mat_VarFree(matvar);
-  Mat_Close(matfp);
-
-  return matrix;
-}
-
-static size_t dm_rank_euler(const DoubleMatrix *mat) {
+size_t dm_rank_euler(const DoubleMatrix *mat) {
   // Make a copy of the matrix to preserve the original data
-  DoubleMatrix *copy = dm_clone(mat);
+  DoubleMatrix *copy = dm_create_clone(mat);
 
   // Apply Gaussian Elimination on the copy
   dm_gauss_elimination(copy);
@@ -685,7 +616,7 @@ static void dm_gauss_elimination(DoubleMatrix *mat) {
   }
 }
 
-double ur_rand() {
+double dm_rand_number() {
 #ifdef __APPLE__
   uint32_t random_uint32 = arc4random();
 #else
