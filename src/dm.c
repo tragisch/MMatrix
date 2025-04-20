@@ -278,14 +278,17 @@ double dm_determinant(const DoubleMatrix *mat) {
     return det;
   } else {
 #ifdef __APPLE__
-    // Using Apple's Accelerate framework (= BLAS)
-    int *ipiv = (int *)malloc(mat->cols * sizeof(int));
+    BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
     DoubleMatrix *lu = dm_create_clone(mat);
-    int info = 0;
-    dgetrf_((BLASINT *)&lu->cols, (BLASINT *)&lu->rows, lu->values,
-            (BLASINT *)&lu->cols, ipiv, (BLASINT *)&info);
+    BLASINT info = 0;
+    BLASINT cols = (BLASINT)lu->cols;
+    BLASINT rows = (BLASINT)lu->rows;
+
+    dgetrf_(&cols, &rows, lu->values, &cols, ipiv, &info);
     if (info != 0) {
       perror("Error: dgetrf failed.\n");
+      free(ipiv);
+      dm_destroy(lu);
       return 0;
     }
     det = 1.0;
@@ -322,53 +325,48 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   DoubleMatrix *inverse = dm_create_clone(mat);
 
 #ifdef __APPLE__
-  // Using Apple's Accelerate framework (= BLAS)
-  int *ipiv = (int *)malloc(mat->cols * sizeof(int));
-  if (ipiv == NULL) {
+BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
+if (ipiv == NULL) {
     free(inverse->values);
     free(inverse);
     perror("Error: Memory allocation for ipiv failed.\n");
     return NULL;
-  }
-  int info = 0;
-  int n = (int)inverse->cols;
+}
+BLASINT info = 0;
+BLASINT n = (BLASINT)inverse->cols;
 
-  // LU decomposition
-  dgetrf_(&n, &n, inverse->values, &n, ipiv, &info);
-  if (info != 0) {
+dgetrf_(&n, &n, inverse->values, &n, ipiv, &info);
+if (info != 0) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
     perror("Error: dgetrf failed.\n");
     return NULL;
-  }
+}
 
-  // Query the optimal size of the work array
-  int lwork = -1;
-  double work_opt;
-  dgetri_(&n, inverse->values, &n, ipiv, &work_opt, &lwork, &info);
+BLASINT lwork = -1;
+double work_opt;
+dgetri_(&n, inverse->values, &n, ipiv, &work_opt, &lwork, &info);
 
-  lwork = (int)work_opt;
-  double *work = (double *)malloc(lwork * sizeof(double));
-  if (work == NULL) {
+lwork = (BLASINT)work_opt;
+double *work = (double *)malloc(lwork * sizeof(double));
+if (work == NULL) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
     perror("Error: Memory allocation for work array failed.\n");
     return NULL;
-  }
+}
 
-  // Matrix inversion
-  dgetri_(&n, inverse->values, &n, ipiv, work, &lwork, &info);
-  free(work);
-  free(ipiv);
-  if (info != 0) {
+dgetri_(&n, inverse->values, &n, ipiv, work, &lwork, &info);
+free(work);
+free(ipiv);
+if (info != 0) {
     free(inverse->values);
     free(inverse);
     perror("Error: dgetri failed.\n");
     return NULL;
-  }
-
+}
 #else
 
   for (size_t i = 0; i < mat->cols; i++) {
@@ -485,50 +483,40 @@ size_t dm_rank(const DoubleMatrix *mat) {
   }
   int rank = 0;
 #ifdef __APPLE__
-  int m = (int)mat->rows;
-  int n = (int)mat->cols;
-  int k = (m < n) ? m : n;
-  int lda = n;
-  int lwork = -1;
+  BLASINT m = (BLASINT)mat->rows;
+  BLASINT n = (BLASINT)mat->cols;
+  BLASINT lda = n;
+  BLASINT lwork = -1;
   double wkopt;
   double *work;
-  int info;
+  BLASINT info;
 
   dgeqrf_(&m, &n, mat->values, &lda, NULL, &wkopt, &lwork, &info);
-  lwork = (int)wkopt;
+  lwork = (BLASINT)wkopt;
   work = (double *)malloc(lwork * sizeof(double));
   if (work == NULL) {
     return -1; // Memory allocation failed
   }
 
-  double *tau = (double *)malloc(k * sizeof(double));
+  double *tau = (double *)malloc((m < n ? m : n) * sizeof(double));
   if (tau == NULL) {
     free(work);
     return -1; // Memory allocation failed
   }
 
-  double *a_copy = (double *)malloc(mat->rows * mat->cols * sizeof(double));
-  if (a_copy == NULL) {
-    free(work);
-    free(tau);
-    return -1; // Memory allocation failed
-  }
-  memcpy(a_copy, mat->values, mat->rows * mat->cols * sizeof(double));
-  dgeqrf_(&m, &n, a_copy, &lda, tau, work, &lwork, &info);
-
+  dgeqrf_(&m, &n, mat->values, &lda, tau, work, &lwork, &info);
   free(work);
   free(tau);
   if (info != 0) {
-    free(a_copy);
     return -1; // QR factorization failed
   }
 
+  int k = (m < n) ? m : n;
   for (int i = 0; i < k; ++i) {
-    if (fabs(a_copy[i * lda + i]) > EPSILON) {
+    if (fabs(mat->values[i * lda + i]) > EPSILON) {
       rank++;
     }
   }
-  free(a_copy);
 #else
   rank = dm_rank_euler(mat);
 #endif
