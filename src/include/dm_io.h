@@ -6,18 +6,19 @@
 #include "dm.h"
 #include "dms.h"
 
+
 /*******************************/
 /*     Plot DEFINES            */
 /*******************************/
 
-#define WIDTH (36)   // 44
-#define HEIGHT (18)  // 22
+#define WIDTH (36)  // 44
+#define HEIGHT (18) // 22
 #define X_DM (1)
 #define Y_DM (1)
 #define XMAX (WIDTH - X_DM - 1)
-#define XMIN (1)  // -(WIDTH - X)
+#define XMIN (1) // -(WIDTH - X)
 #define YMAX (HEIGHT - Y_DM - 1)
-#define YMIN (1)  // -(HEIGHT - Y) + 1
+#define YMIN (1) // -(HEIGHT - Y) + 1
 #define MAX_NUMBER_OF_COLUMNS (30)
 #define MAX_NUMBER_OF_ROWS (30)
 
@@ -56,4 +57,4 @@ static int get_x_coord(size_t x, size_t rows);
 static int get_y_coord(size_t y, size_t cols);
 static void __print_progress_bar(size_t progress, size_t total, int barWidth);
 
-#endif  // DM_IO_H
+#endif // DM_IO_H

@@ -18,7 +18,8 @@ cc_library(
     copts = [
         "-DACCELERATE_NEW_LAPACK",
         "-Xpreprocessor", 
-        "-fopenmp"
+        "-fopenmp",
+        "-O2"
     ],
     includes = ["include"],
     linkopts = [

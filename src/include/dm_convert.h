@@ -4,7 +4,7 @@
 #include "dm.h"
 #include "dms.h"
 
-DoubleMatrix *dms_to_dm(const DoubleSparseMatrix *dms);
+DoubleMatrix *dms_to_dm(const DoubleSparseMatrix *dms_create_empty);
 DoubleSparseMatrix *dm_to_dms(const DoubleMatrix *dm_create_empty);
 
 #endif // DM_CONVERT_H

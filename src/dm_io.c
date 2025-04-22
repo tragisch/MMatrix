@@ -11,11 +11,18 @@
 
 #include "dm_io.h"
 
+#ifndef INIT_CAPACITY
+#define INIT_CAPACITY 100
+#endif
+#ifndef EPSILON
+#define EPSILON 1e-9
+#endif
+
 /* Array of grey shades */
 const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
                            235, 234, 233, 232, 231, 230, 229, 228,
                            227, 226, 225, 224, 223, 222, 221};
-char grid[HEIGHT][WIDTH];  // Actual definition (only once)
+char grid[HEIGHT][WIDTH]; // Actual definition (only once)
 
 /*******************************/
 /*        STRUCTURE PLOT       */
@@ -66,7 +73,14 @@ static void print_structure_dense(DoubleMatrix *mat, DoubleMatrix *count) {
 static void print_structure_coo(DoubleSparseMatrix *mat, DoubleMatrix *count,
                                 double density) {
   for (size_t i = 0; i < mat->nnz; i++) {
-    if (dm_rand_number() < density) {
+#ifdef __APPLE__
+    uint32_t random_uint32 = arc4random();
+#else
+    uint32_t random_uint32 = rand();
+#endif
+    double rand_number = (double)random_uint32 / (double)UINT32_MAX;
+
+    if (rand_number < density) {
       int x = get_x_coord(mat->row_indices[i], mat->rows);
       int y = get_y_coord(mat->col_indices[i], mat->cols);
       __print_element(count, x, y);

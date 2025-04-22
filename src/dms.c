@@ -1,6 +1,70 @@
 #include "dms.h"
 
-DoubleSparseMatrix *dms_create_test_matrix(size_t rows, size_t cols, size_t nnz,
+#ifndef INIT_CAPACITY
+#define INIT_CAPACITY 100
+#endif
+#ifndef EPSILON
+#define EPSILON 1e-9
+#endif
+
+/*******************************/
+/*       Private Functions     */
+/*******************************/
+
+double dms_max_double(double a, double b) { return a > b ? a : b; }
+double dms_min_double(double a, double b) { return a < b ? a : b; }
+int dms_max_int(int a, int b) { return a > b ? a : b; }
+
+static size_t __dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
+                                  size_t j) {
+  size_t low = 0;
+  size_t high = matrix->nnz;
+
+  while (low < high) {
+    size_t mid = (low + high) / 2;
+
+    if (matrix->row_indices[mid] == i && matrix->col_indices[mid] == j) {
+      return mid; // Element found at position (i, j)
+    }
+    if (matrix->row_indices[mid] < i ||
+        (matrix->row_indices[mid] == i && matrix->col_indices[mid] < j)) {
+      low = mid + 1; // Search in the upper half
+    } else {
+      high = mid; // Search in the lower half
+    }
+  }
+
+  return low; // Element not found, return the insertion position
+}
+
+static void __dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
+                                 double value, size_t position) {
+  // Increase the capacity if needed
+  if (matrix->nnz == matrix->capacity) {
+    dms_realloc(matrix, matrix->capacity * 2);
+  }
+
+  // Shift the existing elements to make space for the new element
+  for (size_t k = matrix->nnz; k > position; k--) {
+    matrix->row_indices[k] = matrix->row_indices[k - 1];
+    matrix->col_indices[k] = matrix->col_indices[k - 1];
+    matrix->values[k] = matrix->values[k - 1];
+  }
+
+  // Insert the new element at the appropriate position
+  matrix->row_indices[position] = i;
+  matrix->col_indices[position] = j;
+  matrix->values[position] = value;
+
+  // Increment the count of non-zero elements
+  matrix->nnz++;
+}
+
+/*******************************/
+/*       Public Functions     */
+/*******************************/
+
+DoubleSparseMatrix *dms_create_with_values(size_t rows, size_t cols, size_t nnz,
                                            size_t *row_indices,
                                            size_t *col_indices,
                                            double *values) {
@@ -14,7 +78,7 @@ DoubleSparseMatrix *dms_create_test_matrix(size_t rows, size_t cols, size_t nnz,
   return mat;
 }
 
-DoubleSparseMatrix *dms() {
+DoubleSparseMatrix *dms_create_empty() {
   DoubleSparseMatrix *mat = malloc(sizeof(DoubleSparseMatrix));
   if (!mat) {
     perror("Error allocating memory for matrix struct");
@@ -82,8 +146,8 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity) {
   return mat;
 }
 
-DoubleSparseMatrix *dms_clone(const DoubleSparseMatrix *m) {
-  DoubleSparseMatrix *copy = dms();
+DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m) {
+  DoubleSparseMatrix *copy = dms_create_empty();
   copy->rows = m->rows;
   copy->cols = m->cols;
   copy->nnz = m->nnz;
@@ -100,7 +164,7 @@ DoubleSparseMatrix *dms_clone(const DoubleSparseMatrix *m) {
   return copy;
 }
 
-DoubleSparseMatrix *dms_identity(size_t n) {
+DoubleSparseMatrix *dms_create_identity(size_t n) {
   if (n < 1) {
     perror("Error: invalid identity dimensions.\n");
     return NULL;
@@ -179,7 +243,8 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
   return coo;
 }
 
-DoubleSparseMatrix *dms_rand(size_t rows, size_t cols, double density) {
+DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
+                                      double density) {
   if (density < 0.0 || density > 1.0) {
     // perror("Error: invalid density value.\n");
     return NULL;
@@ -216,7 +281,8 @@ DoubleSparseMatrix *dms_rand(size_t rows, size_t cols, double density) {
   return mat;
 }
 
-DoubleSparseMatrix *dms_array(size_t rows, size_t cols, double *array) {
+DoubleSparseMatrix *dms_create_from_array(size_t rows, size_t cols,
+                                          double *array) {
   DoubleSparseMatrix *mat = dms_create(rows, cols, rows * cols);
   size_t k = 0;
   for (size_t i = 0; i < rows; i++) {
@@ -233,8 +299,8 @@ DoubleSparseMatrix *dms_array(size_t rows, size_t cols, double *array) {
   return mat;
 }
 
-DoubleSparseMatrix *dms_2D_array(size_t rows, size_t cols,
-                                 double array[rows][cols]) {
+DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
+                                             double array[rows][cols]) {
   size_t nnz = 0;
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
@@ -330,7 +396,7 @@ DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
 
 DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
                                            const double number) {
-  DoubleSparseMatrix *result = dms_clone(mat);
+  DoubleSparseMatrix *result = dms_create_clone(mat);
   for (size_t i = 0; i < mat->nnz; i++) {
     result->values[i] *= number;
   }
@@ -338,6 +404,12 @@ DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
 }
 
 DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
+  if (mat->col_indices == NULL || mat->row_indices == NULL ||
+      mat->values == NULL) {
+    perror("Error: matrix is empty.\n");
+    return NULL;
+  }
+
   if (mat->nnz == 0) {
     return dms_create(mat->cols, mat->rows, 0);
   }
@@ -374,51 +446,6 @@ void dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
   }
 }
 
-static size_t __dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
-                                  size_t j) {
-  size_t low = 0;
-  size_t high = matrix->nnz;
-
-  while (low < high) {
-    size_t mid = (low + high) / 2;
-
-    if (matrix->row_indices[mid] == i && matrix->col_indices[mid] == j) {
-      return mid; // Element found at position (i, j)
-    }
-    if (matrix->row_indices[mid] < i ||
-        (matrix->row_indices[mid] == i && matrix->col_indices[mid] < j)) {
-      low = mid + 1; // Search in the upper half
-    } else {
-      high = mid; // Search in the lower half
-    }
-  }
-
-  return low; // Element not found, return the insertion position
-}
-
-static void __dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
-                                 double value, size_t position) {
-  // Increase the capacity if needed
-  if (matrix->nnz == matrix->capacity) {
-    dms_realloc(matrix, matrix->capacity * 2);
-  }
-
-  // Shift the existing elements to make space for the new element
-  for (size_t k = matrix->nnz; k > position; k--) {
-    matrix->row_indices[k] = matrix->row_indices[k - 1];
-    matrix->col_indices[k] = matrix->col_indices[k - 1];
-    matrix->values[k] = matrix->values[k - 1];
-  }
-
-  // Insert the new element at the appropriate position
-  matrix->row_indices[position] = i;
-  matrix->col_indices[position] = j;
-  matrix->values[position] = value;
-
-  // Increment the count of non-zero elements
-  matrix->nnz++;
-}
-
 void dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity) {
   if (new_capacity <= mat->capacity) {
     printf("Can not resize matrix to smaller capacity!\n");
@@ -448,6 +475,10 @@ void dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity) {
 }
 
 void dms_print(const DoubleSparseMatrix *mat) {
+  if (mat->cols > 100 || mat->rows > 100) {
+    printf("Matrix is too large to print\n");
+    return;
+  }
   if (mat->nnz == 0) {
     printf("Empty matrix\n");
     return;
@@ -510,9 +541,6 @@ double *dms_to_array(const DoubleSparseMatrix *mat) {
   return array;
 }
 
-double dms_max_double(double a, double b) { return a > b ? a : b; }
-double dms_min_double(double a, double b) { return a < b ? a : b; }
-int dms_max_int(int a, int b) { return a > b ? a : b; }
 double dms_density(const DoubleSparseMatrix *mat) {
   return (double)mat->nnz / (double)(mat->rows * mat->cols);
 }

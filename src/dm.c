@@ -3,10 +3,107 @@
 #define INIT_CAPACITY 100
 #define EPSILON 1e-9
 
+// only for testing purposes:
+// #ifdef __APPLE__
+// #undef __APPLE__
+// #endif
+
 #ifdef __APPLE__
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
 #endif
+
+/*******************************/
+/*       Private Functions     */
+/*******************************/
+
+void dm_inplace_gauss_elimination(DoubleMatrix *mat) {
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+
+  for (size_t pivot = 0; pivot < rows; pivot++) {
+    // Find the maximum value in the column below the pivot
+    double max_val = fabs(dm_get(mat, pivot, pivot));
+    size_t max_row = pivot;
+    for (size_t row = pivot + 1; row < rows; row++) {
+      double val = fabs(dm_get(mat, row, pivot));
+      if (val > max_val) {
+        max_val = val;
+        max_row = row;
+      }
+    }
+
+    // Swap rows if necessary
+    if (max_row != pivot) {
+      for (size_t col = 0; col < cols; col++) {
+        double temp = dm_get(mat, pivot, col);
+        dm_set(mat, pivot, col, dm_get(mat, max_row, col));
+        dm_set(mat, max_row, col, temp);
+      }
+    }
+
+    // Perform row operations to eliminate values below the pivot
+    double pivot_val = dm_get(mat, pivot, pivot);
+    if (fabs(pivot_val) > EPSILON) { // Check if pivot is non-zero
+      for (size_t row = pivot + 1; row < rows; row++) {
+        double factor = dm_get(mat, row, pivot) / pivot_val;
+        dm_set(mat, row, pivot, 0.0); // Eliminate the value below the pivot
+
+        for (size_t col = pivot + 1; col < cols; col++) {
+          double val = dm_get(mat, row, col);
+          dm_set(mat, row, col, val - factor * dm_get(mat, pivot, col));
+        }
+      }
+    }
+  }
+}
+
+size_t dm_rank_euler(const DoubleMatrix *mat) {
+  // Make a copy of the matrix to preserve the original data
+  DoubleMatrix *copy = dm_create(mat->rows, mat->cols);
+  if (copy == NULL) {
+    perror("Error: Memory allocation for matrix copy failed.\n");
+    return 0; // Return 0 or an appropriate error value
+  }
+  memcpy(copy->values, mat->values, mat->rows * mat->cols * sizeof(double));
+
+  // Apply Gaussian Elimination on the copy
+  dm_inplace_gauss_elimination(copy);
+
+  // Count the number of non-zero rows in the row-echelon form
+  size_t rank = 0;
+  for (size_t i = 0; i < copy->rows; i++) {
+    int has_non_zero_element = 0;
+    for (size_t j = 0; j < copy->cols; j++) {
+      if (fabs(dm_get(copy, i, j)) > EPSILON) {
+        has_non_zero_element = 1;
+        break;
+      }
+    }
+    if (has_non_zero_element) {
+      rank++;
+    }
+  }
+
+  // Free the memory of the copy
+  dm_destroy(copy);
+
+  return rank;
+}
+
+// Random number generation
+double dm_rand_number() {
+#ifdef __APPLE__
+  uint32_t random_uint32 = arc4random();
+#else
+  uint32_t random_uint32 = rand();
+#endif
+  return (double)random_uint32 / (double)UINT32_MAX;
+}
+
+/*******************************/
+/*      Public Functions      */
+/*******************************/
 
 DoubleMatrix *dm_create_empty() {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
@@ -129,7 +226,7 @@ DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   }
   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
 #ifdef __APPLE__
-  // Using Apple's Accelerate framework (= BLAS)
+
   cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (BLASINT)mat1->rows,
               (BLASINT)mat2->cols, (BLASINT)mat1->cols, 1.0, mat1->values,
               (BLASINT)mat1->cols, mat2->values, (BLASINT)mat2->cols, 0.0,
@@ -154,20 +251,7 @@ DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,
                                     const double number) {
   DoubleMatrix *product = dm_create_clone(mat);
-
-#ifdef __APPLE__
-  // Using Apple's Accelerate framework (= BLAS)
-  cblas_dscal((BLASINT)(product->rows * product->cols), number, product->values, 1);
-
-#else
-
-  for (size_t i = 0; i < product->rows; i++) {
-    for (size_t j = 0; j < product->cols; j++) {
-      mat->values[i * product->cols + j] *= number;
-    }
-  }
-
-#endif
+  dm_inplace_multiply_by_number(product, number);
   return product;
 }
 
@@ -176,29 +260,20 @@ DoubleMatrix *dm_transpose(const DoubleMatrix *mat) {
     return NULL;
 
   DoubleMatrix *transposed = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
-  if (transposed == NULL)
-    return NULL;
-
   transposed->rows = mat->cols;
   transposed->cols = mat->rows;
-  transposed->values =
-      (double *)malloc(transposed->rows * transposed->cols * sizeof(double));
-  if (transposed->values == NULL) {
-    free(transposed);
-    return NULL;
-  }
-
-  for (int i = 0; i < mat->rows; ++i) {
-    for (int j = 0; j < mat->cols; ++j) {
-      transposed->values[j * transposed->cols + i] =
-          mat->values[i * mat->cols + j];
+  transposed->capacity = mat->cols * mat->rows;
+  transposed->values = (double *)malloc(transposed->capacity * sizeof(double));
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      dm_set(transposed, j, i, dm_get(mat, i, j));
     }
   }
 
   return transposed;
 }
 
-bool dm_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+bool dm_is_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1 == NULL || mat2 == NULL) {
     return false;
   }
@@ -219,20 +294,8 @@ DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     return NULL;
   }
   DoubleMatrix *sum = dm_create_clone(mat1);
+  dm_inplace_add(sum, mat2);
 
-#ifdef __APPLE__
-  // Using Apple's Accelerate framework (= BLAS)
-  cblas_daxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
-              sum->values, 1);
-
-#else
-
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat1->cols; j++) {
-      dm_set(sum, i, j, dm_get(mat1, i, j) + dm_get(mat2, i, j));
-    }
-  }
-#endif
   return sum;
 }
 
@@ -242,22 +305,7 @@ DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     return NULL;
   }
   DoubleMatrix *difference = dm_create_clone(mat1);
-
-#ifdef __APPLE__
-
-  // Using Apple's Accelerate framework (= BLAS)
-  cblas_daxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
-              difference->values, 1);
-
-#else
-
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat1->cols; j++) {
-      dm_set(difference, i, j, dm_get(mat1, i, j) - dm_get(mat2, i, j));
-    }
-  }
-
-#endif
+  dm_inplace_diff(difference, mat2);
   return difference;
 }
 
@@ -279,6 +327,7 @@ double dm_determinant(const DoubleMatrix *mat) {
     return det;
   } else {
 #ifdef __APPLE__
+
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
     DoubleMatrix *lu = dm_create_clone(mat);
     BLASINT info = 0;
@@ -320,12 +369,13 @@ double dm_determinant(const DoubleMatrix *mat) {
 }
 
 DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
-  if (mat->cols != mat->rows) {
+  if (mat->cols != mat->rows || mat->rows == 0 || mat->cols == 0) {
     perror("the Matrix has to be square!");
   }
   DoubleMatrix *inverse = dm_create_clone(mat);
 
 #ifdef __APPLE__
+
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
   if (ipiv == NULL) {
     free(inverse->values);
@@ -370,9 +420,23 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   }
 #else
 
+  double det = dm_determinant(mat);
+  if (fabs(det) < EPSILON) {
+    perror("Error: Matrix is singular and cannot be inverted.\n");
+    dm_destroy(inverse);
+    return NULL;
+  }
+
   for (size_t i = 0; i < mat->cols; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
       DoubleMatrix *sub_mat = dm_create(mat->cols - 1, mat->cols - 1);
+      if (sub_mat == NULL) {
+        dm_destroy(inverse);
+        perror("Error: Memory allocation for sub-matrix failed.\n");
+        return NULL;
+      }
+
+      // Erstellen der Untermatrix
       for (size_t k = 0; k < mat->cols; k++) {
         for (size_t l = 0; l < mat->cols; l++) {
           if (k < i && l < j) {
@@ -386,12 +450,18 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
           }
         }
       }
-      dm_set(inverse, i, j, pow(-1, (double)(i + j)) * dm_determinant(sub_mat));
+
+      double sign = ((i + j) % 2 == 0) ? 1.0 : -1.0;
+      dm_set(inverse, i, j, sign * dm_determinant(sub_mat));
+
       dm_destroy(sub_mat);
     }
   }
-  dm_transpose(inverse);
-  dm_multiply_by_scalar(inverse, 1 / det);
+
+  // Skalieren mit 1 / det
+  dm_inplace_multiply_by_number(inverse, 1 / det);
+  dm_inplace_transpose(inverse);
+
 #endif
   return inverse;
 }
@@ -536,80 +606,87 @@ double dm_density(const DoubleMatrix *mat) {
   return (double)counter / (double)(mat->rows * mat->cols);
 }
 
-size_t dm_rank_euler(const DoubleMatrix *mat) {
-  // Make a copy of the matrix to preserve the original data
-  DoubleMatrix *copy = dm_create_clone(mat);
-
-  // Apply Gaussian Elimination on the copy
-  dm_gauss_elimination(copy);
-
-  // Count the number of non-zero rows in the row-echelon form
-  size_t rank = 0;
-  for (size_t i = 0; i < copy->rows; i++) {
-    int non_zero = 0;
-    for (size_t j = 0; j < copy->cols; j++) {
-      if (dm_get(copy, i, j) != 0.0) {
-        non_zero = 1;
-        break;
-      }
-    }
-    if (non_zero) {
-      rank++;
-    }
-  }
-
-  // Free the memory of the copy
-  dm_destroy(copy);
-
-  return rank;
+// Matrix is empty
+bool dm_is_empty(const DoubleMatrix *mat) {
+  return (mat == NULL || mat->values == NULL || mat->rows == 0 ||
+          mat->cols == 0);
 }
 
-// Gaussian Elimination
-static void dm_gauss_elimination(DoubleMatrix *mat) {
-  size_t rows = mat->rows;
-  size_t cols = mat->cols;
+// Matrix is square
+bool dm_is_square(const DoubleMatrix *mat) { return (mat->rows == mat->cols); }
 
-  // Apply Gaussian Elimination
-  for (size_t pivot = 0; pivot < rows; pivot++) {
-    // Find the maximum value in the column below the pivot
-    double max_val = fabs(dm_get(mat, pivot, pivot));
-    size_t max_row = pivot;
-    for (size_t row = pivot + 1; row < rows; row++) {
-      double val = fabs(dm_get(mat, row, pivot));
-      if (val > max_val) {
-        max_val = val;
-        max_row = row;
-      }
-    }
-
-    // Swap rows if necessary
-    if (max_row != pivot) {
-      for (size_t col = 0; col < cols; col++) {
-        double temp = dm_get(mat, pivot, col);
-        dm_set(mat, pivot, col, dm_get(mat, max_row, col));
-        dm_set(mat, max_row, col, temp);
-      }
-    }
-
-    // Perform row operations to eliminate values below the pivot
-    for (size_t row = pivot + 1; row < rows; row++) {
-      double factor = dm_get(mat, row, pivot) / dm_get(mat, pivot, pivot);
-      dm_set(mat, row, pivot, 0.0); // Eliminate the value below the pivot
-
-      for (size_t col = pivot + 1; col < cols; col++) {
-        double val = dm_get(mat, row, col);
-        double pivot_val = dm_get(mat, pivot, col);
-        dm_set(mat, row, col, val - factor * pivot_val);
-      }
-    }
-  }
+// Matrix is vector
+bool dm_is_vector(const DoubleMatrix *mat) {
+  return (mat->rows == 1 || mat->cols == 1);
 }
 
-double dm_rand_number() {
+// Matrix is equal size
+bool dm_is_equal_size(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+  return (mat1->rows == mat2->rows && mat1->cols == mat2->cols);
+}
+
+// In-place operations
+void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+  if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
+    perror("Error: invalid matrix dimensions.\n");
+    return;
+  }
 #ifdef __APPLE__
-  uint32_t random_uint32 = arc4random();
+  // Using Apple's Accelerate framework (= BLAS)
+  cblas_daxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
+              mat1->values, 1);
 #else
-  uint32_t random_uint32 = rand();
+  for (size_t i = 0; i < mat1->rows; i++) {
+    for (size_t j = 0; j < mat1->cols; j++) {
+      dm_set(mat1, i, j, dm_get(mat1, i, j) + dm_get(mat2, i, j));
+    }
+  }
 #endif
-  return (double)random_uint32 / (double)UINT32_MAX;
+}
+
+// In-place difference
+void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+  if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
+    perror("Error: invalid matrix dimensions.\n");
+    return;
+  }
+#ifdef __APPLE__
+  // Using Apple's Accelerate framework (= BLAS)
+  cblas_daxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
+              mat1->values, 1);
+#else
+  for (size_t i = 0; i < mat1->rows; i++) {
+    for (size_t j = 0; j < mat1->cols; j++) {
+      dm_set(mat1, i, j, dm_get(mat1, i, j) - dm_get(mat2, i, j));
+    }
+  }
+#endif
+}
+
+// In-place transpose
+void dm_inplace_transpose(DoubleMatrix *mat) {
+  if (mat == NULL || mat->values == NULL || mat->rows != mat->cols) {
+    perror("Error: In-place transposition requires a square matrix.");
+    return;
+  }
+
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = i + 1; j < mat->cols; j++) {
+
+      double temp = dm_get(mat, i, j);
+      dm_set(mat, i, j, dm_get(mat, j, i));
+      dm_set(mat, j, i, temp);
+    }
+  }
+}
+
+// In-place scale
+void dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar) {
+#ifdef __APPLE__
+  cblas_dscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
+#else
+  for (size_t i = 0; i < mat->rows * mat->cols; i++) {
+    mat->values[i] *= scalar;
+  }
+#endif
 }
