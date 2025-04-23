@@ -3,7 +3,7 @@
 
 BUILD_DIR := "bin"
 CFLAGS := env('CFLAGS') + " -g"
-DEPEND_LIBRARIES := " -DACCELERATE_NEW_LAPACK -DACCELERATE_LAPACK_ILP64 "
+DEPEND_LIBRARIES := " -DACCELERATE_NEW_LAPACK"
 BAZEL_INCLUDE := " -I" + `bazel info output_base` / 'external'
 BAZEL_BIN_MATIO_INCLUDE := " -I" + `bazel info bazel-bin` / 'external/matio'
 BAZEL_INCLUDE_MATIO := BAZEL_INCLUDE / "matio/src" + BAZEL_BIN_MATIO_INCLUDE

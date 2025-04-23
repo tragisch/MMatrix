@@ -18,3 +18,11 @@ unity_test(
     tags = ["smoke"],
 )
 
+unity_test(
+    name = "test_convert",
+    srcs = ["test_convert.c",],
+    my_config = ["my_config.yml"],
+    deps = ["//src:DoubleMatrix",],
+    tags = ["smoke"],
+)
+
