@@ -1,5 +1,6 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
+# homebrew installed local libomp
 cc_library(
     name = "libomp",
     srcs = [

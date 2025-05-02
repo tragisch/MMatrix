@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
+ * SPDX-License-Identifier: MIT
+ *
+ * This file is part of a project licensed under the MIT License.
+ * See the LICENSE file in the root directory for details.
+ */
+
 #ifndef DM_IO_H
 #define DM_IO_H
 
@@ -5,7 +13,7 @@
 
 #include "dm.h"
 #include "dms.h"
-
+#include "sm.h"
 
 /*******************************/
 /*     Plot DEFINES            */
@@ -33,10 +41,13 @@ extern char grid[HEIGHT][WIDTH];
 /*******************************/
 
 void dm_cplot(DoubleMatrix *mat);
+void sm_cplot(FloatMatrix *mat);
 void dms_cplot(DoubleSparseMatrix *mat, double strength);
 
 int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename);
+int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename);
 DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname);
+FloatMatrix *sm_read_MAT_file(const char *filename, const char *varname);
 
 DoubleSparseMatrix *dms_read_matrix_market(const char *filename);
 void dms_write_matrix_market(const DoubleSparseMatrix *mat,
@@ -46,15 +57,9 @@ void dms_write_matrix_market(const DoubleSparseMatrix *mat,
 /*     Help Function Plot      */
 /*******************************/
 
-static void print_structure_coo(DoubleSparseMatrix *mat, DoubleMatrix *count,
-                                double density);
-static void print_structure_dense(DoubleMatrix *mat, DoubleMatrix *count);
-static void __print_element(DoubleMatrix *count, size_t x, size_t y);
-static int plot(int x, int y, char c);
-static void init_grid(void);
-static void show_grid(DoubleMatrix *count);
-static int get_x_coord(size_t x, size_t rows);
-static int get_y_coord(size_t y, size_t cols);
-static void __print_progress_bar(size_t progress, size_t total, int barWidth);
+// static void init_grid(void);
+// static void show_grid(DoubleMatrix *count);
+// static int get_x_coord(size_t x, size_t rows);
+// static int get_y_coord(size_t y, size_t cols);
 
 #endif // DM_IO_H

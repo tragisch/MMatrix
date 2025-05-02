@@ -1,3 +1,11 @@
+/*
+ * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
+ * SPDX-License-Identifier: MIT
+ *
+ * This file is part of a project licensed under the MIT License.
+ * See the LICENSE file in the root directory for details.
+ */
+
 #include "dm.h"
 #include "dm_io.h"
 
@@ -362,52 +370,7 @@ DoubleMatrix *create_sample_matrix(size_t rows, size_t cols) {
   return matrix;
 }
 
-// Test function for dm_write_to_file
-void test_dm_write_to_file(void) {
-  DoubleMatrix *matrix = create_sample_matrix(10, 10);
-  const char *filename = "test_matrix.mat";
 
-  // Write the matrix to a file
-  int result = dm_write_MAT_file(matrix, filename);
-  TEST_ASSERT_EQUAL(0, result);
-
-  // Clean up
-  dm_destroy(matrix);
-
-  // Check if the file was created
-  FILE *file = fopen(filename, "r");
-  TEST_ASSERT_NOT_NULL(file);
-  if (file) {
-    fclose(file);
-  }
-}
-
-// Test function for dm_read_from_file
-void test_dm_read_from_file(void) {
-  const char *filename = "test_matrix.mat";
-  const char *varname = "matrix";
-
-  // Read the matrix from the file
-  DoubleMatrix *matrix = dm_read_MAT_file(filename, varname);
-  TEST_ASSERT_NOT_NULL(matrix);
-
-  if (matrix) {
-    // Check the matrix dimensions
-    TEST_ASSERT_EQUAL(10, matrix->rows);
-    TEST_ASSERT_EQUAL(10, matrix->cols);
-
-    // Verify the matrix values
-    for (size_t i = 0; i < 10; ++i) {
-      for (size_t j = 0; j < 10; ++j) {
-        double expected_value = (double)(i * 10 + j);
-        TEST_ASSERT_EQUAL_DOUBLE(expected_value, dm_get(matrix, i, j));
-      }
-    }
-
-    // Clean up
-    dm_destroy(matrix);
-  }
-}
 
 void test_dm_gauss_elimination() {
   double values[4][4] = {

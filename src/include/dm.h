@@ -1,12 +1,9 @@
 /*
- * dm_create_empty.h - Double Matrix Library
- * author: uwe@roettgermann.de
- * for my private purpose: a simple (dense) matrix library using doubles
- * On MacOS it uses Apples Accelerate framework, BLAS
+ * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
+ * SPDX-License-Identifier: MIT
  *
- * License: MIT
- * Last modified: 2024-06-01
- * (c) 2021 Uwe Röttgermann
+ * This file is part of a project licensed under the MIT License.
+ * See the LICENSE file in the root directory for details.
  */
 
 #ifndef DM_H
@@ -96,5 +93,6 @@ void dm_destroy(DoubleMatrix *mat);
 
 // File I/O
 void dm_print(const DoubleMatrix *matrix);
+char *dm_active_library();
 
 #endif // DM_H

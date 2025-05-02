@@ -1,13 +1,9 @@
 /*
- * dms_create_empty.h - Double Sparse Matrix Library
- * author: uwe@roettgermann.de
- * for my private purpose: a simple sparse matrix library using doubles
- * On some platforms it uses SuiteSparse: a Common Sparse Matrix Package
- * DoubleSparseMatrix is a sparse matrix in coordinate format (COO).
+ * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
+ * SPDX-License-Identifier: MIT
  *
- * License: MIT
- * Last modified: 2024-06-01
- * (c) 2021 Uwe Röttgermann
+ * This file is part of a project licensed under the MIT License.
+ * See the LICENSE file in the root directory for details.
  */
 
 #ifndef DMMa_SPARSE_H

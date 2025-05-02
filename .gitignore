@@ -104,6 +104,7 @@ StyleGuide.md
 /examples/*
 /coverage/*
 /data/*
+/share/*
 /lib/*
 *.in
 *.clang-tidy

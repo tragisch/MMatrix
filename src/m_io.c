@@ -1,15 +1,13 @@
-/**
- * @file dm_cplot.c
- * @author Uwe Röttgermann (uwe@roettgermann.de)
- * @brief
- * @version 0.1
- * @date 26-12-2022
+/*
+ * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
+ * SPDX-License-Identifier: MIT
  *
- * @copyright Copyright (c) 2021
- *
+ * This file is part of a project licensed under the MIT License.
+ * See the LICENSE file in the root directory for details.
  */
 
-#include "dm_io.h"
+#include "m_io.h"
+#include "sm.h"
 
 #ifndef INIT_CAPACITY
 #define INIT_CAPACITY 100
@@ -25,67 +23,50 @@ const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
 char grid[HEIGHT][WIDTH]; // Actual definition (only once)
 
 /*******************************/
-/*        STRUCTURE PLOT       */
+/*       Plot & Progress       */
 /*******************************/
 
-void dms_cplot(DoubleSparseMatrix *mat, double strength) {
-  init_grid();
+static int plot(int x, int y, char c) {
+  if (x > XMAX || x < XMIN || y > YMAX || y < YMIN) {
+    return (-1);
+  }
 
-  double density = dms_density(mat) * strength;
+  grid[y][x] = c;
 
-  printf("Matrix (%zu x %zu, %zu), density: %lf\n", mat->rows, mat->cols,
-         mat->nnz, density);
-  DoubleMatrix *count = dm_create(WIDTH, HEIGHT);
-  print_structure_coo(mat, count, density);
-
-  show_grid(count);
+  return 1;
 }
 
-void dm_cplot(DoubleMatrix *mat) {
-  init_grid();
+// if file to read is very large, print a progress bar:
+static void __print_progress_bar(size_t progress, size_t total, int barWidth) {
+  float percentage = (float)progress / (float)total;
+  int filledWidth = (int)(percentage * (float)barWidth);
 
-  double density = dm_density(mat);
-
-  printf("Matrix (%zu x %zu), density: %lf\n", mat->rows, mat->cols, density);
-  DoubleMatrix *count = dm_create(WIDTH, HEIGHT);
-  print_structure_dense(mat, count);
-
-  show_grid(count);
-}
-
-static void __print_element(DoubleMatrix *count, size_t x, size_t y) {
-  dm_set(count, x, y, dm_get(count, x, y) + 1);
-  plot(x, y, '*');
-}
-
-static void print_structure_dense(DoubleMatrix *mat, DoubleMatrix *count) {
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
-        int x = (int)get_x_coord(i, mat->rows);
-        int y = (int)get_y_coord(j, mat->cols);
-        __print_element(count, x, y);
-      }
+  printf("[");
+  for (int i = 0; i < barWidth; i++) {
+    if (i < filledWidth) {
+      printf("=");
+    } else {
+      printf(" ");
     }
   }
+  printf("] %d%%\r", (int)(percentage * 100));
+  fflush(stdout);
 }
 
-static void print_structure_coo(DoubleSparseMatrix *mat, DoubleMatrix *count,
-                                double density) {
-  for (size_t i = 0; i < mat->nnz; i++) {
-#ifdef __APPLE__
-    uint32_t random_uint32 = arc4random();
-#else
-    uint32_t random_uint32 = rand();
-#endif
-    double rand_number = (double)random_uint32 / (double)UINT32_MAX;
+/*******************************/
+/*     Normalize to Grid       */
+/*******************************/
 
-    if (rand_number < density) {
-      int x = get_x_coord(mat->row_indices[i], mat->rows);
-      int y = get_y_coord(mat->col_indices[i], mat->cols);
-      __print_element(count, x, y);
-    }
-  }
+static int get_x_coord(size_t x, size_t rows) {
+  // int ret = 1 + (int)round((double)x / (double)rows * (double)(WIDTH - 2));
+  double ret = (double)(x + 1) * ((double)WIDTH / (double)(rows + 1)) - 1;
+  return (int)ret;
+}
+
+static int get_y_coord(size_t y, size_t cols) {
+  // int ret = 1 + (int)round((double)y / (double)cols * (double)(HEIGHT - 3));
+  double ret = (double)(y) * ((double)HEIGHT / (double)(cols + 1)) + 1;
+  return (int)ret;
 }
 
 /*******************************/
@@ -93,11 +74,11 @@ static void print_structure_coo(DoubleSparseMatrix *mat, DoubleMatrix *count,
 /*******************************/
 // from: https://c-for-dummies.com/blog/?p=761
 
-static void show_grid(DoubleMatrix *count) {
+static void show_grid(FloatMatrix *count) {
   for (int y = 0; y < HEIGHT; y++) {
     for (int x = 0; x < WIDTH; x++) {
       // Check if the character has a color escape code
-      int color = (int)dm_get(count, x, y);
+      int color = (int)sm_get(count, x, y);
       if (color > 1) {
         // get color escape code
         int grey_color = grey_shades[color];
@@ -147,33 +128,99 @@ static void init_grid(void) {
 }
 
 /*******************************/
-/*       Plot Functions        */
+/*        STRUCTURE PLOT       */
 /*******************************/
 
-static int plot(int x, int y, char c) {
-  if (x > XMAX || x < XMIN || y > YMAX || y < YMIN) {
-    return (-1);
+static void __print_element(FloatMatrix *count, size_t x, size_t y) {
+  sm_set(count, x, y, sm_get(count, x, y) + 1);
+  plot(x, y, '*');
+}
+
+// static void print_structure_dense(DoubleMatrix *mat, DoubleMatrix *count) {
+//   for (size_t i = 0; i < mat->rows; i++) {
+//     for (size_t j = 0; j < mat->cols; j++) {
+//       if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
+//         int x = (int)get_x_coord(i, mat->rows);
+//         int y = (int)get_y_coord(j, mat->cols);
+//         __print_element(count, x, y);
+//       }
+//     }
+//   }
+// }
+
+static void print_structure_dense(float *values, size_t rows, size_t cols,
+                                  FloatMatrix *count) {
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      if (fabs(values[i * cols + j]) > EPSILON) {
+        int x = (int)get_x_coord(i, rows);
+        int y = (int)get_y_coord(j, cols);
+        __print_element(count, x, y);
+      }
+    }
   }
-
-  grid[y][x] = c;
-
-  return 1;
 }
 
-/*******************************/
-/*     Normalize to Grid       */
-/*******************************/
+static void print_structure_coo(DoubleSparseMatrix *mat, FloatMatrix *count,
+                                double density) {
+  for (size_t i = 0; i < mat->nnz; i++) {
+#ifdef __APPLE__
+    uint32_t random_uint32 = arc4random();
+#else
+    uint32_t random_uint32 = rand();
+#endif
+    double rand_number = (double)random_uint32 / (double)UINT32_MAX;
 
-static int get_x_coord(size_t x, size_t rows) {
-  // int ret = 1 + (int)round((double)x / (double)rows * (double)(WIDTH - 2));
-  double ret = (double)(x + 1) * ((double)WIDTH / (double)(rows + 1)) - 1;
-  return (int)ret;
+    if (rand_number < density) {
+      int x = get_x_coord(mat->row_indices[i], mat->rows);
+      int y = get_y_coord(mat->col_indices[i], mat->cols);
+      __print_element(count, x, y);
+    }
+  }
 }
 
-static int get_y_coord(size_t y, size_t cols) {
-  // int ret = 1 + (int)round((double)y / (double)cols * (double)(HEIGHT - 3));
-  double ret = (double)(y) * ((double)HEIGHT / (double)(cols + 1)) + 1;
-  return (int)ret;
+void dms_cplot(DoubleSparseMatrix *mat, double strength) {
+  init_grid();
+
+  double density = dms_density(mat) * strength;
+
+  printf("Matrix (%zu x %zu, %zu), density: %lf\n", mat->rows, mat->cols,
+         mat->nnz, density);
+  FloatMatrix *count = sm_create(WIDTH, HEIGHT);
+  print_structure_coo(mat, count, density);
+
+  show_grid(count);
+}
+
+void dm_cplot(DoubleMatrix *mat) {
+  init_grid();
+
+  double density = dm_density(mat);
+
+  printf("Matrix (%zu x %zu), density: %lf\n", mat->rows, mat->cols, density);
+  FloatMatrix *count = sm_create(WIDTH, HEIGHT);
+
+  print_structure_dense((float *)mat->values, mat->rows, mat->cols, count);
+
+  show_grid(count);
+}
+
+void sm_cplot(FloatMatrix *mat) {
+  init_grid();
+  float density = sm_density(mat);
+  printf("Matrix (%zu x %zu), density: %f\n", mat->rows, mat->cols, density);
+  FloatMatrix *count = sm_create(WIDTH, HEIGHT);
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      if (fabsf(mat->values[i * mat->cols + j]) > EPSILON) {
+        int x = (int)get_x_coord(i, mat->rows);
+        int y = (int)get_y_coord(j, mat->cols);
+        sm_set(count, x, y, sm_get(count, x, y) + 1);
+        plot(x, y, '*');
+      }
+    }
+  }
+  show_grid(count);
 }
 
 /*******************************/
@@ -204,6 +251,30 @@ int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
   Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);
 
   // Free the matrix variable and close the MAT file
+  Mat_VarFree(matvar);
+  Mat_Close(matfp);
+
+  return 0;
+}
+
+int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename) {
+  mat_t *matfp = Mat_CreateVer(filename, NULL, MAT_FT_MAT5);
+  if (NULL == matfp) {
+    fprintf(stderr, "Error creating MAT file %s\n", filename);
+    return -1;
+  }
+
+  size_t dims[2] = {matrix->rows, matrix->cols};
+
+  matvar_t *matvar = Mat_VarCreate("matrix", MAT_C_SINGLE, MAT_T_SINGLE, 2,
+                                   dims, matrix->values, 0);
+  if (NULL == matvar) {
+    fprintf(stderr, "Error creating matrix variable\n");
+    Mat_Close(matfp);
+    return -1;
+  }
+
+  Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);
   Mat_VarFree(matvar);
   Mat_Close(matfp);
 
@@ -250,6 +321,47 @@ DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname) {
   memcpy(matrix->values, matvar->data, rows * cols * sizeof(double));
 
   // Free the matvar and close the MAT file
+  Mat_VarFree(matvar);
+  Mat_Close(matfp);
+
+  return matrix;
+}
+
+FloatMatrix *sm_read_MAT_file(const char *filename, const char *varname) {
+  mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
+  if (NULL == matfp) {
+    fprintf(stderr, "Error opening MAT file %s\n", filename);
+    return NULL;
+  }
+
+  matvar_t *matvar = Mat_VarRead(matfp, varname);
+  if (NULL == matvar) {
+    fprintf(stderr, "Variable %s not found in MAT file %s\n", varname,
+            filename);
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  if (matvar->rank != 2) {
+    fprintf(stderr, "Variable %s is not a 2D matrix\n", varname);
+    Mat_VarFree(matvar);
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  size_t rows = matvar->dims[0];
+  size_t cols = matvar->dims[1];
+
+  FloatMatrix *matrix = sm_create(rows, cols);
+  if (!matrix) {
+    fprintf(stderr, "Error allocating memory for matrix\n");
+    Mat_VarFree(matvar);
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  memcpy(matrix->values, matvar->data, rows * cols * sizeof(float));
+
   Mat_VarFree(matvar);
   Mat_Close(matfp);
 
@@ -344,21 +456,4 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
   fclose(fp);
 
   return mat;
-}
-
-// if file to read is very large, print a progress bar:
-static void __print_progress_bar(size_t progress, size_t total, int barWidth) {
-  float percentage = (float)progress / (float)total;
-  int filledWidth = (int)(percentage * (float)barWidth);
-
-  printf("[");
-  for (int i = 0; i < barWidth; i++) {
-    if (i < filledWidth) {
-      printf("=");
-    } else {
-      printf(" ");
-    }
-  }
-  printf("] %d%%\r", (int)(percentage * 100));
-  fflush(stdout);
 }
