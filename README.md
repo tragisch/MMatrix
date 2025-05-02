@@ -3,8 +3,8 @@
 A matrix C-library for MacOS. It is a wrapper for my purpose and to benchmark different matrix implementations.
 
 ### Features:
-- **dm**: double matrix (OpenBLAS or Apple's Accelerator, Apple's MPS)
-- **sm**: float matrix (OpenBLAS or Apple's Accelerator)
+- **sm**: float matrix (OpenBLAS or Apple's Accelerator, Apple's MPS)
+- **dm**: double matrix (OpenBLAS or Apple's Accelerator)
 - **dms**: double sparse matrix in COO format (using SuiteSparse)
 - **i/o**: console-print, 
   - read/write MAT files (using libs matio, hdf5)
