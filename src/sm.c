@@ -621,47 +621,75 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   }
 #else
 
-  float det = sm_determinant(mat);
-  if (fabs(det) < EPSILON) {
-    perror("Error: Matrix is singular and cannot be inverted.\n");
-    sm_destroy(inverse);
+  if (!sm_is_square(mat)) {
+    perror("Error: Matrix must be square.\n");
     return NULL;
   }
 
-  for (size_t i = 0; i < mat->cols; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      FloatMatrix *sub_mat = sm_create(mat->cols - 1, mat->cols - 1);
-      if (sub_mat == NULL) {
-        sm_destroy(inverse);
-        perror("Error: Memory allocation for sub-matrix failed.\n");
-        return NULL;
+  size_t n = mat->cols;
+  FloatMatrix *copy = sm_create_clone(mat);
+  if (!copy)
+    return NULL;
+
+  // FloatMatrix *inverse = sm_create_identity(n);
+  if (!inverse) {
+    sm_destroy(copy);
+    return NULL;
+  }
+
+  for (size_t pivot = 0; pivot < n; pivot++) {
+    // Pivotisierung
+    float max_val = fabs(copy->values[pivot * n + pivot]);
+    size_t max_row = pivot;
+    for (size_t row = pivot + 1; row < n; row++) {
+      float val = fabs(copy->values[row * n + pivot]);
+      if (val > max_val) {
+        max_val = val;
+        max_row = row;
       }
+    }
 
-      // Erstellen der Untermatrix
-      for (size_t k = 0; k < mat->cols; k++) {
-        for (size_t l = 0; l < mat->cols; l++) {
-          if (k < i && l < j) {
-            sm_set(sub_mat, k, l, sm_get(mat, k, l));
-          } else if (k < i && l > j) {
-            sm_set(sub_mat, k, l - 1, sm_get(mat, k, l));
-          } else if (k > i && l < j) {
-            sm_set(sub_mat, k - 1, l, sm_get(mat, k, l));
-          } else if (k > i && l > j) {
-            sm_set(sub_mat, k - 1, l - 1, sm_get(mat, k, l));
-          }
-        }
+    if (max_val < EPSILON) {
+      sm_destroy(copy);
+      sm_destroy(inverse);
+      perror("Error: Matrix is singular.\n");
+      return NULL;
+    }
+
+    if (max_row != pivot) {
+      for (size_t col = 0; col < n; col++) {
+        float tmp = copy->values[pivot * n + col];
+        copy->values[pivot * n + col] = copy->values[max_row * n + col];
+        copy->values[max_row * n + col] = tmp;
+
+        tmp = inverse->values[pivot * n + col];
+        inverse->values[pivot * n + col] = inverse->values[max_row * n + col];
+        inverse->values[max_row * n + col] = tmp;
       }
+    }
 
-      float sign = ((i + j) % 2 == 0) ? 1.0 : -1.0;
-      sm_set(inverse, i, j, sign * sm_determinant(sub_mat));
+    float pivot_val = copy->values[pivot * n + pivot];
+    for (size_t col = 0; col < n; col++) {
+      copy->values[pivot * n + col] /= pivot_val;
+      inverse->values[pivot * n + col] /= pivot_val;
+    }
 
-      sm_destroy(sub_mat);
+#pragma omp parallel for
+    for (size_t row = 0; row < n; row++) {
+      if (row == pivot)
+        continue;
+
+      float factor = copy->values[row * n + pivot];
+      for (size_t col = 0; col < n; col++) {
+        copy->values[row * n + col] -= factor * copy->values[pivot * n + col];
+        inverse->values[row * n + col] -=
+            factor * inverse->values[pivot * n + col];
+      }
     }
   }
 
-  // Skalieren mit 1 / det
-  sm_inplace_multiply_by_number(inverse, 1 / det);
-  sm_inplace_square_transpose(inverse);
+  sm_destroy(copy);
+  return inverse;
 
 #endif
   return inverse;
