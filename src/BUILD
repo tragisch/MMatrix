@@ -1,9 +1,8 @@
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 
 
-
+# build options for different architectures
 dm_copts = [
     "-O2",
     "-fno-fast-math",
@@ -21,8 +20,54 @@ default_deps = [
     "@matio",
 ]
 
+# matrix library
+cc_library(
+    name = "matrix",
+    srcs = [
+        "m_convert.c",
+        "m_io.c",
+    ],
+    hdrs = [
+        "include/m_convert.h",
+        "include/m_io.h",
+    ],
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":dm",
+        ":sm",
+        ":dms",
+        ":nm",
+    ],
+)
 
+cc_library(
+    name = "nm",
+    srcs = [
+        "nm.c",
+    ],
+    hdrs = [
+        "include/nm.h",
+    ],
+    includes = ["include"],
+    visibility = ["//visibility:public"],
+    copts = [
+        "-O3",
+        "-ffast-math",
+        "-funsafe-math-optimizations",
+        "-Xpreprocessor",
+        "-fopenmp"
+    ],
+    linkopts = [
+        "-lm",
+        "-lomp",
+    ],
+    deps = [
+        ":sm",
+    ],
+)
 
+# double matrix library
 cc_library(
     name = "dm",
     srcs = [
@@ -50,9 +95,11 @@ cc_library(
         "//conditions:default": ["-lomp"],
         ":use_accelerate": [
             "-framework Accelerate",
+             "-lomp",
         ],
         ":use_accelerate_mps": [
             "-framework Accelerate",
+             "-lomp",
         ],
         ":use_openblas": [
             "-L/opt/homebrew/opt/openblas/lib",
@@ -63,12 +110,13 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = select({
         "//conditions:default": default_deps + ["@libomp"],
-        ":use_accelerate": default_deps + [],
-        ":use_accelerate_mps": default_deps +[],
+        ":use_accelerate": default_deps + ["@libomp"],
+        ":use_accelerate_mps": default_deps +["@libomp"],
         ":use_openblas": default_deps + ["@openblas", "@libomp"],
     }),
 )
 
+# single matrix library (float)
 cc_library(
     name = "sm",
     srcs = [
@@ -98,11 +146,13 @@ cc_library(
         "//conditions:default": ["-lomp"],
         ":use_accelerate": [
             "-framework Accelerate",
+             "-lomp",
         ],
         ":use_accelerate_mps": [
             "-framework Accelerate",
             "-framework Metal",
             "-framework MetalPerformanceShaders", 
+             "-lomp",
         ],
         ":use_openblas": [
             "-L/opt/homebrew/opt/openblas/lib",
@@ -113,12 +163,13 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = select({
         "//conditions:default": default_deps + ["@libomp"],
-        ":use_accelerate": default_deps + [],
-        ":use_accelerate_mps": default_deps + [":sm_mps_objc"],
+        ":use_accelerate": default_deps + ["@libomp"],
+        ":use_accelerate_mps": default_deps + [":sm_mps_objc", "@libomp"],
         ":use_openblas": default_deps + ["@openblas", "@libomp"],
     }),
 )
 
+# Objective-C library for Metal Performance Shaders (on macOS)
 objc_library(
     name = "sm_mps_objc",
     hdrs = ["sm_mps.h"],
@@ -126,6 +177,8 @@ objc_library(
     copts = ["-ObjC"],
 )
 
+
+# sparse matrix (double) library
 cc_library(
     name = "dms",
     srcs = [
@@ -141,24 +194,7 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "matrix",
-    srcs = [
-        "m_convert.c",
-        "m_io.c",
-    ],
-    hdrs = [
-        "include/m_convert.h",
-        "include/m_io.h",
-    ],
-    includes = ["include"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":dm",
-        ":sm",
-        ":dms",
-    ],
-)
+# build configurations for different matrix libraries
 
 config_setting(
     name = "use_accelerate",
@@ -175,8 +211,4 @@ config_setting(
     values = {"define": "USE_ACCELERATE_MPS=1"},
 )
 
-cc_binary(
-    name = "main",
-    srcs = ["main.c"],
-    deps = [":matrix"],
-)
+

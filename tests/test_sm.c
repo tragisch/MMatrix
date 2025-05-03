@@ -59,6 +59,54 @@ void test_sm_create(void) {
   sm_destroy(matrix);
 }
 
+void test_sm_create_from_array(void) {
+  size_t rows = 2;
+  size_t cols = 2;
+
+  // Dynamisches 2D-Array erstellen
+  float **array = (float **)malloc(rows * sizeof(float *));
+  for (size_t i = 0; i < rows; ++i) {
+    array[i] = (float *)malloc(cols * sizeof(float));
+  }
+
+  // Werte setzen
+  array[0][0] = 1.0f;
+  array[0][1] = 2.0f;
+  array[1][0] = 3.0f;
+  array[1][1] = 4.0f;
+
+  // Matrix erstellen
+  FloatMatrix *mat = sm_create_from_array(rows, cols, array);
+  TEST_ASSERT_NOT_NULL(mat);
+
+  // Werte prüfen
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, sm_get(mat, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 2.0f, sm_get(mat, 0, 1));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 3.0f, sm_get(mat, 1, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 4.0f, sm_get(mat, 1, 1));
+
+  // Aufräumen
+  sm_destroy(mat);
+  for (size_t i = 0; i < rows; ++i) {
+    free(array[i]);
+  }
+  free(array);
+}
+
+void test_sm_create_from_2D_array(void) {
+  float input[2][2] = {{1.0f, 2.0f}, {3.0f, 4.0f}};
+
+  FloatMatrix *mat = sm_create_from_2D_array(2, 2, input);
+  TEST_ASSERT_NOT_NULL(mat);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, sm_get(mat, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 2.0f, sm_get(mat, 0, 1));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 3.0f, sm_get(mat, 1, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 4.0f, sm_get(mat, 1, 1));
+
+  sm_destroy(mat);
+}
+
 void test_sm_convert_array(void) {
   float values[3][2] = {{1.0f, 2.0f}, {3.0f, 4.0f}, {5.0f, 6.0f}};
   FloatMatrix *mat = sm_create_from_2D_array(3, 2, values);
@@ -207,6 +255,67 @@ void test_sm_rand(void) {
       TEST_ASSERT_TRUE(value >= 0.0f && value <= 1.0f);
     }
   }
+  sm_destroy(mat);
+}
+
+void test_sm_random_xavier_distribution(void) {
+  size_t rows = 100;
+  size_t cols = 100;
+  size_t fan_in = 128;
+  size_t fan_out = 64;
+
+  FloatMatrix *mat = sm_create_random_xavier(rows, cols, fan_in, fan_out);
+  TEST_ASSERT_NOT_NULL(mat);
+
+  size_t n = rows * cols;
+  float sum = 0.0f;
+  float sum_sq = 0.0f;
+
+  for (size_t i = 0; i < n; ++i) {
+    float v = mat->values[i];
+    sum += v;
+    sum_sq += v * v;
+  }
+
+  float mean = sum / n;
+  float variance = sum_sq / n - mean * mean;
+  float stddev = sqrtf(variance);
+  float expected_stddev = sqrtf(2.0f / (fan_in + fan_out));
+
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, mean); // Average_mean ≈ 0
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, expected_stddev, stddev);
+
+  sm_destroy(mat);
+}
+
+void test_sm_random_he_distribution(void) {
+  size_t rows = 100;
+  size_t cols = 100;
+  size_t fan_in = 128;
+
+  FloatMatrix *mat = sm_create_random_he(rows, cols, fan_in);
+  TEST_ASSERT_NOT_NULL(mat);
+
+  size_t n = rows * cols;
+  float sum = 0.0f;
+  float sum_sq = 0.0f;
+
+  for (size_t i = 0; i < n; ++i) {
+    float v = mat->values[i];
+    sum += v;
+    sum_sq += v * v;
+  }
+
+  float mean = sum / n;
+  float variance = sum_sq / n - mean * mean;
+  float stddev = sqrtf(variance);
+  float expected_stddev = sqrtf(2.0f / fan_in);
+
+  // Toleranzen: etwas großzügig, da Zufall im Spiel ist
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, mean); // Mittelwert ≈ 0
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, expected_stddev,
+                           stddev); // Varianz wie erwartet
+
   sm_destroy(mat);
 }
 

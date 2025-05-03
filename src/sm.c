@@ -7,6 +7,9 @@
  */
 
 #include "sm.h"
+#include <omp.h>
+#include <stdint.h>
+#include <time.h>
 
 #define INIT_CAPACITY 100
 #define EPSILON 1e-5
@@ -27,8 +30,9 @@
 #include <cblas.h>
 #include <lapacke.h>
 #else
+#include <arm_neon.h>
 #include <math.h>
-#include <omp.h>
+
 #endif
 
 #define BLOCK_SIZE 64
@@ -111,16 +115,6 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   return rank;
 }
 
-// Random number generation
-float sm_rand_number() {
-#ifdef __APPLE__
-  uint32_t random_uint32 = arc4random();
-#else
-  uint32_t random_uint32 = rand();
-#endif
-  return (float)random_uint32 / (float)UINT32_MAX;
-}
-
 /*******************************/
 /*      Public Functions      */
 /*******************************/
@@ -148,10 +142,9 @@ FloatMatrix *sm_create_empty() {
 
 FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values) {
   FloatMatrix *matrix = sm_create(rows, cols);
-  matrix->cols = cols;
-  matrix->rows = rows;
-  matrix->capacity = rows * cols;
-  matrix->values = values;
+  if (!matrix)
+    return NULL;
+  memcpy(matrix->values, values, rows * cols * sizeof(float));
   return matrix;
 }
 
@@ -161,67 +154,157 @@ FloatMatrix *sm_create(size_t rows, size_t cols) {
     return NULL;
   }
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
+  if (!matrix) {
+    perror("Error: could not allocate FloatMatrix struct.\n");
+    return NULL;
+  }
   matrix->rows = rows;
   matrix->cols = cols;
   matrix->capacity = rows * cols;
   matrix->values = (float *)calloc(rows * cols, sizeof(float));
+  if (!matrix->values) {
+    free(matrix);
+    perror("Error: could not allocate values array.\n");
+    return NULL;
+  }
   return matrix;
 }
 
 FloatMatrix *sm_create_clone(const FloatMatrix *mat) {
   FloatMatrix *copy = sm_create(mat->rows, mat->cols);
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      sm_set(copy, i, j, sm_get(mat, i, j));
-    }
-  }
+  if (!copy)
+    return NULL;
+  memcpy(copy->values, mat->values, mat->rows * mat->cols * sizeof(float));
   return copy;
 }
 
 FloatMatrix *sm_create_identity(size_t n) {
   FloatMatrix *identity = sm_create(n, n);
+  if (!identity)
+    return NULL;
+
   for (size_t i = 0; i < n; i++) {
-    sm_set(identity, i, i, 1.0);
+    identity->values[i * n + i] = 1.0f;
   }
   return identity;
 }
 
-float sm_rand_number();
-
 FloatMatrix *sm_create_random(size_t rows, size_t cols) {
   FloatMatrix *mat = sm_create(rows, cols);
+  size_t size = rows * cols;
 
-  for (int i = 0; i < mat->rows; i++) {
-    for (int j = 0; j < mat->cols; j++) {
-      float value = sm_rand_number();
-      sm_set(mat, i, j, value);
+  unsigned int global_seed = (unsigned int)time(NULL) ^ (uintptr_t)mat;
+#pragma omp parallel
+  {
+    unsigned int seed = global_seed ^ omp_get_thread_num();
+#pragma omp for
+    for (size_t i = 0; i < size; ++i) {
+      mat->values[i] = (float)rand_r(&seed) / RAND_MAX;
     }
   }
+
+  return mat;
+}
+
+// He initialization (He-et-al.) random matrix creation
+FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
+  FloatMatrix *mat = sm_create(rows, cols);
+  if (!mat)
+    return NULL;
+
+  float stddev = sqrtf(2.0f / fan_in);
+  size_t size = rows * cols;
+
+  unsigned int global_seed = (unsigned int)time(NULL) ^ (uintptr_t)mat;
+#pragma omp parallel
+  {
+    unsigned int seed = global_seed ^ omp_get_thread_num();
+#pragma omp for
+    for (size_t i = 0; i < size; ++i) {
+      // Box-Muller Transform (approximate standard normal)
+      float u1 = (float)rand_r(&seed) / RAND_MAX;
+      float u2 = (float)rand_r(&seed) / RAND_MAX;
+      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
+      mat->values[i] = z * stddev;
+    }
+  }
+
+  return mat;
+}
+
+// Xavier (Glorot) initialization: Normal distribution
+FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
+                                     size_t fan_out) {
+  FloatMatrix *mat = sm_create(rows, cols);
+  if (!mat)
+    return NULL;
+
+  float stddev = sqrtf(2.0f / (fan_in + fan_out));
+  size_t size = rows * cols;
+
+  unsigned int global_seed = (unsigned int)time(NULL) ^ (uintptr_t)mat;
+#pragma omp parallel
+  {
+    unsigned int seed = global_seed ^ omp_get_thread_num();
+#pragma omp for
+    for (size_t i = 0; i < size; ++i) {
+      // Box-Muller Transform: generate standard normal distributed value
+      float u1 = (float)rand_r(&seed) / RAND_MAX;
+      float u2 = (float)rand_r(&seed) / RAND_MAX;
+      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
+      mat->values[i] = z * stddev;
+    }
+  }
+
   return mat;
 }
 
 FloatMatrix *sm_create_from_array(size_t rows, size_t cols, float **array) {
-
-  FloatMatrix *mat = sm_create(rows, cols);
-
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      sm_set(mat, i, j, array[i][j]);
-    }
+  // check if the array is NULL
+  if (array == NULL) {
+    perror("Error: array is NULL.\n");
+    return NULL;
+  }
+  // check if array is an array of arrays
+  if (array[0] == NULL) {
+    perror("Error: array is not an array of arrays.\n");
+    return NULL;
   }
 
+  FloatMatrix *mat = sm_create(rows, cols);
+  if (!mat)
+    return NULL;
+
+#pragma omp parallel for
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      mat->values[i * cols + j] = array[i][j];
+    }
+  }
   return mat;
 }
 
 FloatMatrix *sm_create_from_2D_array(size_t rows, size_t cols,
                                      float array[rows][cols]) {
+  // check if the array is NULL
+  if (array == NULL) {
+    perror("Error: array is NULL.\n");
+    return NULL;
+  }
+  // check if array is an 2D array
+  if (array[0] == NULL) {
+    perror("Error: array is not an 2D array.\n");
+    return NULL;
+  }
+
   FloatMatrix *matrix = sm_create(rows, cols);
   if (!matrix)
     return NULL;
 
+#pragma omp parallel for
   for (size_t i = 0; i < rows; ++i) {
     for (size_t j = 0; j < cols; ++j) {
-      sm_set(matrix, i, j, array[i][j]);
+      matrix->values[i * cols + j] = array[i][j];
     }
   }
   return matrix;
@@ -229,9 +312,8 @@ FloatMatrix *sm_create_from_2D_array(size_t rows, size_t cols,
 
 FloatMatrix *sm_get_row(const FloatMatrix *mat, size_t i) {
   FloatMatrix *row = sm_create(1, mat->cols);
-  for (size_t j = 0; j < mat->cols; j++) {
-    sm_set(row, 0, j, sm_get(mat, i, j));
-  }
+  if (!row) return NULL;
+  memcpy(row->values, &mat->values[i * mat->cols], mat->cols * sizeof(float));
   return row;
 }
 
@@ -241,8 +323,9 @@ FloatMatrix *sm_get_last_row(const FloatMatrix *mat) {
 
 FloatMatrix *sm_get_col(const FloatMatrix *mat, size_t j) {
   FloatMatrix *col = sm_create(mat->rows, 1);
+  if (!col) return NULL;
   for (size_t i = 0; i < mat->rows; i++) {
-    sm_set(col, i, 0, sm_get(mat, i, j));
+    col->values[i] = mat->values[i * mat->cols + j];
   }
   return col;
 }
@@ -277,20 +360,26 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
               product->values, (BLASINT)product->cols);
 
 #else
-  // Fallback to manual multiplication
+  // ohne SMID
   FloatMatrix *mat2_transposed = sm_transpose(mat2);
 
-#pragma omp parallel for
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat2->cols; j++) {
-      float sum = 0.0;
-      for (size_t k = 0; k < mat1->cols; k++) {
-        sum += sm_get(mat1, i, k) * sm_get(mat2_transposed, j, k);
+  size_t rows = mat1->rows;
+  size_t cols = mat2->cols;
+  size_t inner = mat1->cols;
+  float *a = mat1->values;
+  float *bT = mat2_transposed->values;
+  float *c = product->values;
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      float sum = 0.0f;
+      for (size_t k = 0; k < inner; k++) {
+        sum += a[i * inner + k] * bT[j * inner + k];
       }
-      sm_set(product, i, j, sum);
+      c[i * cols + j] = sum;
     }
   }
-
   sm_destroy(mat2_transposed);
 
 #endif
@@ -306,6 +395,12 @@ FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number) {
 FloatMatrix *sm_transpose(const FloatMatrix *mat) {
   if (mat == NULL || mat->values == NULL)
     return NULL;
+
+  if (sm_is_square(mat)) {
+    FloatMatrix *copy = sm_create_clone(mat);
+    sm_inplace_square_transpose(copy);
+    return copy;
+  }
 
   FloatMatrix *transposed = sm_create(mat->cols, mat->rows);
 
@@ -333,12 +428,19 @@ bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
     return false;
   }
-  for (size_t i = 0; i < mat1->cols * mat1->rows; i++) {
+
+  size_t size = mat1->cols * mat1->rows;
+  int equal = 1;
+
+#pragma omp parallel for
+  for (size_t i = 0; i < size; i++) {
     if (fabs(mat1->values[i] - mat2->values[i]) > EPSILON) {
-      return false;
+#pragma omp atomic write
+      equal = 0;
     }
   }
-  return true;
+
+  return equal;
 }
 
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2) {
@@ -517,7 +619,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
 
   // Skalieren mit 1 / det
   sm_inplace_multiply_by_number(inverse, 1 / det);
-  sm_inplace_transpose(inverse);
+  sm_inplace_square_transpose(inverse);
 
 #endif
   return inverse;
@@ -539,24 +641,23 @@ void sm_reshape(FloatMatrix *matrix, size_t new_rows, size_t new_cols) {
 void sm_resize(FloatMatrix *mat, size_t new_row, size_t new_col) {
   // allocate new memory for dense matrix:
   float *new_values = (float *)calloc(new_row * new_col, sizeof(float));
-
   if (new_values == NULL) {
     perror("Error: could not reallocate memory for dense matrix.\n");
     exit(EXIT_FAILURE);
   }
 
-  // copy values from old matrix to new matrix:
-  for (int i = 0; i < new_row; i++) {
-    for (int j = 0; j < new_col; j++) {
-      if (i >= mat->rows || j >= mat->cols) {
-        new_values[i * new_col + j] = 0.0;
-      } else {
-        new_values[i * new_col + j] = mat->values[i * mat->cols + j];
-      }
-    }
+  // Copy values from old matrix to new matrix using linear index arithmetic and OpenMP
+  size_t min_rows = (new_row < mat->rows) ? new_row : mat->rows;
+  size_t min_cols = (new_col < mat->cols) ? new_col : mat->cols;
+  size_t n = min_rows * min_cols;
+#pragma omp parallel for
+  for (size_t idx = 0; idx < n; ++idx) {
+    size_t i = idx / min_cols;
+    size_t j = idx % min_cols;
+    new_values[i * new_col + j] = mat->values[i * mat->cols + j];
   }
 
-  // update matrix:
+  free(mat->values);
   mat->values = new_values;
   mat->rows = new_row;
   mat->cols = new_col;
@@ -661,15 +762,17 @@ size_t sm_rank(const FloatMatrix *mat) {
 }
 
 float sm_density(const FloatMatrix *mat) {
+  size_t size = mat->rows * mat->cols;
   int counter = 0;
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      if (fabs(sm_get(mat, i, j)) > EPSILON) {
-        counter++;
-      }
+
+#pragma omp parallel for reduction(+:counter)
+  for (size_t i = 0; i < size; i++) {
+    if (fabs(mat->values[i]) > EPSILON) {
+      counter++;
     }
   }
-  return (float)counter / (float)(mat->rows * mat->cols);
+
+  return (float)counter / (float)size;
 }
 
 // Matrix is empty
@@ -703,10 +806,9 @@ void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
               mat1->values, 1);
 #else
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat1->cols; j++) {
-      sm_set(mat1, i, j, sm_get(mat1, i, j) + sm_get(mat2, i, j));
-    }
+#pragma omp parallel for
+  for (size_t i = 0; i < mat1->rows * mat1->cols; i++) {
+    mat1->values[i] += mat2->values[i];
   }
 #endif
 }
@@ -723,27 +825,32 @@ void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
               mat1->values, 1);
 #else
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat1->cols; j++) {
-      sm_set(mat1, i, j, sm_get(mat1, i, j) - sm_get(mat2, i, j));
-    }
+  #pragma omp parallel for
+  for (size_t i = 0; i < mat1->rows * mat1->cols; i++) {
+    mat1->values[i] -= mat2->values[i];
   }
 #endif
 }
 
-// In-place transpose
-void sm_inplace_transpose(FloatMatrix *mat) {
+void sm_inplace_square_transpose(FloatMatrix *mat) {
   if (mat == NULL || mat->values == NULL || mat->rows != mat->cols) {
     perror("Error: In-place transposition requires a square matrix.");
     return;
   }
 
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = i + 1; j < mat->cols; j++) {
+  size_t n = mat->rows;
 
-      float temp = sm_get(mat, i, j);
-      sm_set(mat, i, j, sm_get(mat, j, i));
-      sm_set(mat, j, i, temp);
+#pragma omp parallel for collapse(2) schedule(dynamic)
+  for (size_t ii = 0; ii < n; ii += BLOCK_SIZE) {
+    for (size_t jj = ii; jj < n; jj += BLOCK_SIZE) {
+      for (size_t i = ii; i < ii + BLOCK_SIZE && i < n; i++) {
+        for (size_t j = (ii == jj ? i + 1 : jj); j < jj + BLOCK_SIZE && j < n;
+             j++) {
+          float tmp = mat->values[i * n + j];
+          mat->values[i * n + j] = mat->values[j * n + i];
+          mat->values[j * n + i] = tmp;
+        }
+      }
     }
   }
 }
@@ -754,6 +861,7 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
     defined(USE_ACCELERATE_MPS)
   cblas_sscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
 #else
+#pragma omp parallel for simd
   for (size_t i = 0; i < mat->rows * mat->cols; i++) {
     mat->values[i] *= scalar;
   }

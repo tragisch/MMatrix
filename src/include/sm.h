@@ -39,6 +39,9 @@ FloatMatrix *sm_create(size_t rows, size_t cols);
 FloatMatrix *sm_create_clone(const FloatMatrix *m);
 FloatMatrix *sm_create_identity(size_t n);
 FloatMatrix *sm_create_random(size_t rows, size_t cols);
+FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in);
+FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
+                                     size_t fan_out);
 
 // Importing from array
 FloatMatrix *sm_create_from_array(size_t rows, size_t cols, float **array);
@@ -83,7 +86,7 @@ bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2);
 // In-place operations
 void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2);
 void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2);
-void sm_inplace_transpose(FloatMatrix *mat);
+void sm_inplace_square_transpose(FloatMatrix *mat);
 void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar);
 void sm_inplace_gauss_elimination(FloatMatrix *mat);
 
