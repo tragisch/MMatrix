@@ -7,7 +7,7 @@
  */
 
 #include "dm.h"
-#include "dm_io.h"
+#include "m_io.h"
 
 /******************************
  ** Test preconditions:

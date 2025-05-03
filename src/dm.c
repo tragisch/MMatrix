@@ -20,9 +20,10 @@
 #include <Accelerate/Accelerate.h>
 #elif defined(USE_ACCELERATE_MPS)
 #define BLASINT int
+#include "sm_mps.h"
 #include <Accelerate/Accelerate.h>
-#import <Foundation/Foundation.h>
-#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
+// #import <Foundation/Foundation.h>
+// #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #elif defined(USE_OPENBLAS)
 #define BLASINT int
 #include <cblas.h>
