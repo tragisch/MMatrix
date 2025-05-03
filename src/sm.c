@@ -312,7 +312,8 @@ FloatMatrix *sm_create_from_2D_array(size_t rows, size_t cols,
 
 FloatMatrix *sm_get_row(const FloatMatrix *mat, size_t i) {
   FloatMatrix *row = sm_create(1, mat->cols);
-  if (!row) return NULL;
+  if (!row)
+    return NULL;
   memcpy(row->values, &mat->values[i * mat->cols], mat->cols * sizeof(float));
   return row;
 }
@@ -323,7 +324,8 @@ FloatMatrix *sm_get_last_row(const FloatMatrix *mat) {
 
 FloatMatrix *sm_get_col(const FloatMatrix *mat, size_t j) {
   FloatMatrix *col = sm_create(mat->rows, 1);
-  if (!col) return NULL;
+  if (!col)
+    return NULL;
   for (size_t i = 0; i < mat->rows; i++) {
     col->values[i] = mat->values[i * mat->cols + j];
   }
@@ -506,21 +508,61 @@ float sm_determinant(const FloatMatrix *mat) {
     sm_destroy(lu);
 
 #else
-    float det = 0;
-    for (size_t i = 0; i < mat->cols; i++) {
-      FloatMatrix *sub_mat = sm_create(mat->cols - 1, mat->cols - 1);
-      for (size_t j = 1; j < mat->cols; j++) {
-        for (size_t k = 0; k < mat->cols; k++) {
-          if (k < i) {
-            sm_set(sub_mat, j - 1, k, sm_get(mat, j, k));
-          } else if (k > i) {
-            sm_set(sub_mat, j - 1, k - 1, sm_get(mat, j, k));
+    FloatMatrix *copy = sm_create_clone(mat);
+    if (!copy)
+      return 0.0f;
+
+    float det = 1.0f;
+    size_t n = mat->rows;
+
+    for (size_t pivot = 0; pivot < n; pivot++) {
+      float max_val = fabs(copy->values[pivot * n + pivot]);
+      size_t max_row = pivot;
+      for (size_t row = pivot + 1; row < n; row++) {
+        float val = fabs(copy->values[row * n + pivot]);
+        if (val > max_val) {
+          max_val = val;
+          max_row = row;
+        }
+      }
+
+      if (max_row != pivot) {
+        for (size_t col = 0; col < n; col++) {
+          float tmp = copy->values[pivot * n + col];
+          copy->values[pivot * n + col] = copy->values[max_row * n + col];
+          copy->values[max_row * n + col] = tmp;
+        }
+        det *= -1.0f;
+      }
+
+      float pivot_val = copy->values[pivot * n + pivot];
+      if (fabs(pivot_val) < EPSILON) {
+        sm_destroy(copy);
+        return 0.0f;
+      }
+
+      det *= pivot_val;
+      if (mat->rows >= 512) {
+#pragma omp parallel for
+        for (size_t row = pivot + 1; row < n; row++) {
+          float factor = copy->values[row * n + pivot] / pivot_val;
+          for (size_t col = pivot + 1; col < n; col++) {
+            copy->values[row * n + col] -=
+                factor * copy->values[pivot * n + col];
+          }
+        }
+      } else {
+        // for small matrices:
+        for (size_t row = pivot + 1; row < n; row++) {
+          float factor = copy->values[row * n + pivot] / pivot_val;
+          for (size_t col = pivot + 1; col < n; col++) {
+            copy->values[row * n + col] -=
+                factor * copy->values[pivot * n + col];
           }
         }
       }
-      det += pow(-1, (float)i) * sm_get(mat, 0, i) * sm_determinant(sub_mat);
-      sm_destroy(sub_mat);
     }
+    sm_destroy(copy);
 #endif
     return det;
   }
@@ -646,7 +688,8 @@ void sm_resize(FloatMatrix *mat, size_t new_row, size_t new_col) {
     exit(EXIT_FAILURE);
   }
 
-  // Copy values from old matrix to new matrix using linear index arithmetic and OpenMP
+  // Copy values from old matrix to new matrix using linear index arithmetic and
+  // OpenMP
   size_t min_rows = (new_row < mat->rows) ? new_row : mat->rows;
   size_t min_cols = (new_col < mat->cols) ? new_col : mat->cols;
   size_t n = min_rows * min_cols;
@@ -765,7 +808,7 @@ float sm_density(const FloatMatrix *mat) {
   size_t size = mat->rows * mat->cols;
   int counter = 0;
 
-#pragma omp parallel for reduction(+:counter)
+#pragma omp parallel for reduction(+ : counter)
   for (size_t i = 0; i < size; i++) {
     if (fabs(mat->values[i]) > EPSILON) {
       counter++;
@@ -825,7 +868,7 @@ void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
               mat1->values, 1);
 #else
-  #pragma omp parallel for
+#pragma omp parallel for
   for (size_t i = 0; i < mat1->rows * mat1->cols; i++) {
     mat1->values[i] -= mat2->values[i];
   }
