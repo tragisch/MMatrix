@@ -1,5 +1,3 @@
-__all__ = ["install_library_macro"]
-
 def _impl(ctx):
     files = ctx.files.srcs + ctx.files.hdrs
     out_dir = ctx.actions.declare_directory("install_out")

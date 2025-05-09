@@ -119,6 +119,23 @@ void test_sm_convert_array(void) {
   sm_destroy(mat);
 }
 
+void test_sm_create_array_from_matrix(void) {
+  float data[2][3] = {{1.5f, 2.5f, 3.5f}, {4.5f, 5.5f, 6.5f}};
+  FloatMatrix *mat = sm_create_from_2D_array(2, 3, data);
+  TEST_ASSERT_NOT_NULL(mat);
+
+  double *arr = sm_create_array_from_matrix(mat);
+  TEST_ASSERT_NOT_NULL(arr);
+
+  double expected[] = {1.5, 2.5, 3.5, 4.5, 5.5, 6.5};
+  for (size_t i = 0; i < 6; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected[i], arr[i]);
+  }
+
+  free(arr);
+  sm_destroy(mat);
+}
+
 void test_sm_set(void) {
   FloatMatrix *mat = sm_create(3, 3);
   sm_set(mat, 0, 0, 1.0f);
@@ -438,27 +455,6 @@ FloatMatrix *create_sample_matrix(size_t rows, size_t cols) {
   return matrix;
 }
 
-void test_sm_gauss_elimination() {
-  float values[4][4] = {{2.0f, 1.0f, 1.0f, 4.0f},
-                        {3.0f, -1.0f, 2.0f, 1.0f},
-                        {4.0f, 7.0f, -2.0f, 3.0f}};
-
-  float expected[4][4] = {{4.0f, 7.0f, -2.0f, 3.0f},
-                          {0.0f, -6.25f, 3.50f, -1.25f},
-                          {0.0f, 0.0f, 0.60f, 3.0f}};
-
-  FloatMatrix *mat = sm_create_from_2D_array(4, 4, values);
-  sm_inplace_gauss_elimination(mat);
-
-  for (size_t i = 0; i < 4; i++) {
-    for (size_t j = 0; j < 4; j++) {
-      TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected[i][j], sm_get(mat, i, j));
-    }
-  }
-
-  sm_destroy(mat);
-}
-
 void sm_back_substitution(const FloatMatrix *mat, float *solution) {
   size_t rows = mat->rows;
   size_t cols = mat->cols;
@@ -473,31 +469,74 @@ void sm_back_substitution(const FloatMatrix *mat, float *solution) {
   }
 }
 
-void test_sm_gauss_elimination_solve() {
-  // Erwartete Lösung x
-  float expected_x[3] = {2.0f, 3.0f, -1.0f};
+void test_sm_linear_batch_should_multiply_and_add_bias(void) {
+  float input[2][3] = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
+  float weights[2][3] = {{1.0f, 0.0f, -1.0f}, {0.5f, 0.5f, 0.5f}};
+  float bias[1][2] = {{1.0f, 2.0f}};
+  float expected[2][2] = {
+      {1.0f + (1 * 1 + 2 * 0 + 3 * -1), 2.0f + (1 * 0.5 + 2 * 0.5 + 3 * 0.5)},
+      {1.0f + (4 * 1 + 5 * 0 + 6 * -1), 2.0f + (4 * 0.5 + 5 * 0.5 + 6 * 0.5)}};
 
-  // Erweiterte Matrix [A | b]
-  float augmented[3][4] = {{2.0f, 1.0f, -1.0f, 8.0f},
-                           {-3.0f, -1.0f, 2.0f, -11.0f},
-                           {-2.0f, 1.0f, 2.0f, -3.0f}};
+  FloatMatrix *inputs = sm_create_from_2D_array(2, 3, input);
+  FloatMatrix *W = sm_create_from_2D_array(2, 3, weights);
+  FloatMatrix *b = sm_create_from_2D_array(1, 2, bias);
 
-  // Matrix erstellen
-  FloatMatrix *mat = sm_create_from_2D_array(3, 4, augmented);
+  FloatMatrix *output = sm_linear_batch(inputs, W, b);
+  FloatMatrix *expected_mat = sm_create_from_2D_array(2, 2, expected);
 
-  // Gaußsche Elimination anwenden
-  sm_inplace_gauss_elimination(mat);
+  TEST_ASSERT_TRUE(sm_is_equal(output, expected_mat));
 
-  // Rückwärtseinsetzen durchführen
-  float computed_x[3];
-  sm_back_substitution(mat, computed_x);
-
-  // Überprüfen, ob die berechnete Lösung mit der erwarteten Lösung
-  // übereinstimmt
-  for (size_t i = 0; i < 3; i++) {
-    TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected_x[i], computed_x[i]);
-  }
-
-  // Speicher freigeben
-  sm_destroy(mat);
+  sm_destroy(inputs);
+  sm_destroy(W);
+  sm_destroy(b);
+  sm_destroy(output);
+  sm_destroy(expected_mat);
 }
+
+// Helper function to create a matrix from a flat array
+FloatMatrix *sm_create_from_flat_array(size_t rows, size_t cols,
+                                       const float *flat) {
+  FloatMatrix *mat = sm_create(rows, cols);
+  if (!mat)
+    return NULL;
+  memcpy(mat->values, flat, sizeof(float) * rows * cols);
+  return mat;
+}
+
+void test_sm_linear_batch_DSP_should_match_sm_linear_batch(void) {
+  float input[2][3] = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
+  float weights[] = {1.0f, 0.0f, -1.0f, 0.5f, 0.5f, 0.5f};
+  float bias[1][2] = {{1.0f, 2.0f}};
+
+  FloatMatrix *inputs = sm_create_from_2D_array(2, 3, input);
+  FloatMatrix *W = sm_create_from_flat_array(2, 3, weights);
+  FloatMatrix *b = sm_create_from_2D_array(1, 2, bias);
+
+  FloatMatrix *reference = sm_linear_batch(inputs, W, b);
+  FloatMatrix *dsp_result = sm_linear_batch_DSP(inputs, W, b);
+
+  printf("Inputs:\n");
+  sm_print(inputs);
+
+  printf("Weights:\n");
+  sm_print(W);
+
+  printf("Biases:\n");
+  sm_print(b);
+
+  printf("Reference result (sm_linear_batch):\n");
+  sm_print(reference);
+
+  printf("DSP result (sm_linear_batch_DSP):\n");
+  sm_print(dsp_result);
+
+  TEST_ASSERT_TRUE(sm_is_equal(reference, dsp_result));
+
+  sm_destroy(inputs);
+  sm_destroy(W);
+  sm_destroy(b);
+  sm_destroy(reference);
+  sm_destroy(dsp_result);
+}
+
+//

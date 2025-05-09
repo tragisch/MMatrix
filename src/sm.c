@@ -41,78 +41,70 @@
 /*       Private Functions     */
 /*******************************/
 
-void sm_inplace_gauss_elimination(FloatMatrix *mat) {
+size_t sm_rank_euler(const FloatMatrix *mat) {
   size_t rows = mat->rows;
   size_t cols = mat->cols;
-
-  for (size_t pivot = 0; pivot < rows; pivot++) {
-    // Find the maximum value in the column below the pivot
-    float max_val = fabs(sm_get(mat, pivot, pivot));
-    size_t max_row = pivot;
-    for (size_t row = pivot + 1; row < rows; row++) {
-      float val = fabs(sm_get(mat, row, pivot));
-      if (val > max_val) {
-        max_val = val;
-        max_row = row;
-      }
-    }
-
-    // Swap rows if necessary
-    if (max_row != pivot) {
-      for (size_t col = 0; col < cols; col++) {
-        float temp = sm_get(mat, pivot, col);
-        sm_set(mat, pivot, col, sm_get(mat, max_row, col));
-        sm_set(mat, max_row, col, temp);
-      }
-    }
-
-    // Perform row operations to eliminate values below the pivot
-    float pivot_val = sm_get(mat, pivot, pivot);
-    if (fabs(pivot_val) > EPSILON) { // Check if pivot is non-zero
-      for (size_t row = pivot + 1; row < rows; row++) {
-        float factor = sm_get(mat, row, pivot) / pivot_val;
-        sm_set(mat, row, pivot, 0.0); // Eliminate the value below the pivot
-
-        for (size_t col = pivot + 1; col < cols; col++) {
-          float val = sm_get(mat, row, col);
-          sm_set(mat, row, col, val - factor * sm_get(mat, pivot, col));
-        }
-      }
-    }
-  }
-}
-
-size_t sm_rank_euler(const FloatMatrix *mat) {
-  // Make a copy of the matrix to preserve the original data
-  FloatMatrix *copy = sm_create(mat->rows, mat->cols);
-  if (copy == NULL) {
+  FloatMatrix *copy = sm_create(rows, cols);
+  if (!copy) {
     perror("Error: Memory allocation for matrix copy failed.\n");
-    return 0; // Return 0 or an appropriate error value
+    return 0;
   }
-  memcpy(copy->values, mat->values, mat->rows * mat->cols * sizeof(float));
+  memcpy(copy->values, mat->values, rows * cols * sizeof(float));
 
-  // Apply Gaussian Elimination on the copy
-  sm_inplace_gauss_elimination(copy);
+  // Inline LU elimination (no pivot matrix, just elimination)
+  FloatMatrix *dummy = copy;
+  size_t n = dummy->rows;
+  for (size_t pivot = 0; pivot < n; pivot++) {
+    float pivot_val = dummy->values[pivot * dummy->cols + pivot];
+    if (fabs(pivot_val) < EPSILON)
+      continue;
+    for (size_t row = pivot + 1; row < n; row++) {
+      float factor = dummy->values[row * dummy->cols + pivot] / pivot_val;
+      dummy->values[row * dummy->cols + pivot] = 0.0f;
+      for (size_t col = pivot + 1; col < dummy->cols; col++) {
+        dummy->values[row * dummy->cols + col] -=
+            factor * dummy->values[pivot * dummy->cols + col];
+      }
+    }
+  }
 
-  // Count the number of non-zero rows in the row-echelon form
   size_t rank = 0;
-  for (size_t i = 0; i < copy->rows; i++) {
-    int has_non_zero_element = 0;
-    for (size_t j = 0; j < copy->cols; j++) {
-      if (fabs(sm_get(copy, i, j)) > EPSILON) {
-        has_non_zero_element = 1;
+#pragma omp parallel for reduction(+ : rank)
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      if (fabs(copy->values[i * cols + j]) > EPSILON) {
+        rank++;
         break;
       }
     }
-    if (has_non_zero_element) {
-      rank++;
-    }
   }
 
-  // Free the memory of the copy
   sm_destroy(copy);
-
   return rank;
+}
+
+static unsigned int sm_random_seed() {
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return (unsigned int)(ts.tv_nsec ^ ts.tv_sec);
+}
+
+float *sm_to_column_major(const FloatMatrix *mat) {
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+  float *col_major = malloc(rows * cols * sizeof(float));
+  if (!col_major) {
+    perror("Failed to allocate column-major buffer");
+    return NULL;
+  }
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < rows; ++i) {
+    for (size_t j = 0; j < cols; ++j) {
+      col_major[j * rows + i] = mat->values[i * cols + j];
+    }
+  }
+  return col_major;
 }
 
 /*******************************/
@@ -190,10 +182,15 @@ FloatMatrix *sm_create_identity(size_t n) {
 }
 
 FloatMatrix *sm_create_random(size_t rows, size_t cols) {
+  if (cols != 0 && rows > SIZE_MAX / cols) {
+    perror("Overflow detected in matrix allocation.");
+    return NULL;
+  }
+
   FloatMatrix *mat = sm_create(rows, cols);
   size_t size = rows * cols;
 
-  unsigned int global_seed = (unsigned int)time(NULL) ^ (uintptr_t)mat;
+  unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
 #pragma omp parallel
   {
     unsigned int seed = global_seed ^ omp_get_thread_num();
@@ -208,6 +205,11 @@ FloatMatrix *sm_create_random(size_t rows, size_t cols) {
 
 // He initialization (He-et-al.) random matrix creation
 FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
+  if (cols != 0 && rows > SIZE_MAX / cols) {
+    perror("Overflow detected in matrix allocation.");
+    return NULL;
+  }
+
   FloatMatrix *mat = sm_create(rows, cols);
   if (!mat)
     return NULL;
@@ -215,7 +217,7 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   float stddev = sqrtf(2.0f / fan_in);
   size_t size = rows * cols;
 
-  unsigned int global_seed = (unsigned int)time(NULL) ^ (uintptr_t)mat;
+  unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
 #pragma omp parallel
   {
     unsigned int seed = global_seed ^ omp_get_thread_num();
@@ -235,6 +237,12 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
 // Xavier (Glorot) initialization: Normal distribution
 FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
                                      size_t fan_out) {
+
+  if (cols != 0 && rows > SIZE_MAX / cols) {
+    perror("Overflow detected in matrix allocation.");
+    return NULL;
+  }
+
   FloatMatrix *mat = sm_create(rows, cols);
   if (!mat)
     return NULL;
@@ -242,7 +250,7 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
   float stddev = sqrtf(2.0f / (fan_in + fan_out));
   size_t size = rows * cols;
 
-  unsigned int global_seed = (unsigned int)time(NULL) ^ (uintptr_t)mat;
+  unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
 #pragma omp parallel
   {
     unsigned int seed = global_seed ^ omp_get_thread_num();
@@ -310,6 +318,29 @@ FloatMatrix *sm_create_from_2D_array(size_t rows, size_t cols,
   return matrix;
 }
 
+double *sm_create_array_from_matrix(FloatMatrix *matrix) {
+  if (matrix == NULL || matrix->values == NULL) {
+    perror("Error: matrix is NULL.\n");
+    return NULL;
+  }
+
+  double *array =
+      (double *)malloc(matrix->rows * matrix->cols * sizeof(double));
+  if (!array) {
+    perror("Error: could not allocate array.\n");
+    return NULL;
+  }
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < matrix->rows; ++i) {
+    for (size_t j = 0; j < matrix->cols; ++j) {
+      array[i * matrix->cols + j] =
+          (double)matrix->values[i * matrix->cols + j];
+    }
+  }
+  return array;
+}
+
 FloatMatrix *sm_get_row(const FloatMatrix *mat, size_t i) {
   FloatMatrix *row = sm_create(1, mat->cols);
   if (!row)
@@ -350,7 +381,7 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
               product->values, (BLASINT)product->cols);
 
 #elif defined(USE_ACCELERATE_MPS)
-  printf("Using Accelerate MPS for matrix multiplication.\n");
+
   mps_matrix_multiply(mat1->values, mat1->rows, mat1->cols, mat2->values,
                       mat2->rows, mat2->cols, product->values);
 
@@ -384,6 +415,24 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   }
   sm_destroy(mat2_transposed);
 
+#endif
+  return product;
+}
+
+FloatMatrix *sm_multiply_DSP(const FloatMatrix *mat1, const FloatMatrix *mat2) {
+  if (mat1->cols != mat2->rows) {
+    perror("Error: invalid matrix dimensions.\n");
+    return NULL;
+  }
+  FloatMatrix *product = sm_create(mat1->rows, mat2->cols);
+  if (!product)
+    return NULL;
+#ifdef USE_ACCELERATE
+
+  vDSP_mmul(mat1->values, 1, mat2->values, 1, product->values, 1, mat1->rows,
+            mat2->cols, mat1->cols);
+#else
+  printf("Error: DSP not available.\n");
 #endif
   return product;
 }
@@ -466,6 +515,53 @@ FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   return difference;
 }
 
+#if !defined(USE_ACCELERATE) && !defined(USE_OPENBLAS) &&                      \
+    !defined(USE_ACCELERATE_MPS)
+static bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
+  size_t n = mat->rows;
+  if (mat->cols != n)
+    return false;
+
+  for (size_t pivot = 0; pivot < n; pivot++) {
+    float max_val = fabs(mat->values[pivot * n + pivot]);
+    size_t max_row = pivot;
+    for (size_t row = pivot + 1; row < n; row++) {
+      float val = fabs(mat->values[row * n + pivot]);
+      if (val > max_val) {
+        max_val = val;
+        max_row = row;
+      }
+    }
+
+    if (max_val < EPSILON) {
+      return false;
+    }
+
+    pivot_order[pivot] = max_row;
+
+    if (max_row != pivot) {
+      for (size_t col = 0; col < n; col++) {
+        float tmp = mat->values[pivot * n + col];
+        mat->values[pivot * n + col] = mat->values[max_row * n + col];
+        mat->values[max_row * n + col] = tmp;
+      }
+    }
+
+    float pivot_val = mat->values[pivot * n + pivot];
+#pragma omp parallel for
+    for (size_t row = pivot + 1; row < n; row++) {
+      float factor = mat->values[row * n + pivot] / pivot_val;
+      mat->values[row * n + pivot] = factor;
+      for (size_t col = pivot + 1; col < n; col++) {
+        mat->values[row * n + col] -= factor * mat->values[pivot * n + col];
+      }
+    }
+  }
+
+  return true;
+}
+#endif
+
 float sm_determinant(const FloatMatrix *mat) {
   if (mat->cols != mat->rows) {
     perror("the Matrix has to be square!");
@@ -512,56 +608,27 @@ float sm_determinant(const FloatMatrix *mat) {
     if (!copy)
       return 0.0f;
 
+    size_t *pivot_order = (size_t *)malloc(mat->rows * sizeof(size_t));
+    if (!pivot_order) {
+      sm_destroy(copy);
+      return 0.0f;
+    }
+
+    if (!sm_lu_decompose(copy, pivot_order)) {
+      free(pivot_order);
+      sm_destroy(copy);
+      return 0.0f;
+    }
+
     float det = 1.0f;
-    size_t n = mat->rows;
-
-    for (size_t pivot = 0; pivot < n; pivot++) {
-      float max_val = fabs(copy->values[pivot * n + pivot]);
-      size_t max_row = pivot;
-      for (size_t row = pivot + 1; row < n; row++) {
-        float val = fabs(copy->values[row * n + pivot]);
-        if (val > max_val) {
-          max_val = val;
-          max_row = row;
-        }
-      }
-
-      if (max_row != pivot) {
-        for (size_t col = 0; col < n; col++) {
-          float tmp = copy->values[pivot * n + col];
-          copy->values[pivot * n + col] = copy->values[max_row * n + col];
-          copy->values[max_row * n + col] = tmp;
-        }
+    for (size_t i = 0; i < mat->rows; i++) {
+      det *= copy->values[i * mat->cols + i];
+      if (pivot_order[i] != i) {
         det *= -1.0f;
       }
-
-      float pivot_val = copy->values[pivot * n + pivot];
-      if (fabs(pivot_val) < EPSILON) {
-        sm_destroy(copy);
-        return 0.0f;
-      }
-
-      det *= pivot_val;
-      if (mat->rows >= 512) {
-#pragma omp parallel for
-        for (size_t row = pivot + 1; row < n; row++) {
-          float factor = copy->values[row * n + pivot] / pivot_val;
-          for (size_t col = pivot + 1; col < n; col++) {
-            copy->values[row * n + col] -=
-                factor * copy->values[pivot * n + col];
-          }
-        }
-      } else {
-        // for small matrices:
-        for (size_t row = pivot + 1; row < n; row++) {
-          float factor = copy->values[row * n + pivot] / pivot_val;
-          for (size_t col = pivot + 1; col < n; col++) {
-            copy->values[row * n + col] -=
-                factor * copy->values[pivot * n + col];
-          }
-        }
-      }
     }
+
+    free(pivot_order);
     sm_destroy(copy);
 #endif
     return det;
@@ -572,11 +639,9 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   if (mat->cols != mat->rows || mat->rows == 0 || mat->cols == 0) {
     perror("the Matrix has to be square!");
   }
-  FloatMatrix *inverse = sm_create_clone(mat);
-
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
     defined(USE_ACCELERATE_MPS)
-
+  FloatMatrix *inverse = sm_create_clone(mat);
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
   if (ipiv == NULL) {
     free(inverse->values);
@@ -619,8 +684,10 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     perror("Error: dgetri failed.\n");
     return NULL;
   }
+  return inverse;
 #else
-
+  // Neue Nicht-BLAS-Variante: LU-Zerlegung und
+  // Vorwärts-/Rückwärtssubstitution
   if (!sm_is_square(mat)) {
     perror("Error: Matrix must be square.\n");
     return NULL;
@@ -631,68 +698,51 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   if (!copy)
     return NULL;
 
-  // FloatMatrix *inverse = sm_create_identity(n);
+  FloatMatrix *inverse = sm_create_identity(n);
   if (!inverse) {
     sm_destroy(copy);
     return NULL;
   }
 
-  for (size_t pivot = 0; pivot < n; pivot++) {
-    // Pivotisierung
-    float max_val = fabs(copy->values[pivot * n + pivot]);
-    size_t max_row = pivot;
-    for (size_t row = pivot + 1; row < n; row++) {
-      float val = fabs(copy->values[row * n + pivot]);
-      if (val > max_val) {
-        max_val = val;
-        max_row = row;
+  size_t *pivot_order = (size_t *)malloc(n * sizeof(size_t));
+  if (!pivot_order) {
+    sm_destroy(copy);
+    sm_destroy(inverse);
+    return NULL;
+  }
+
+  if (!sm_lu_decompose(copy, pivot_order)) {
+    perror("Error: LU decomposition failed.\n");
+    free(pivot_order);
+    sm_destroy(copy);
+    sm_destroy(inverse);
+    return NULL;
+  }
+
+  for (size_t col = 0; col < n; col++) {
+    // Vorwärtseinsetzen (L * y = e_col)
+    for (size_t i = 1; i < n; i++) {
+      float sum = inverse->values[i * n + col];
+      for (size_t j = 0; j < i; j++) {
+        sum -= copy->values[i * n + j] * inverse->values[j * n + col];
       }
+      inverse->values[i * n + col] = sum;
     }
 
-    if (max_val < EPSILON) {
-      sm_destroy(copy);
-      sm_destroy(inverse);
-      perror("Error: Matrix is singular.\n");
-      return NULL;
-    }
-
-    if (max_row != pivot) {
-      for (size_t col = 0; col < n; col++) {
-        float tmp = copy->values[pivot * n + col];
-        copy->values[pivot * n + col] = copy->values[max_row * n + col];
-        copy->values[max_row * n + col] = tmp;
-
-        tmp = inverse->values[pivot * n + col];
-        inverse->values[pivot * n + col] = inverse->values[max_row * n + col];
-        inverse->values[max_row * n + col] = tmp;
+    // Rückwärtseinsetzen (U * x = y)
+    for (ssize_t i = n - 1; i >= 0; i--) {
+      float sum = inverse->values[i * n + col];
+      for (size_t j = i + 1; j < n; j++) {
+        sum -= copy->values[i * n + j] * inverse->values[j * n + col];
       }
-    }
-
-    float pivot_val = copy->values[pivot * n + pivot];
-    for (size_t col = 0; col < n; col++) {
-      copy->values[pivot * n + col] /= pivot_val;
-      inverse->values[pivot * n + col] /= pivot_val;
-    }
-
-#pragma omp parallel for
-    for (size_t row = 0; row < n; row++) {
-      if (row == pivot)
-        continue;
-
-      float factor = copy->values[row * n + pivot];
-      for (size_t col = 0; col < n; col++) {
-        copy->values[row * n + col] -= factor * copy->values[pivot * n + col];
-        inverse->values[row * n + col] -=
-            factor * inverse->values[pivot * n + col];
-      }
+      inverse->values[i * n + col] = sum / copy->values[i * n + i];
     }
   }
 
+  free(pivot_order);
   sm_destroy(copy);
   return inverse;
-
 #endif
-  return inverse;
 }
 
 void sm_set(FloatMatrix *mat, size_t i, size_t j, const float value) {
@@ -716,8 +766,8 @@ void sm_resize(FloatMatrix *mat, size_t new_row, size_t new_col) {
     exit(EXIT_FAILURE);
   }
 
-  // Copy values from old matrix to new matrix using linear index arithmetic and
-  // OpenMP
+  // Copy values from old matrix to new matrix using linear index arithmetic
+  // and OpenMP
   size_t min_rows = (new_row < mat->rows) ? new_row : mat->rows;
   size_t min_cols = (new_col < mat->cols) ? new_col : mat->cols;
   size_t n = min_rows * min_cols;
@@ -747,24 +797,16 @@ void sm_print(const FloatMatrix *matrix) {
 }
 
 void sm_destroy(FloatMatrix *mat) {
-  free(mat->values);
+  if (!mat)
+    return;
+  if (mat->values) {
+    free(mat->values);
+  }
   free(mat);
-  mat = NULL;
 }
 
 float sm_trace(const FloatMatrix *mat) {
   size_t n = (mat->rows < mat->cols) ? mat->rows : mat->cols;
-
-  // #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-//     defined(USE_ACCELERATE_MPS)
-  //   if (mat->rows == mat->cols) {
-  //     // BLAS ist nur bei quadratischen Matrizen sicher
-  //     return cblas_sdot((BLASINT)n, mat->values, (BLASINT)(mat->cols + 1),
-  //                       mat->values, (BLASINT)(mat->cols + 1));
-  //   }
-  // #endif
-
-  // sichere generische Variante
   float trace = 0;
   for (size_t i = 0; i < n; i++) {
     trace += sm_get(mat, i, i);
@@ -936,5 +978,101 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
   for (size_t i = 0; i < mat->rows * mat->cols; i++) {
     mat->values[i] *= scalar;
   }
+#endif
+}
+
+// Add bias vector to each row of output matrix
+static void sm_add_bias_rowwise(FloatMatrix *out, const FloatMatrix *bias) {
+  size_t rows = out->rows;
+  size_t cols = out->cols;
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < rows; ++i)
+    for (size_t j = 0; j < cols; ++j)
+      out->values[i * cols + j] += bias->values[j];
+}
+
+FloatMatrix *sm_linear_batch(const FloatMatrix *inputs,
+                             const FloatMatrix *weights,
+                             const FloatMatrix *biases) {
+  if (inputs == NULL || weights == NULL || biases == NULL) {
+    perror("Error: Null pointer input to sm_linear_batch.\n");
+    return NULL;
+  }
+
+  if (inputs->cols != weights->cols || biases->cols != weights->rows ||
+      biases->rows != 1) {
+    perror("Error: Dimension mismatch in sm_linear_batch.\n");
+    return NULL;
+  }
+
+  FloatMatrix *output = sm_create(inputs->rows, weights->rows);
+  if (!output)
+    return NULL;
+
+#ifdef USE_ACCELERATE
+  // output = inputs * weights^T
+  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, (BLASINT)inputs->rows,
+              (BLASINT)weights->rows, (BLASINT)inputs->cols, 1.0f,
+              inputs->values, (BLASINT)inputs->cols, weights->values,
+              (BLASINT)weights->cols, 0.0f, output->values,
+              (BLASINT)output->cols);
+
+  // Add bias row-wise
+  sm_add_bias_rowwise(output, biases);
+
+#else
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < inputs->rows; i++) {
+    for (size_t j = 0; j < weights->rows; j++) {
+      float sum = 0.0f;
+      for (size_t k = 0; k < inputs->cols; k++) {
+        sum += inputs->values[i * inputs->cols + k] *
+               weights->values[j * weights->cols + k];
+      }
+      output->values[i * output->cols + j] = sum + biases->values[j];
+    }
+  }
+#endif
+
+  return output;
+}
+
+FloatMatrix *sm_linear_batch_DSP(const FloatMatrix *inputs,
+                                 const FloatMatrix *weights,
+                                 const FloatMatrix *biases) {
+  if (inputs == NULL || weights == NULL || biases == NULL) {
+    perror("Error: Null pointer input to sm_linear_batch_DSP.\n");
+    return NULL;
+  }
+
+  if (inputs->cols != weights->cols || biases->cols != weights->rows ||
+      biases->rows != 1) {
+    perror("Error: Dimension mismatch in sm_linear_batch_DSP.\n");
+    return NULL;
+  }
+
+#ifdef USE_ACCELERATE
+
+  if (inputs->cols != weights->rows) {
+    perror("Error: incompatible matrix dimensions for multiplication.\n");
+    return NULL;
+  }
+
+  FloatMatrix *C = sm_create(inputs->rows, weights->cols);
+  if (!C) {
+    perror("Error: memory allocation for result matrix failed.\n");
+    return NULL;
+  }
+
+  vDSP_mmul(inputs->values, 1, weights->values, 1, inputs->values, 1,
+            inputs->rows, weights->cols, inputs->cols);
+
+  sm_add_bias_rowwise(C, biases);
+
+  return C;
+#else
+  perror("Error: DSP not supported.\n");
+  return NULL;
 #endif
 }

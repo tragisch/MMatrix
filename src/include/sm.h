@@ -16,14 +16,6 @@
 #include <string.h>
 #include <time.h>
 
-// Macro for measuring execution time of a function call
-#define CPUTIME(FCALL)                                                         \
-  do {                                                                         \
-    float START = clock();                                                     \
-    FCALL;                                                                     \
-    ((float)clock() - START) / CLOCKS_PER_SEC;                                 \
-  } while (0)
-
 // Struct for FloatMatrix
 typedef struct FloatMatrix {
   size_t rows;
@@ -48,6 +40,8 @@ FloatMatrix *sm_create_from_array(size_t rows, size_t cols, float **array);
 FloatMatrix *sm_create_from_2D_array(size_t rows, size_t cols,
                                      float array[rows][cols]);
 
+double *sm_create_array_from_matrix(FloatMatrix *matrix);
+
 // Getters and Setters
 float sm_get(const FloatMatrix *mat, size_t i, size_t j);
 void sm_set(FloatMatrix *mat, size_t i, size_t j, float value);
@@ -63,6 +57,7 @@ void sm_resize(FloatMatrix *mat, size_t new_row, size_t new_col);
 
 // Matrix operations
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2);
+FloatMatrix *sm_multiply_DSP(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number);
 FloatMatrix *sm_transpose(const FloatMatrix *mat);
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2);
@@ -90,6 +85,13 @@ void sm_inplace_square_transpose(FloatMatrix *mat);
 void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar);
 void sm_inplace_gauss_elimination(FloatMatrix *mat);
 
+// Neural network operations
+FloatMatrix *sm_linear_batch(const FloatMatrix *inputs,
+                             const FloatMatrix *weights,
+                             const FloatMatrix *biases);
+FloatMatrix *sm_linear_batch_DSP(const FloatMatrix *inputs,
+                                 const FloatMatrix *weights,
+                                 const FloatMatrix *biases);
 // Memory management
 void sm_destroy(FloatMatrix *mat);
 

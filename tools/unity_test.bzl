@@ -1,4 +1,7 @@
+
 """Module docstring describing the purpose of the file."""
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+
 def unity_test(name,  srcs, my_config=None, deps=None,  **kwargs):
     """ Create a unity test.
 
@@ -13,7 +16,7 @@ def unity_test(name,  srcs, my_config=None, deps=None,  **kwargs):
     file_name = str(srcs[0])
     generate_test_runner(file_name, my_config, name)
 
-    native.cc_test(
+    cc_test(
         name = name,
         deps = deps,
         srcs = srcs + [runner_file_name(file_name)],
