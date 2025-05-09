@@ -3,20 +3,49 @@
 #include <math.h>
 #include <omp.h>
 
-float nm_relu(float x) { return x > 0 ? x : 0; }
-
 void nm_apply_relu(FloatMatrix *mat) {
+  if (!mat)
+    return;
+  size_t size = mat->rows * mat->cols;
+
+  if (size > 1000000) {
 #pragma omp parallel for simd
-  for (size_t i = 0; i < mat->rows * mat->cols; ++i) {
-    mat->values[i] = nm_relu(mat->values[i]);
+    for (size_t i = 0; i < size; ++i) {
+      float x = mat->values[i];
+      mat->values[i] = x > 0.0f ? x : 0.0f;
+    }
+  } else {
+#pragma omp simd
+    for (size_t i = 0; i < size; ++i) {
+      float x = mat->values[i];
+      mat->values[i] = x > 0.0f ? x : 0.0f;
+    }
   }
 }
 
-float nm_sigmoid(float x) { return 1.0f / (1.0f + expf(-x)); }
-
 void nm_apply_sigmoid(FloatMatrix *mat) {
+  size_t size = mat->rows * mat->cols;
+
+  if (size > 1000000) {
+#pragma omp parallel for simd
+    for (size_t i = 0; i < size; ++i) {
+      float x = mat->values[i];
+      mat->values[i] = 1.0f / (1.0f + expf(-x));
+    }
+  } else {
+#pragma omp simd
+    for (size_t i = 0; i < size; ++i) {
+      float x = mat->values[i];
+      mat->values[i] = 1.0f / (1.0f + expf(-x));
+    }
+  }
+}
+
+float nm_tanh(float x) { return tanhf(x); }
+
+void nm_apply_tanh(FloatMatrix *mat) {
   for (size_t i = 0; i < mat->rows * mat->cols; ++i) {
-    mat->values[i] = nm_sigmoid(mat->values[i]);
+    mat->values[i] = nm_tanh(mat->values[i]);
   }
 }
 
@@ -45,13 +74,6 @@ FloatMatrix *nm_linear(const FloatMatrix *input, const FloatMatrix *weights,
   return out;
 }
 
-float nm_tanh(float x) { return tanhf(x); }
-
-void nm_apply_tanh(FloatMatrix *mat) {
-  for (size_t i = 0; i < mat->rows * mat->cols; ++i) {
-    mat->values[i] = nm_tanh(mat->values[i]);
-  }
-}
 float nm_cross_entropy_loss(const FloatMatrix *predicted,
                             const FloatMatrix *target) {
   if (!predicted || !target)

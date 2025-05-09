@@ -9,23 +9,12 @@
 #ifndef NM_H
 #define NM_H
 
-/*
- * NeuralMatrix Library - planned neural network matrix operations.
- * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
- * SPDX-License-Identifier: MIT
- *
- * This file is part of a project licensed under the MIT License.
- * See the LICENSE file in the root directory for details.
- */
-
 #include "sm.h"
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 
 // Activation functions
-float nm_relu(float x);
-float nm_sigmoid(float x);
 float nm_tanh(float x);
 float nm_softmax_denominator(const float *vec, size_t len);
 

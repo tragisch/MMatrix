@@ -64,6 +64,7 @@ cc_library(
     ],
     deps = [
         ":sm",
+        "@libomp"
     ],
 )
 
@@ -130,6 +131,7 @@ cc_library(
         ":use_accelerate": sm_copts + [
             "-DUSE_ACCELERATE",
             "-DACCELERATE_NEW_LAPACK",
+            "-march=native",
         ],
         ":use_accelerate_mps": sm_copts + [
             "-DUSE_ACCELERATE_MPS",
