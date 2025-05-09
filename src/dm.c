@@ -7,6 +7,7 @@
  */
 
 #include "dm.h"
+#include <omp.h>
 
 #define INIT_CAPACITY 100
 #define EPSILON 1e-9
@@ -18,12 +19,6 @@
 #ifdef USE_ACCELERATE
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
-#elif defined(USE_ACCELERATE_MPS)
-#define BLASINT int
-#include "sm_mps.h"
-#include <Accelerate/Accelerate.h>
-// #import <Foundation/Foundation.h>
-// #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #elif defined(USE_OPENBLAS)
 #define BLASINT int
 #include <cblas.h>
