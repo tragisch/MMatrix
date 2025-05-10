@@ -503,40 +503,4 @@ FloatMatrix *sm_create_from_flat_array(size_t rows, size_t cols,
   return mat;
 }
 
-void test_sm_linear_batch_DSP_should_match_sm_linear_batch(void) {
-  float input[2][3] = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
-  float weights[] = {1.0f, 0.0f, -1.0f, 0.5f, 0.5f, 0.5f};
-  float bias[1][2] = {{1.0f, 2.0f}};
-
-  FloatMatrix *inputs = sm_create_from_2D_array(2, 3, input);
-  FloatMatrix *W = sm_create_from_flat_array(2, 3, weights);
-  FloatMatrix *b = sm_create_from_2D_array(1, 2, bias);
-
-  FloatMatrix *reference = sm_linear_batch(inputs, W, b);
-  FloatMatrix *dsp_result = sm_linear_batch_DSP(inputs, W, b);
-
-  printf("Inputs:\n");
-  sm_print(inputs);
-
-  printf("Weights:\n");
-  sm_print(W);
-
-  printf("Biases:\n");
-  sm_print(b);
-
-  printf("Reference result (sm_linear_batch):\n");
-  sm_print(reference);
-
-  printf("DSP result (sm_linear_batch_DSP):\n");
-  sm_print(dsp_result);
-
-  TEST_ASSERT_TRUE(sm_is_equal(reference, dsp_result));
-
-  sm_destroy(inputs);
-  sm_destroy(W);
-  sm_destroy(b);
-  sm_destroy(reference);
-  sm_destroy(dsp_result);
-}
-
 //

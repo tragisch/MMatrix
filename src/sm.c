@@ -18,7 +18,12 @@
 /*      Define Environment     */
 /*******************************/
 
-#ifdef USE_ACCELERATE
+#ifdef __APPLE__
+#if !defined(USE_ACCELERATE) && !defined(USE_OPENBLAS) && !defined(USE_ACCELERATE_MPS)
+#define USE_ACCELERATE_MPS 1
+#endif
+
+#if defined(USE_ACCELERATE)
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
 #elif defined(USE_ACCELERATE_MPS)
@@ -382,8 +387,13 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 
 #elif defined(USE_ACCELERATE_MPS)
 
-  mps_matrix_multiply(mat1->values, mat1->rows, mat1->cols, mat2->values,
-                      mat2->rows, mat2->cols, product->values);
+  if (mat1->cols < 2000) {
+    vDSP_mmul(mat1->values, 1, mat2->values, 1, product->values, 1, mat1->rows,
+              mat2->cols, mat1->cols);
+  } else {
+    mps_matrix_multiply(mat1->values, mat1->rows, mat1->cols, mat2->values,
+                        mat2->rows, mat2->cols, product->values);
+  }
 
 #elif defined(USE_OPENBLAS)
 
@@ -415,24 +425,6 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   }
   sm_destroy(mat2_transposed);
 
-#endif
-  return product;
-}
-
-FloatMatrix *sm_multiply_DSP(const FloatMatrix *mat1, const FloatMatrix *mat2) {
-  if (mat1->cols != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
-    return NULL;
-  }
-  FloatMatrix *product = sm_create(mat1->rows, mat2->cols);
-  if (!product)
-    return NULL;
-#ifdef USE_ACCELERATE
-
-  vDSP_mmul(mat1->values, 1, mat2->values, 1, product->values, 1, mat1->rows,
-            mat2->cols, mat1->cols);
-#else
-  printf("Error: DSP not available.\n");
 #endif
   return product;
 }
@@ -981,16 +973,6 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
 #endif
 }
 
-// Add bias vector to each row of output matrix
-static void sm_add_bias_rowwise(FloatMatrix *out, const FloatMatrix *bias) {
-  size_t rows = out->rows;
-  size_t cols = out->cols;
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < rows; ++i)
-    for (size_t j = 0; j < cols; ++j)
-      out->values[i * cols + j] += bias->values[j];
-}
-
 FloatMatrix *sm_linear_batch(const FloatMatrix *inputs,
                              const FloatMatrix *weights,
                              const FloatMatrix *biases) {
@@ -1018,7 +1000,12 @@ FloatMatrix *sm_linear_batch(const FloatMatrix *inputs,
               (BLASINT)output->cols);
 
   // Add bias row-wise
-  sm_add_bias_rowwise(output, biases);
+  size_t rows = out->rows;
+  size_t cols = out->cols;
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < rows; ++i)
+    for (size_t j = 0; j < cols; ++j)
+      out->values[i * cols + j] += bias->values[j];
 
 #else
 
@@ -1036,43 +1023,4 @@ FloatMatrix *sm_linear_batch(const FloatMatrix *inputs,
 #endif
 
   return output;
-}
-
-FloatMatrix *sm_linear_batch_DSP(const FloatMatrix *inputs,
-                                 const FloatMatrix *weights,
-                                 const FloatMatrix *biases) {
-  if (inputs == NULL || weights == NULL || biases == NULL) {
-    perror("Error: Null pointer input to sm_linear_batch_DSP.\n");
-    return NULL;
-  }
-
-  if (inputs->cols != weights->cols || biases->cols != weights->rows ||
-      biases->rows != 1) {
-    perror("Error: Dimension mismatch in sm_linear_batch_DSP.\n");
-    return NULL;
-  }
-
-#ifdef USE_ACCELERATE
-
-  if (inputs->cols != weights->rows) {
-    perror("Error: incompatible matrix dimensions for multiplication.\n");
-    return NULL;
-  }
-
-  FloatMatrix *C = sm_create(inputs->rows, weights->cols);
-  if (!C) {
-    perror("Error: memory allocation for result matrix failed.\n");
-    return NULL;
-  }
-
-  vDSP_mmul(inputs->values, 1, weights->values, 1, inputs->values, 1,
-            inputs->rows, weights->cols, inputs->cols);
-
-  sm_add_bias_rowwise(C, biases);
-
-  return C;
-#else
-  perror("Error: DSP not supported.\n");
-  return NULL;
-#endif
 }
