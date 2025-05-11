@@ -591,31 +591,53 @@ float sm_determinant(const FloatMatrix *mat) {
     sm_destroy(lu);
 
 #else
-    FloatMatrix *copy = sm_create_clone(mat);
+    FloatMatrix *copy = sm_clone(mat);
     if (!copy)
       return 0.0f;
 
-    size_t *pivot_order = (size_t *)malloc(mat->rows * sizeof(size_t));
-    if (!pivot_order) {
-      sm_destroy(copy);
-      return 0.0f;
-    }
+    size_t n = mat->rows;
+    float *a = copy->values;
 
-    if (!sm_lu_decompose(copy, pivot_order)) {
-      free(pivot_order);
-      sm_destroy(copy);
-      return 0.0f;
-    }
+    for (size_t k = 0; k < n; ++k) {
+      // Pivot
+      size_t max_row = k;
+      float max_val = fabsf(a[k * n + k]);
+      for (size_t i = k + 1; i < n; ++i) {
+        float val = fabsf(a[i * n + k]);
+        if (val > max_val) {
+          max_val = val;
+          max_row = i;
+        }
+      }
 
-    float det = 1.0f;
-    for (size_t i = 0; i < mat->rows; i++) {
-      det *= copy->values[i * mat->cols + i];
-      if (pivot_order[i] != i) {
-        det *= -1.0f;
+      if (max_val < 1e-6f) {
+        sm_destroy(copy);
+        return 0.0f;
+      }
+
+      if (max_row != k) {
+        for (size_t j = 0; j < n; ++j) {
+          float tmp = a[k * n + j];
+          a[k * n + j] = a[max_row * n + j];
+          a[max_row * n + j] = tmp;
+        }
+      }
+
+      float pivot = a[k * n + k];
+      for (size_t i = k + 1; i < n; ++i) {
+        float factor = a[i * n + k] / pivot;
+        a[i * n + k] = 0.0f;
+        for (size_t j = k + 1; j < n; ++j) {
+          a[i * n + j] -= factor * a[k * n + j];
+        }
       }
     }
 
-    free(pivot_order);
+    float det = 1.0f;
+    for (size_t i = 0; i < n; ++i) {
+      det *= a[i * n + i];
+    }
+
     sm_destroy(copy);
 #endif
     return det;
