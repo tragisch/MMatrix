@@ -11,6 +11,14 @@ A matrix C-library for MacOS. It is a wrapper for my purpose and to benchmark di
   - read/wirte MarketMatrix files
 
 
+### Performance
+**sm:**
+- SIMD acceleration using OpenMP and NEON intrinsics for `sm` operations (add, diff, multiply, norm, etc.) - if available
+- Optimized fallback paths with transposed access to improve cache locality
+- Uses Apple Accelerate or OpenBLAS depending on build configuration
+- Optional GPU acceleration via Apple Metal Performance Shaders (MPS) for large float matrix multiplications
+
+
 ### Build
 To build library. Be sure openmp, openblas, suitesparse and matio is installed locally (via i.e. homebrew). Using [Bazel](https://bazel.build/):
 
