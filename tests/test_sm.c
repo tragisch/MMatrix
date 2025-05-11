@@ -455,6 +455,41 @@ FloatMatrix *create_sample_matrix(size_t rows, size_t cols) {
   return matrix;
 }
 
+void test_sm_determinant(void) {
+  float values[3][3] = {
+      {1.0f, 2.0f, 3.0f}, {0.0f, 1.0f, 4.0f}, {5.0f, 6.0f, 0.0f}};
+  FloatMatrix *mat = sm_from_array_static(3, 3, values);
+  float det = sm_determinant(mat);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, det);
+  sm_destroy(mat);
+}
+
+void test_sm_determinant_2x2(void) {
+  float values[2][2] = {{1.0f, 2.0f}, {3.0f, 4.0f}};
+  FloatMatrix *mat = sm_from_array_static(2, 2, values);
+  float det = sm_determinant(mat);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, -2.0f, det);
+  sm_destroy(mat);
+}
+
+void test_sm_determinant_5x5(void) {
+  float values[5][5];
+  for (int i = 0; i < 5; i++) {
+    for (int j = 0; j < 5; j++) {
+      values[i][j] = (float)(i * 5 + j) + 1;
+    }
+  }
+  values[3][3] = 2.5;
+  values[2][2] = 0.0;
+  values[1][1] = 0.0;
+
+  FloatMatrix *mat = sm_from_array_static(5, 5, values);
+
+  float det = sm_determinant(mat);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, -120120.0f, det);
+  sm_destroy(mat);
+}
+
 void sm_back_substitution(const FloatMatrix *mat, float *solution) {
   size_t rows = mat->rows;
   size_t cols = mat->cols;
