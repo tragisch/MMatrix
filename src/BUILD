@@ -2,6 +2,27 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 
 
+# define the platforms
+constraint_setting(name = "custom_os")
+constraint_value(
+    name = "macos_arm64",
+    constraint_setting = ":custom_os",
+)
+
+platform(
+    name = "macos_arm64_platform",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+        ":macos_arm64",
+    ],
+)
+
+config_setting(
+    name = "on_macos_arm64",
+    constraint_values = [":macos_arm64"],
+)
+
 # build options for different architectures
 dm_copts = [
     "-O2",
@@ -126,49 +147,35 @@ cc_library(
     hdrs = [
         "include/sm.h",
     ],
-    copts = select({
-        "//conditions:default": sm_copts  + ["-fopenmp"],
-        ":use_accelerate": sm_copts + [
-            "-DUSE_ACCELERATE",
-            "-DACCELERATE_NEW_LAPACK",
-            "-march=native",
-        ],
-        ":use_accelerate_mps": sm_copts + [
+    copts = sm_copts + ["-fopenmp"] + select({
+        ":on_macos_arm64": [
             "-DUSE_ACCELERATE_MPS",
             "-DACCELERATE_NEW_LAPACK",
             "-DUSE_MPS",
             "-fobjc-arc",
         ],
-        ":use_openblas": sm_copts + [
+        "//conditions:default": [],
+    }) + select({
+        ":use_openblas": [
             "-DUSE_OPENBLAS",
         ],
+        "//conditions:default": [],
     }),
     includes = ["include"],
     linkopts = select({
-        "//conditions:default": ["-lomp"],
-        ":use_accelerate": [
-            "-framework Accelerate",
-             "-lomp",
-        ],
-        ":use_accelerate_mps": [
+        ":on_macos_arm64": [
             "-framework Accelerate",
             "-framework Metal",
-            "-framework MetalPerformanceShaders", 
-             "-lomp",
-        ],
-        ":use_openblas": [
-            "-L/opt/homebrew/opt/openblas/lib",
-            "-lopenblas",
+            "-framework MetalPerformanceShaders",
             "-lomp",
         ],
+        "//conditions:default": ["-lomp"],
     }),
     visibility = ["//visibility:public"],
-    deps = select({
-        "//conditions:default": default_deps + ["@libomp"],
-        ":use_accelerate": default_deps + ["@libomp"],
-        ":use_accelerate_mps": default_deps + [":sm_mps_objc", "@libomp"],
-        ":use_openblas": default_deps + ["@openblas", "@libomp"],
-    }),
+    deps = default_deps + [":sm_mps_objc", "@libomp"] + select({
+        ":use_openblas": ["@openblas"],
+        "//conditions:default": [],
+    })
 )
 
 # Objective-C library for Metal Performance Shaders (on macOS)
@@ -212,5 +219,7 @@ config_setting(
     name = "use_accelerate_mps",
     values = {"define": "USE_ACCELERATE_MPS=1"},
 )
+
+
 
 

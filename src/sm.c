@@ -8,8 +8,10 @@
 
 #include "sm.h"
 #include <omp.h>
-#include <stdint.h>
-#include <time.h>
+
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+#endif
 
 #define INIT_CAPACITY 100
 #define EPSILON 1e-5
@@ -18,15 +20,17 @@
 /*      Define Environment     */
 /*******************************/
 
-#ifdef __APPLE__
-#if !defined(USE_ACCELERATE) && !defined(USE_OPENBLAS) && !defined(USE_ACCELERATE_MPS)
-#define USE_ACCELERATE_MPS 1
+#if defined(USE_ACCELERATE)
+#define ACTIVE_LIB "Apple Accelerate"
+#elif defined(USE_ACCELERATE_MPS)
+#define ACTIVE_LIB "Metal Performance Shaders"
+#elif defined(USE_OPENBLAS)
+#define ACTIVE_LIB "OpenBLAS"
+#else
+#define ACTIVE_LIB "No BLAS"
 #endif
 
-#if defined(USE_ACCELERATE)
-#define BLASINT int
-#include <Accelerate/Accelerate.h>
-#elif defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
 #define BLASINT int
 #include "sm_mps.h"
 #include <Accelerate/Accelerate.h>
@@ -34,12 +38,10 @@
 #define BLASINT int
 #include <cblas.h>
 #include <lapacke.h>
-#else
-#include <arm_neon.h>
-#include <math.h>
 
 #endif
 
+// Block size used for cache-optimized transpose operations
 #define BLOCK_SIZE 64
 
 /*******************************/
@@ -116,17 +118,7 @@ float *sm_to_column_major(const FloatMatrix *mat) {
 /*      Public Functions      */
 /*******************************/
 
-char *sm_active_library() {
-#ifdef USE_ACCELERATE
-  return "Apple's Accelerate";
-#elif defined(USE_ACCELERATE_MPS)
-  return "Apple's Accelerate MPS";
-#elif defined(USE_OPENBLAS)
-  return "OpenBLAS";
-#else
-  return "No BLAS";
-#endif
-}
+char *sm_active_library() { return (char *)ACTIVE_LIB; }
 
 FloatMatrix *sm_create_empty() {
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
@@ -167,7 +159,7 @@ FloatMatrix *sm_create(size_t rows, size_t cols) {
   return matrix;
 }
 
-FloatMatrix *sm_create_clone(const FloatMatrix *mat) {
+FloatMatrix *sm_clone(const FloatMatrix *mat) {
   FloatMatrix *copy = sm_create(mat->rows, mat->cols);
   if (!copy)
     return NULL;
@@ -272,15 +264,10 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
   return mat;
 }
 
-FloatMatrix *sm_create_from_array(size_t rows, size_t cols, float **array) {
+FloatMatrix *sm_from_array_ptrs(size_t rows, size_t cols, float **array) {
   // check if the array is NULL
   if (array == NULL) {
     perror("Error: array is NULL.\n");
-    return NULL;
-  }
-  // check if array is an array of arrays
-  if (array[0] == NULL) {
-    perror("Error: array is not an array of arrays.\n");
     return NULL;
   }
 
@@ -297,16 +284,11 @@ FloatMatrix *sm_create_from_array(size_t rows, size_t cols, float **array) {
   return mat;
 }
 
-FloatMatrix *sm_create_from_2D_array(size_t rows, size_t cols,
-                                     float array[rows][cols]) {
+FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
+                                  float array[rows][cols]) {
   // check if the array is NULL
   if (array == NULL) {
     perror("Error: array is NULL.\n");
-    return NULL;
-  }
-  // check if array is an 2D array
-  if (array[0] == NULL) {
-    perror("Error: array is not an 2D array.\n");
     return NULL;
   }
 
@@ -378,15 +360,14 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
     return NULL;
   }
   FloatMatrix *product = sm_create(mat1->rows, mat2->cols);
-#ifdef USE_ACCELERATE
 
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (BLASINT)mat1->rows,
               (BLASINT)mat2->cols, (BLASINT)mat1->cols, 1.0, mat1->values,
               (BLASINT)mat1->cols, mat2->values, (BLASINT)mat2->cols, 0.0,
               product->values, (BLASINT)product->cols);
 
 #elif defined(USE_ACCELERATE_MPS)
-
   if (mat1->cols < 2000) {
     vDSP_mmul(mat1->values, 1, mat2->values, 1, product->values, 1, mat1->rows,
               mat2->cols, mat1->cols);
@@ -395,15 +376,7 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
                         mat2->rows, mat2->cols, product->values);
   }
 
-#elif defined(USE_OPENBLAS)
-
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (BLASINT)mat1->rows,
-              (BLASINT)mat2->cols, (BLASINT)mat1->cols, 1.0, mat1->values,
-              (BLASINT)mat1->cols, mat2->values, (BLASINT)mat2->cols, 0.0,
-              product->values, (BLASINT)product->cols);
-
 #else
-  // ohne SMID
   FloatMatrix *mat2_transposed = sm_transpose(mat2);
 
   size_t rows = mat1->rows;
@@ -417,6 +390,7 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
       float sum = 0.0f;
+#pragma omp simd reduction(+ : sum)
       for (size_t k = 0; k < inner; k++) {
         sum += a[i * inner + k] * bT[j * inner + k];
       }
@@ -430,7 +404,7 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 }
 
 FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number) {
-  FloatMatrix *product = sm_create_clone(mat);
+  FloatMatrix *product = sm_clone(mat);
   sm_inplace_multiply_by_number(product, number);
   return product;
 }
@@ -440,7 +414,7 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat) {
     return NULL;
 
   if (sm_is_square(mat)) {
-    FloatMatrix *copy = sm_create_clone(mat);
+    FloatMatrix *copy = sm_clone(mat);
     sm_inplace_square_transpose(copy);
     return copy;
   }
@@ -474,7 +448,26 @@ bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 
   size_t size = mat1->cols * mat1->rows;
   int equal = 1;
-
+#ifdef __ARM_NEON
+  size_t i = 0;
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t a = vld1q_f32(&mat1->values[i]);
+    float32x4_t b = vld1q_f32(&mat2->values[i]);
+    float32x4_t diff = vabsq_f32(vsubq_f32(a, b));
+    float32x4_t eps = vdupq_n_f32(EPSILON);
+    uint32x4_t cmp = vcgtq_f32(diff, eps);
+    if (vmaxvq_u32(cmp)) {
+      equal = 0;
+      break;
+    }
+  }
+  for (; i < size; i++) {
+    if (fabsf(mat1->values[i] - mat2->values[i]) > EPSILON) {
+      equal = 0;
+      break;
+    }
+  }
+#else
 #pragma omp parallel for
   for (size_t i = 0; i < size; i++) {
     if (fabs(mat1->values[i] - mat2->values[i]) > EPSILON) {
@@ -482,7 +475,7 @@ bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2) {
       equal = 0;
     }
   }
-
+#endif
   return equal;
 }
 
@@ -491,9 +484,8 @@ FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return NULL;
   }
-  FloatMatrix *sum = sm_create_clone(mat1);
+  FloatMatrix *sum = sm_clone(mat1);
   sm_inplace_add(sum, mat2);
-
   return sum;
 }
 
@@ -502,13 +494,15 @@ FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return NULL;
   }
-  FloatMatrix *difference = sm_create_clone(mat1);
+  FloatMatrix *difference = sm_clone(mat1);
   sm_inplace_diff(difference, mat2);
   return difference;
 }
 
 #if !defined(USE_ACCELERATE) && !defined(USE_OPENBLAS) &&                      \
     !defined(USE_ACCELERATE_MPS)
+// Use TOLERANCE for numerical zero threshold in LU decomposition
+#define TOLERANCE EPSILON
 static bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
   size_t n = mat->rows;
   if (mat->cols != n)
@@ -525,7 +519,8 @@ static bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
       }
     }
 
-    if (max_val < EPSILON) {
+    // Use TOLERANCE instead of magic value
+    if (max_val < TOLERANCE) {
       return false;
     }
 
@@ -557,8 +552,8 @@ static bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
 float sm_determinant(const FloatMatrix *mat) {
   if (mat->cols != mat->rows) {
     perror("the Matrix has to be square!");
+    return 0.0f;
   }
-  float det = 0;
   if (mat->cols == 1) {
     return sm_get(mat, 0, 0);
   } else if (mat->cols == 2) {
@@ -566,9 +561,9 @@ float sm_determinant(const FloatMatrix *mat) {
            sm_get(mat, 0, 1) * sm_get(mat, 1, 0);
   } else if (mat->cols == 3) {
     float *a = mat->values;
-    det = a[0] * (a[4] * a[8] - a[5] * a[7]) -
-          a[1] * (a[3] * a[8] - a[5] * a[6]) +
-          a[2] * (a[3] * a[7] - a[4] * a[6]);
+    float det = a[0] * (a[4] * a[8] - a[5] * a[7]) -
+                a[1] * (a[3] * a[8] - a[5] * a[6]) +
+                a[2] * (a[3] * a[7] - a[4] * a[6]);
     return det;
   } else {
 
@@ -576,7 +571,7 @@ float sm_determinant(const FloatMatrix *mat) {
     defined(USE_ACCELERATE_MPS)
 
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
-    FloatMatrix *lu = sm_create_clone(mat);
+    FloatMatrix *lu = sm_clone(mat);
     BLASINT info = 0;
     BLASINT cols = (BLASINT)lu->cols;
     BLASINT rows = (BLASINT)lu->rows;
@@ -588,7 +583,7 @@ float sm_determinant(const FloatMatrix *mat) {
       sm_destroy(lu);
       return 0;
     }
-    det = 1.0;
+    float det = 1.0;
     for (size_t i = 0; i < mat->cols; i++) {
       det *= sm_get(lu, i, i);
     }
@@ -630,10 +625,11 @@ float sm_determinant(const FloatMatrix *mat) {
 FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   if (mat->cols != mat->rows || mat->rows == 0 || mat->cols == 0) {
     perror("the Matrix has to be square!");
+    return NULL;
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
     defined(USE_ACCELERATE_MPS)
-  FloatMatrix *inverse = sm_create_clone(mat);
+  FloatMatrix *inverse = sm_clone(mat);
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
   if (ipiv == NULL) {
     free(inverse->values);
@@ -686,7 +682,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   }
 
   size_t n = mat->cols;
-  FloatMatrix *copy = sm_create_clone(mat);
+  FloatMatrix *copy = sm_clone(mat);
   if (!copy)
     return NULL;
 
@@ -811,11 +807,30 @@ float sm_norm(const FloatMatrix *mat) {
     defined(USE_ACCELERATE_MPS)
   return cblas_snrm2((BLASINT)(mat->rows * mat->cols), mat->values, 1);
 #else
+#ifdef __ARM_NEON
+  size_t n = mat->rows * mat->cols;
+  size_t i = 0;
+  float32x4_t sum_vec = vdupq_n_f32(0.0f);
+  for (; i + 4 <= n; i += 4) {
+    float32x4_t v = vld1q_f32(&mat->values[i]);
+    sum_vec = vmlaq_f32(sum_vec, v, v);
+  }
+
+  float buf[4];
+  vst1q_f32(buf, sum_vec);
+  float norm = buf[0] + buf[1] + buf[2] + buf[3];
+
+  for (; i < n; ++i) {
+    norm += mat->values[i] * mat->values[i];
+  }
+  return sqrtf(norm);
+#else
   float norm = 0;
   for (size_t i = 0; i < mat->rows * mat->cols; i++) {
     norm += mat->values[i] * mat->values[i];
   }
-  return sqrt(norm);
+  return sqrtf(norm);
+#endif
 #endif
 }
 
@@ -869,14 +884,28 @@ size_t sm_rank(const FloatMatrix *mat) {
 float sm_density(const FloatMatrix *mat) {
   size_t size = mat->rows * mat->cols;
   int counter = 0;
-
+#ifdef __ARM_NEON
+  size_t i = 0;
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t v = vld1q_f32(&mat->values[i]);
+    float32x4_t abs_v = vabsq_f32(v);
+    float32x4_t eps = vdupq_n_f32(EPSILON);
+    uint32x4_t cmp = vcgtq_f32(abs_v, eps);
+    counter += vaddvq_u32(cmp);
+  }
+  for (; i < size; ++i) {
+    if (fabsf(mat->values[i]) > EPSILON) {
+      counter++;
+    }
+  }
+#else
 #pragma omp parallel for reduction(+ : counter)
   for (size_t i = 0; i < size; i++) {
     if (fabs(mat->values[i]) > EPSILON) {
       counter++;
     }
   }
-
+#endif
   return (float)counter / (float)size;
 }
 
@@ -907,14 +936,26 @@ void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
     defined(USE_ACCELERATE_MPS)
-  // Using Apple's Accelerate framework (= BLAS)
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
               mat1->values, 1);
+#else
+#ifdef __ARM_NEON
+  size_t n = mat1->rows * mat1->cols;
+  size_t i = 0;
+  for (; i + 4 <= n; i += 4) {
+    float32x4_t a = vld1q_f32(&mat1->values[i]);
+    float32x4_t b = vld1q_f32(&mat2->values[i]);
+    vst1q_f32(&mat1->values[i], vaddq_f32(a, b));
+  }
+  for (; i < n; i++) {
+    mat1->values[i] += mat2->values[i];
+  }
 #else
 #pragma omp parallel for
   for (size_t i = 0; i < mat1->rows * mat1->cols; i++) {
     mat1->values[i] += mat2->values[i];
   }
+#endif
 #endif
 }
 
@@ -930,10 +971,23 @@ void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
               mat1->values, 1);
 #else
+#ifdef __ARM_NEON
+  size_t n = mat1->rows * mat1->cols;
+  size_t i = 0;
+  for (; i + 4 <= n; i += 4) {
+    float32x4_t a = vld1q_f32(&mat1->values[i]);
+    float32x4_t b = vld1q_f32(&mat2->values[i]);
+    vst1q_f32(&mat1->values[i], vsubq_f32(a, b));
+  }
+  for (; i < n; i++) {
+    mat1->values[i] -= mat2->values[i];
+  }
+#else
 #pragma omp parallel for
   for (size_t i = 0; i < mat1->rows * mat1->cols; i++) {
     mat1->values[i] -= mat2->values[i];
   }
+#endif
 #endif
 }
 
@@ -966,61 +1020,22 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
     defined(USE_ACCELERATE_MPS)
   cblas_sscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
 #else
+#ifdef __ARM_NEON
+  size_t n = mat->rows * mat->cols;
+  size_t i = 0;
+  float32x4_t s = vdupq_n_f32(scalar);
+  for (; i + 4 <= n; i += 4) {
+    float32x4_t v = vld1q_f32(&mat->values[i]);
+    vst1q_f32(&mat->values[i], vmulq_f32(v, s));
+  }
+  for (; i < n; ++i) {
+    mat->values[i] *= scalar;
+  }
+#else
 #pragma omp parallel for simd
   for (size_t i = 0; i < mat->rows * mat->cols; i++) {
     mat->values[i] *= scalar;
   }
 #endif
-}
-
-FloatMatrix *sm_linear_batch(const FloatMatrix *inputs,
-                             const FloatMatrix *weights,
-                             const FloatMatrix *biases) {
-  if (inputs == NULL || weights == NULL || biases == NULL) {
-    perror("Error: Null pointer input to sm_linear_batch.\n");
-    return NULL;
-  }
-
-  if (inputs->cols != weights->cols || biases->cols != weights->rows ||
-      biases->rows != 1) {
-    perror("Error: Dimension mismatch in sm_linear_batch.\n");
-    return NULL;
-  }
-
-  FloatMatrix *output = sm_create(inputs->rows, weights->rows);
-  if (!output)
-    return NULL;
-
-#ifdef USE_ACCELERATE
-  // output = inputs * weights^T
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans, (BLASINT)inputs->rows,
-              (BLASINT)weights->rows, (BLASINT)inputs->cols, 1.0f,
-              inputs->values, (BLASINT)inputs->cols, weights->values,
-              (BLASINT)weights->cols, 0.0f, output->values,
-              (BLASINT)output->cols);
-
-  // Add bias row-wise
-  size_t rows = out->rows;
-  size_t cols = out->cols;
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < rows; ++i)
-    for (size_t j = 0; j < cols; ++j)
-      out->values[i * cols + j] += bias->values[j];
-
-#else
-
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < inputs->rows; i++) {
-    for (size_t j = 0; j < weights->rows; j++) {
-      float sum = 0.0f;
-      for (size_t k = 0; k < inputs->cols; k++) {
-        sum += inputs->values[i * inputs->cols + k] *
-               weights->values[j * weights->cols + k];
-      }
-      output->values[i * output->cols + j] = sum + biases->values[j];
-    }
-  }
 #endif
-
-  return output;
 }
