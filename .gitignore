@@ -112,3 +112,7 @@ StyleGuide.md
 
 # exclude archive files
 _archive/*
+
+
+#sphinx
+/sphinx/*
