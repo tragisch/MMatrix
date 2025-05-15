@@ -619,6 +619,10 @@ void test_sm_solve_system_2x2(void) {
 
   // Prüfe, ob A · x ≈ b
   FloatMatrix *Ax = sm_multiply(A, x);
+  // printf("Ax: \n");
+  // sm_print(Ax);
+  // printf("b: \n");
+  // sm_print(b);
   TEST_ASSERT_TRUE(sm_is_equal(Ax, b));
 
   sm_destroy(A);
@@ -647,4 +651,41 @@ void test_sm_solve_system_4x4(void) {
   sm_destroy(x);
   sm_destroy(Ax);
 }
+
+void test_sm_normalize_rows_should_normalize_each_row_to_unit_L2_norm(void) {
+  FloatMatrix *mat = sm_create_with_values(
+      2, 3, (float[]){3.0f, 0.0f, 4.0f, 0.0f, 6.0f, 8.0f});
+
+  sm_inplace_normalize_rows(mat);
+
+  // Erste Zeile: sqrt(3^2 + 0^2 + 4^2) = 5.0
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 0, 0)); // 3/5
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.0f, sm_get(mat, 0, 1));
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 0, 2)); // 4/5
+
+  // Zweite Zeile: sqrt(0^2 + 6^2 + 8^2) = 10.0
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.0f, sm_get(mat, 1, 0));
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 1, 1)); // 6/10
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 1, 2)); // 8/10
+
+  sm_destroy(mat);
+}
+
+void test_sm_normalize_cols_should_normalize_each_column_to_unit_L2_norm(void) {
+  FloatMatrix *mat =
+      sm_create_with_values(2, 2, (float[]){3.0f, 0.0f, 4.0f, 5.0f});
+
+  sm_inplace_normalize_cols(mat);
+
+  // Erste Spalte: sqrt(3^2 + 4^2) = 5.0
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 0, 0)); // 3/5
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 1, 0)); // 4/5
+
+  // Zweite Spalte: sqrt(0^2 + 5^2) = 5.0
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.0f, sm_get(mat, 0, 1));
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 1.0f, sm_get(mat, 1, 1));
+
+  sm_destroy(mat);
+}
+
 //

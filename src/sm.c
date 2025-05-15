@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -38,7 +39,6 @@
 #define BLASINT int
 #include <cblas.h>
 #include <lapacke.h>
-
 #endif
 
 // Block size used for cache-optimized transpose operations
@@ -496,31 +496,77 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
     perror("Error: invalid matrix dimensions for solve.\n");
     return NULL;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
   int n = (int)A->rows;
   int nrhs = (int)b->cols;
   int lda = n;
-  int ldb = nrhs;
+  int ldb = n;
 
   FloatMatrix *a_copy = sm_clone(A);
   FloatMatrix *b_copy = sm_clone(b);
-  int *ipiv = (int *)malloc(n * sizeof(int));
+
+  float *a_col = sm_to_column_major(a_copy);
+  float *b_col = sm_to_column_major(b_copy);
+
+  int *ipiv = malloc(n * sizeof(int));
   int info;
 
-  // Use LAPACK_ROW_MAJOR for correct C layout
-  info = LAPACKE_sgesv(LAPACK_ROW_MAJOR, n, nrhs, a_copy->values, lda, ipiv,
-                       b_copy->values, ldb);
+  // Solve AX = B using LAPACK
+  sgesv_(&n, &nrhs, a_col, &lda, ipiv, b_col, &ldb, &info);
 
   free(ipiv);
+  free(a_col);
   sm_destroy(a_copy);
 
   if (info != 0) {
-    perror("Error: LAPACKE_sgesv failed.\n");
+    fprintf(stderr, "Error: sgesv_ failed with info = %d\n", info);
+    sm_destroy(b_copy);
+    free(b_col);
+    return NULL;
+  }
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < b_copy->rows; ++i) {
+    for (size_t j = 0; j < b_copy->cols; ++j) {
+      b_copy->values[i * b_copy->cols + j] = b_col[j * b_copy->rows + i];
+    }
+  }
+
+  free(b_col);
+  return b_copy;
+
+#elif defined(USE_OPENBLAS)
+
+  int n = (int)A->rows;
+  int nrhs = (int)b->cols;
+  int lda = (int)A->cols;
+  int ldb = (int)b->cols;
+
+  FloatMatrix *a_copy = sm_clone(A);
+  FloatMatrix *b_copy = sm_clone(b);
+
+  int *ipiv = malloc(n * sizeof(int));
+  int info;
+
+  info = LAPACKE_sgesv(LAPACK_ROW_MAJOR,
+                       n,    // number of equations
+                       nrhs, // number of right-hand sides
+                       a_copy->values,
+                       lda, // leading dimension of A (= cols in row-major)
+                       ipiv, b_copy->values,
+                       ldb // leading dimension of B (= cols in row-major)
+  );
+
+  free(ipiv);
+
+  if (info != 0) {
+    fprintf(stderr, "Error: LAPACKE_sgesv failed with info = %d\n", info);
+    sm_destroy(a_copy);
     sm_destroy(b_copy);
     return NULL;
   }
 
+  sm_destroy(a_copy);
   return b_copy;
 #else
   size_t n = A->rows;
@@ -1242,3 +1288,76 @@ FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   sm_inplace_div(result, mat2);
   return result;
 }
+
+void sm_inplace_normalize_rows(FloatMatrix *mat) {
+  if (!mat || mat->rows == 0 || mat->cols == 0)
+    return;
+
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+  for (size_t i = 0; i < rows; ++i) {
+    float *row = &mat->values[i * cols];
+    float norm;
+    vDSP_svesq(row, 1, &norm, cols);
+    norm = sqrtf(norm);
+    if (norm > 1e-8f) {
+      float inv = 1.0f / norm;
+      vDSP_vsmul(row, 1, &inv, row, 1, cols);
+    }
+  }
+#else
+#pragma omp parallel for
+  for (size_t i = 0; i < rows; ++i) {
+    float norm = 0.0f;
+    for (size_t j = 0; j < cols; ++j) {
+      float val = mat->values[i * cols + j];
+      norm += val * val;
+    }
+    norm = sqrtf(norm);
+    if (norm > 1e-8f) {
+      for (size_t j = 0; j < cols; ++j) {
+        mat->values[i * cols + j] /= norm;
+      }
+    }
+  }
+#endif
+}
+
+// Normalize each column of the matrix to unit norm (L2)
+void sm_inplace_normalize_cols(FloatMatrix *mat) {
+  if (!mat || mat->rows == 0 || mat->cols == 0)
+    return;
+
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+  for (size_t j = 0; j < cols; ++j) {
+    float norm;
+    vDSP_svesq(&mat->values[j], cols, &norm, rows);
+    norm = sqrtf(norm);
+    if (norm > 1e-8f) {
+      float inv = 1.0f / norm;
+      vDSP_vsmul(&mat->values[j], cols, &inv, &mat->values[j], cols, rows);
+    }
+  }
+#else
+#pragma omp parallel for
+  for (size_t j = 0; j < cols; ++j) {
+    float norm = 0.0f;
+    for (size_t i = 0; i < rows; ++i) {
+      float val = mat->values[i * cols + j];
+      norm += val * val;
+    }
+    norm = sqrtf(norm);
+    if (norm > 1e-8f) {
+      for (size_t i = 0; i < rows; ++i) {
+        mat->values[i * cols + j] /= norm;
+      }
+    }
+  }
+#endif
+}
+//

@@ -85,6 +85,8 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar);
 void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
                                      const FloatMatrix *mat2);
 void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2);
+void sm_inplace_normalize_rows(FloatMatrix *mat);
+void sm_inplace_normalize_cols(FloatMatrix *mat);
 
 /**************************************/
 /*       Matrix Properties            */
