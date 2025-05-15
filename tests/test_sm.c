@@ -351,6 +351,36 @@ void test_sm_multiply(void) {
   sm_destroy(expected_mat);
 }
 
+void test_sm_multiply_5x5(void) {
+  float values1[5][5] = {{1.0f, 2.0f, 3.0f, 4.0f, 5.0f},
+                         {6.0f, 7.0f, 8.0f, 9.0f, 10.0f},
+                         {11.0f, 12.0f, 13.0f, 14.0f, 15.0f},
+                         {16.0f, 17.0f, 18.0f, 19.0f, 20.0f},
+                         {21.0f, 22.0f, 23.0f, 24.0f, 25.0f}};
+
+  float values2[5][5] = {{1.0f, 2.0f, 3.0f, 4.0f, 5.0f},
+                         {6.0f, 7.0f, 8.0f, 9.0f, 10.0f},
+                         {11.0f, 12.0f, 13.0f, 14.0f, 15.0f},
+                         {16.0f, 17.0f, 18.0f, 19.0f, 20.0f},
+                         {21.0f, 22.0f, 23.0f, 24.0f, 25.0f}};
+
+  float expected[5][5] = {{215.f, 230.f, 245.f, 260.f, 275.f},
+                          {490.f, 530.f, 570.f, 610.f, 650.f},
+                          {765.f, 830.f, 895.f, 960.f, 1025.f},
+                          {1040.f, 1130.f, 1220.f, 1310.f, 1400.f},
+                          {1315.f, 1430.f, 1545.f, 1660.f, 1775.f}};
+
+  FloatMatrix *mat1 = sm_from_array_static(5, 5, values1);
+  FloatMatrix *mat2 = sm_from_array_static(5, 5, values2);
+  FloatMatrix *result = sm_multiply(mat1, mat2);
+  FloatMatrix *expected_mat = sm_from_array_static(5, 5, expected);
+  TEST_ASSERT_TRUE(sm_is_equal(result, expected_mat));
+  sm_destroy(mat1);
+  sm_destroy(mat2);
+  sm_destroy(result);
+  sm_destroy(expected_mat);
+}
+
 void test_sm_multiply_by_number(void) {
   float values[2][3] = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
   float expected[2][3] = {{2.0f, 4.0f, 6.0f}, {8.0f, 10.0f, 12.0f}};
@@ -361,6 +391,29 @@ void test_sm_multiply_by_number(void) {
   sm_destroy(mat);
   sm_destroy(result);
   sm_destroy(expected_mat);
+}
+
+void test_sm_elementwise_multiply_2x3(void) {
+  float a_values[2][3] = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
+  float b_values[2][3] = {{7.0f, 8.0f, 9.0f}, {10.0f, 11.0f, 12.0f}};
+  float expected_values[2][3] = {{7.0f, 16.0f, 27.0f}, {40.0f, 55.0f, 72.0f}};
+
+  FloatMatrix *a = sm_from_array_static(2, 3, a_values);
+  FloatMatrix *b = sm_from_array_static(2, 3, b_values);
+  FloatMatrix *result = sm_elementwise_multiply(a, b);
+
+  TEST_ASSERT_NOT_NULL(result);
+  for (size_t i = 0; i < 2; ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      float expected = expected_values[i][j];
+      float actual = sm_get(result, i, j);
+      TEST_ASSERT_FLOAT_WITHIN(1e-5, expected, actual);
+    }
+  }
+
+  sm_destroy(a);
+  sm_destroy(b);
+  sm_destroy(result);
 }
 
 void test_sm_transpose(void) {
@@ -504,39 +557,94 @@ void sm_back_substitution(const FloatMatrix *mat, float *solution) {
   }
 }
 
-// void test_sm_linear_batch_should_multiply_and_add_bias(void) {
-//   float input[2][3] = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
-//   float weights[2][3] = {{1.0f, 0.0f, -1.0f}, {0.5f, 0.5f, 0.5f}};
-//   float bias[1][2] = {{1.0f, 2.0f}};
-//   float expected[2][2] = {
-//       {1.0f + (1 * 1 + 2 * 0 + 3 * -1), 2.0f + (1 * 0.5 + 2 * 0.5 + 3 *
-//       0.5)}, {1.0f + (4 * 1 + 5 * 0 + 6 * -1), 2.0f + (4 * 0.5 + 5 * 0.5 + 6
-//       * 0.5)}};
+void test_sm_div_basic(void) {
+  float a_data[2][3] = {{10.0f, 20.0f, 30.0f}, {40.0f, 50.0f, 60.0f}};
+  float b_data[2][3] = {{2.0f, 4.0f, 5.0f}, {10.0f, 10.0f, 12.0f}};
+  float expected_data[2][3] = {{5.0f, 5.0f, 6.0f}, {4.0f, 5.0f, 5.0f}};
 
-//   FloatMatrix *inputs = sm_create_from_2D_array(2, 3, input);
-//   FloatMatrix *W = sm_create_from_2D_array(2, 3, weights);
-//   FloatMatrix *b = sm_create_from_2D_array(1, 2, bias);
+  FloatMatrix *A = sm_from_array_static(2, 3, a_data);
+  FloatMatrix *B = sm_from_array_static(2, 3, b_data);
+  FloatMatrix *C = sm_div(A, B);
 
-//   FloatMatrix *output = sm_linear_batch(inputs, W, b);
-//   FloatMatrix *expected_mat = sm_create_from_2D_array(2, 2, expected);
+  TEST_ASSERT_NOT_NULL(C);
+  for (size_t i = 0; i < 2; ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      TEST_ASSERT_FLOAT_WITHIN(1e-5f, expected_data[i][j], sm_get(C, i, j));
+    }
+  }
 
-//   TEST_ASSERT_TRUE(sm_is_equal(output, expected_mat));
+  sm_destroy(A);
+  sm_destroy(B);
+  sm_destroy(C);
+}
+void test_sm_lu_decompose_identity(void) {
+  FloatMatrix *A = sm_create_identity(3);
+  size_t pivot[3];
+  bool success = sm_lu_decompose(A, pivot);
+  TEST_ASSERT_TRUE(success);
 
-//   sm_destroy(inputs);
-//   sm_destroy(W);
-//   sm_destroy(b);
-//   sm_destroy(output);
-//   sm_destroy(expected_mat);
-// }
+  // L und U rekonstruieren
+  FloatMatrix *L = sm_create(3, 3);
+  FloatMatrix *U = sm_create(3, 3);
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j < 3; ++j) {
+      if (i > j)
+        L->values[i * 3 + j] = A->values[i * 3 + j];
+      else if (i == j) {
+        L->values[i * 3 + j] = 1.0f;
+        U->values[i * 3 + j] = A->values[i * 3 + j];
+      } else
+        U->values[i * 3 + j] = A->values[i * 3 + j];
+    }
+  }
 
-// // Helper function to create a matrix from a flat array
-// FloatMatrix *sm_create_from_flat_array(size_t rows, size_t cols,
-//                                        const float *flat) {
-//   FloatMatrix *mat = sm_create(rows, cols);
-//   if (!mat)
-//     return NULL;
-//   memcpy(mat->values, flat, sizeof(float) * rows * cols);
-//   return mat;
-// }
+  FloatMatrix *LU = sm_multiply(L, U);
+  FloatMatrix *I1 = sm_create_identity(3);
+  TEST_ASSERT_TRUE(sm_is_equal(LU, I1));
 
+  sm_destroy(A);
+  sm_destroy(L);
+  sm_destroy(U);
+  sm_destroy(LU);
+  sm_destroy(I1);
+}
+
+void test_sm_solve_system_2x2(void) {
+  float A_data[2][2] = {{2.0f, 1.0f}, {5.0f, 7.0f}};
+  float b_data[2][1] = {{11.0f}, {13.0f}};
+
+  FloatMatrix *A = sm_from_array_static(2, 2, A_data);
+  FloatMatrix *b = sm_from_array_static(2, 1, b_data);
+  FloatMatrix *x = sm_solve_system(A, b);
+
+  // Prüfe, ob A · x ≈ b
+  FloatMatrix *Ax = sm_multiply(A, x);
+  TEST_ASSERT_TRUE(sm_is_equal(Ax, b));
+
+  sm_destroy(A);
+  sm_destroy(b);
+  sm_destroy(x);
+  sm_destroy(Ax);
+}
+
+void test_sm_solve_system_4x4(void) {
+  float A_data[4][4] = {{2.0f, 3.0f, 4.0f, 1.0f},
+                        {2.0f, 2.0f, 1.0f, 2.0f},
+                        {1.0f, 1.0f, 1.0f, 2.0f},
+                        {5.0f, 0.5f, 2.0f, 1.0f}};
+  float b_data[4][1] = {{5.0f}, {3.0f}, {4.0f}, {0.0f}};
+
+  FloatMatrix *A = sm_from_array_static(4, 4, A_data);
+  FloatMatrix *b = sm_from_array_static(4, 1, b_data);
+  FloatMatrix *x = sm_solve_system(A, b);
+
+  // Prüfe, ob A · x ≈ b
+  FloatMatrix *Ax = sm_multiply(A, x);
+  TEST_ASSERT_TRUE(sm_is_equal(Ax, b));
+
+  sm_destroy(A);
+  sm_destroy(b);
+  sm_destroy(x);
+  sm_destroy(Ax);
+}
 //

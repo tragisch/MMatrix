@@ -82,3 +82,4 @@ void mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
   // Copy result back to CPU
   memcpy(result, matrixC.data.contents, rows1 * cols2 * sizeof(float));
 }
+//

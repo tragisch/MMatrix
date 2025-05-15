@@ -68,8 +68,12 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat);
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2);
+FloatMatrix *sm_elementwise_multiply(const FloatMatrix *mat1,
+                                     const FloatMatrix *mat2);
 FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number);
 FloatMatrix *sm_inverse(const FloatMatrix *mat);
+FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2);
+FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b);
 
 /**************************************/
 /*        Matrix In-Place Ops         */
@@ -78,6 +82,9 @@ void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2);
 void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2);
 void sm_inplace_square_transpose(FloatMatrix *mat);
 void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar);
+void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
+                                     const FloatMatrix *mat2);
+void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2);
 
 /**************************************/
 /*       Matrix Properties            */
@@ -96,6 +103,7 @@ bool sm_is_square(const FloatMatrix *mat);
 bool sm_is_vector(const FloatMatrix *mat);
 bool sm_is_equal_size(const FloatMatrix *mat1, const FloatMatrix *mat2);
 bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2);
+bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order);
 
 /**************************************/
 /*         Matrix Utilities           */

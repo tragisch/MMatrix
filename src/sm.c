@@ -403,6 +403,59 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   return product;
 }
 
+void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
+                                     const FloatMatrix *mat2) {
+  if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    return;
+  }
+
+  size_t size = mat1->rows * mat1->cols;
+
+#if defined(USE_ACCELERATE_MPS) || defined(USE_ACCELERATE)
+
+  vDSP_vmul(mat1->values, 1, mat2->values, 1, mat1->values, 1, size);
+  return;
+#else
+
+  float *a = mat1->values;
+  float *b = mat2->values;
+
+#ifdef __ARM_NEON
+  size_t i = 0;
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t va = vld1q_f32(&a[i]);
+    float32x4_t vb = vld1q_f32(&b[i]);
+    float32x4_t vc = vmulq_f32(va, vb);
+    vst1q_f32(&a[i], vc);
+  }
+  for (; i < size; i++) {
+    a[i] *= b[i];
+  }
+#else
+#pragma omp parallel for
+  for (size_t i = 0; i < size; i++) {
+    a[i] *= b[i];
+  }
+#endif
+#endif
+}
+
+FloatMatrix *sm_elementwise_multiply(const FloatMatrix *mat1,
+                                     const FloatMatrix *mat2) {
+  if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    return NULL;
+  }
+
+  FloatMatrix *result = sm_clone(mat1);
+  if (!result)
+    return NULL;
+
+  sm_inplace_elementwise_multiply(result, mat2);
+  return result;
+}
+
 FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number) {
   FloatMatrix *product = sm_clone(mat);
   sm_inplace_multiply_by_number(product, number);
@@ -436,6 +489,87 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat) {
   }
 
   return transposed;
+}
+
+FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
+  if (!A || !b || A->rows != A->cols || A->rows != b->rows) {
+    perror("Error: invalid matrix dimensions for solve.\n");
+    return NULL;
+  }
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+    defined(USE_ACCELERATE_MPS)
+  int n = (int)A->rows;
+  int nrhs = (int)b->cols;
+  int lda = n;
+  int ldb = nrhs;
+
+  FloatMatrix *a_copy = sm_clone(A);
+  FloatMatrix *b_copy = sm_clone(b);
+  int *ipiv = (int *)malloc(n * sizeof(int));
+  int info;
+
+  // Use LAPACK_ROW_MAJOR for correct C layout
+  info = LAPACKE_sgesv(LAPACK_ROW_MAJOR, n, nrhs, a_copy->values, lda, ipiv,
+                       b_copy->values, ldb);
+
+  free(ipiv);
+  sm_destroy(a_copy);
+
+  if (info != 0) {
+    perror("Error: LAPACKE_sgesv failed.\n");
+    sm_destroy(b_copy);
+    return NULL;
+  }
+
+  return b_copy;
+#else
+  size_t n = A->rows;
+  size_t rhs = b->cols;
+
+  FloatMatrix *lu = sm_clone(A);
+  FloatMatrix *x = sm_clone(b);
+  size_t *pivot_order = (size_t *)malloc(n * sizeof(size_t));
+
+  if (!sm_lu_decompose(lu, pivot_order)) {
+    perror("Error: LU decomposition failed.\n");
+    sm_destroy(lu);
+    sm_destroy(x);
+    free(pivot_order);
+    return NULL;
+  }
+
+  for (size_t i = 0; i < n; ++i) {
+    if (pivot_order[i] != i) {
+      for (size_t j = 0; j < rhs; ++j) {
+        float tmp = x->values[i * rhs + j];
+        x->values[i * rhs + j] = x->values[pivot_order[i] * rhs + j];
+        x->values[pivot_order[i] * rhs + j] = tmp;
+      }
+    }
+  }
+#pragma omp parallel for
+  for (size_t k = 0; k < rhs; ++k) {
+    for (size_t i = 1; i < n; ++i) {
+      float sum = x->values[i * rhs + k];
+      for (size_t j = 0; j < i; ++j) {
+        sum -= lu->values[i * n + j] * x->values[j * rhs + k];
+      }
+      x->values[i * rhs + k] = sum;
+    }
+
+    for (ssize_t i = n - 1; i >= 0; --i) {
+      float sum = x->values[i * rhs + k];
+      for (size_t j = i + 1; j < n; ++j) {
+        sum -= lu->values[i * n + j] * x->values[j * rhs + k];
+      }
+      x->values[i * rhs + k] = sum / lu->values[i * n + i];
+    }
+  }
+
+  sm_destroy(lu);
+  free(pivot_order);
+  return x;
+#endif
 }
 
 bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2) {
@@ -499,11 +633,9 @@ FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   return difference;
 }
 
-#if !defined(USE_ACCELERATE) && !defined(USE_OPENBLAS) &&                      \
-    !defined(USE_ACCELERATE_MPS)
 // Use TOLERANCE for numerical zero threshold in LU decomposition
 #define TOLERANCE EPSILON
-static bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
+bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
   size_t n = mat->rows;
   if (mat->cols != n)
     return false;
@@ -547,7 +679,6 @@ static bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
 
   return true;
 }
-#endif
 
 float sm_determinant(const FloatMatrix *mat) {
   if (mat->cols != mat->rows) {
@@ -1060,4 +1191,54 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
   }
 #endif
 #endif
+}
+
+// In-place division
+void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
+  if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    return;
+  }
+
+  size_t size = mat1->rows * mat1->cols;
+
+  float *a = mat1->values;
+  float *b = mat2->values;
+
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+  vDSP_vdiv(b, 1, a, 1, a, 1, size);
+#else
+
+#ifdef __ARM_NEON
+  size_t i = 0;
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t va = vld1q_f32(&a[i]);
+    float32x4_t vb = vld1q_f32(&b[i]);
+    float32x4_t vc = vdivq_f32(va, vb);
+    vst1q_f32(&a[i], vc);
+  }
+  for (; i < size; i++) {
+    a[i] /= b[i];
+  }
+#else
+#pragma omp parallel for
+  for (size_t i = 0; i < size; i++) {
+    a[i] /= b[i];
+  }
+#endif
+#endif
+}
+
+FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2) {
+  if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    return NULL;
+  }
+
+  FloatMatrix *result = sm_clone(mat1);
+  if (!result)
+    return NULL;
+
+  sm_inplace_div(result, mat2);
+  return result;
 }
