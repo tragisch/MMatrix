@@ -118,7 +118,7 @@ float *sm_to_column_major(const FloatMatrix *mat) {
 /*      Public Functions      */
 /*******************************/
 
-char *sm_active_library() { return (char *)ACTIVE_LIB; }
+const char *sm_active_library() { return ACTIVE_LIB; }
 
 FloatMatrix *sm_create_empty() {
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));

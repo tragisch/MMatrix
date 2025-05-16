@@ -28,8 +28,14 @@ float nm_mse_loss(const FloatMatrix *predicted, const FloatMatrix *target);
 float nm_cross_entropy_loss(const FloatMatrix *predicted,
                             const FloatMatrix *target);
 
+// inplace operations
+void nm_inplace_add_rowwise(FloatMatrix *mat, const FloatMatrix *row);
+
 // Forward operations
 FloatMatrix *nm_linear(const FloatMatrix *input, const FloatMatrix *weights,
                        const FloatMatrix *bias);
+
+const char *nm_active_library(void);
+;
 
 #endif

@@ -111,7 +111,7 @@ bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order);
 /*         Matrix Utilities           */
 /**************************************/
 void sm_print(const FloatMatrix *matrix);
-char *sm_active_library();
+const char *sm_active_library();
 void sm_destroy(FloatMatrix *mat);
 
 #endif // sm_H
