@@ -1,7 +1,11 @@
+
+
 #include "nm.h"
 #include <float.h>
+#include <log.h>
 #include <math.h>
 #include <omp.h>
+#include <stddef.h>
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
@@ -22,7 +26,7 @@
 #define ACTIVE_LIB "OpenBLAS"
 #else
 #if defined(__ARM_NEON)
-#define ACTIVE_LIB "BLAS, ARM NEON"
+#define ACTIVE_LIB "No BLAS, ARM NEON"
 #else
 #define ACTIVE_LIB "No BLAS"
 #endif
@@ -72,14 +76,128 @@ void nm_apply_relu(FloatMatrix *mat) {
   }
 
 #else
-  if (size > 1000000) {
+  if (n > 1000000) {
 #pragma omp parallel for simd
   } else {
 #pragma omp simd
   }
-  for (size_t i = 0; i < size; ++i) {
+  for (size_t i = 0; i < n; ++i) {
     float x = mat->values[i];
     mat->values[i] = x > 0.0f ? x : 0.0f;
+  }
+#endif
+}
+
+void nm_d_relu(const FloatMatrix *activation, FloatMatrix *grad_output) {
+  if (!activation || !grad_output || activation->rows != grad_output->rows ||
+      activation->cols != grad_output->cols)
+    return;
+
+  size_t size = activation->rows * activation->cols;
+  const float *a = activation->values;
+  float *g = grad_output->values;
+
+#if defined(__ARM_NEON)
+  size_t i = 0;
+  float32x4_t zero = vdupq_n_f32(0.0f);
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t act = vld1q_f32(&a[i]);
+    float32x4_t grad = vld1q_f32(&g[i]);
+    uint32x4_t mask = vcgtq_f32(act, zero);
+    float32x4_t result = vbslq_f32(mask, grad, zero);
+    vst1q_f32(&g[i], result);
+  }
+  for (; i < size; ++i) {
+    g[i] = (a[i] > 0.0f) ? g[i] : 0.0f;
+  }
+
+#elif defined(USE_ACCELERATE)
+  for (size_t i = 0; i < size; ++i) {
+    g[i] = (a[i] > 0.0f) ? g[i] : 0.0f;
+  }
+
+#else
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    g[i] = (a[i] > 0.0f) ? g[i] : 0.0f;
+  }
+#endif
+}
+
+void nm_d_sigmoid(const FloatMatrix *activation, FloatMatrix *grad_output) {
+  if (!activation || !grad_output || activation->rows != grad_output->rows ||
+      activation->cols != grad_output->cols)
+    return;
+
+  size_t size = activation->rows * activation->cols;
+  const float *a = activation->values;
+  float *g = grad_output->values;
+
+#if defined(__ARM_NEON)
+  size_t i = 0;
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t sig = vld1q_f32(&a[i]);
+    float32x4_t grad = vld1q_f32(&g[i]);
+    float32x4_t one = vdupq_n_f32(1.0f);
+    float32x4_t ds = vmulq_f32(sig, vsubq_f32(one, sig)); // s * (1 - s)
+    vst1q_f32(&g[i], vmulq_f32(ds, grad));
+  }
+  for (; i < size; ++i) {
+    float s = a[i];
+    g[i] *= s * (1.0f - s);
+  }
+
+#elif defined(USE_ACCELERATE)
+  for (size_t i = 0; i < size; ++i) {
+    float s = a[i];
+    g[i] *= s * (1.0f - s);
+  }
+
+#else
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    float s = a[i];
+    g[i] *= s * (1.0f - s);
+  }
+#endif
+}
+
+void nm_d_tanh(const FloatMatrix *activation, FloatMatrix *grad_output) {
+  if (!activation || !grad_output || activation->rows != grad_output->rows ||
+      activation->cols != grad_output->cols)
+    return;
+
+  size_t size = activation->rows * activation->cols;
+  const float *a = activation->values;
+  float *g = grad_output->values;
+
+#if defined(__ARM_NEON)
+  size_t i = 0;
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t tanh_vals = vld1q_f32(&a[i]);
+    float32x4_t grad_vals = vld1q_f32(&g[i]);
+    float32x4_t one = vdupq_n_f32(1.0f);
+    float32x4_t square = vmulq_f32(tanh_vals, tanh_vals);
+    float32x4_t dtanh = vsubq_f32(one, square); // 1 - tanh^2(x)
+    float32x4_t result = vmulq_f32(grad_vals, dtanh);
+    vst1q_f32(&g[i], result);
+  }
+  for (; i < size; ++i) {
+    float t = a[i];
+    g[i] *= (1.0f - t * t);
+  }
+
+#elif defined(USE_ACCELERATE)
+  for (size_t i = 0; i < size; ++i) {
+    float t = a[i];
+    g[i] *= (1.0f - t * t);
+  }
+
+#else
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    float t = a[i];
+    g[i] *= (1.0f - t * t);
   }
 #endif
 }
@@ -198,6 +316,47 @@ void nm_inplace_add_rowwise(FloatMatrix *mat, const FloatMatrix *row) {
     }
   }
 #endif
+}
+
+FloatMatrix *nm_sum_rows(const FloatMatrix *mat) {
+  if (!mat || !mat->values)
+    return NULL;
+
+  FloatMatrix *result = sm_create_zeros(1, mat->cols);
+  if (!result)
+    return NULL;
+
+  float *out = result->values;
+  const float *in = mat->values;
+
+#if defined(__ARM_NEON)
+  size_t cols = mat->cols;
+  for (size_t j = 0; j + 4 <= cols; j += 4) {
+    float32x4_t sum_vec = vdupq_n_f32(0.0f);
+    for (size_t i = 0; i < mat->rows; ++i) {
+      float32x4_t vals = vld1q_f32(&in[i * cols + j]);
+      sum_vec = vaddq_f32(sum_vec, vals);
+    }
+    vst1q_f32(&out[j], sum_vec);
+  }
+  for (size_t j = (cols & ~3UL); j < cols; ++j) {
+    for (size_t i = 0; i < mat->rows; ++i) {
+      out[j] += in[i * cols + j];
+    }
+  }
+
+#else
+#pragma omp parallel for
+  for (size_t j = 0; j < mat->cols; ++j) {
+    float sum = 0.0f;
+    for (size_t i = 0; i < mat->rows; ++i) {
+      sum += in[i * mat->cols + j];
+    }
+    out[j] = sum;
+  }
+#endif
+
+  return result;
 }
 
 FloatMatrix *nm_linear(const FloatMatrix *input, const FloatMatrix *weights,
@@ -439,4 +598,279 @@ float nm_mse_loss(const FloatMatrix *predicted, const FloatMatrix *target) {
 #endif
 
   return loss / (float)size;
+}
+
+void nm_d_softmax_crossentropy(const FloatMatrix *predicted,
+                               const FloatMatrix *target,
+                               FloatMatrix *grad_output) {
+  if (!predicted || !target || !grad_output)
+    return;
+  if (predicted->rows != target->rows || predicted->cols != target->cols ||
+      predicted->rows != grad_output->rows ||
+      predicted->cols != grad_output->cols)
+    return;
+
+  size_t size = predicted->rows * predicted->cols;
+  const float *p = predicted->values;
+  const float *t = target->values;
+  float *g = grad_output->values;
+
+#if defined(__ARM_NEON)
+  size_t i = 0;
+  for (; i + 4 <= size; i += 4) {
+    float32x4_t v_p = vld1q_f32(&p[i]);
+    float32x4_t v_t = vld1q_f32(&t[i]);
+    vst1q_f32(&g[i], vsubq_f32(v_p, v_t));
+  }
+  for (; i < size; ++i) {
+    g[i] = p[i] - t[i];
+  }
+
+#elif defined(USE_ACCELERATE)
+  vDSP_vsub(t, 1, p, 1, g, 1, size);
+  for (size_t i = 0; i < size; ++i) {
+    g[i] = -g[i];
+  }
+
+#else
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    g[i] = p[i] - t[i];
+  }
+#endif
+}
+
+FloatMatrix *dense_forward(DenseLayer *layer, const FloatMatrix *input) {
+  if (!layer || !input || !layer->weights || !layer->bias || !layer->activation)
+    return NULL;
+
+  FloatMatrix *z = nm_linear(input, layer->weights, layer->bias);
+  if (!z)
+    return NULL;
+
+  layer->activation(z);
+  return z;
+}
+
+void dense_backward(DenseLayer *layer, const FloatMatrix *input,
+                    const FloatMatrix *activation, FloatMatrix *grad_output,
+                    float learning_rate) {
+  if (!layer || !input || !activation || !grad_output || !layer->weights ||
+      !layer->bias || !layer->activation_derivative)
+    return;
+
+  // Ableitung Aktivierung anwenden
+  if (layer->activation_derivative != NULL) {
+    layer->activation_derivative(activation, grad_output);
+  }
+
+  // Gradienten berechnen
+  FloatMatrix *input_T = sm_transpose(input);
+  FloatMatrix *grad_weights = sm_multiply(input_T, grad_output);
+  sm_destroy(input_T);
+
+  // Bias-Gradient = Zeilensumme von grad_output
+  FloatMatrix *grad_bias = nm_sum_rows(grad_output);
+
+// Update
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < layer->weights->rows; ++i) {
+    for (size_t j = 0; j < layer->weights->cols; ++j) {
+      layer->weights->values[i * layer->weights->cols + j] -=
+          learning_rate * grad_weights->values[i * grad_weights->cols + j];
+    }
+  }
+
+  for (size_t j = 0; j < layer->bias->cols; ++j) {
+    layer->bias->values[j] -= learning_rate * grad_bias->values[j];
+  }
+
+  sm_destroy(grad_weights);
+  sm_destroy(grad_bias);
+}
+
+void train_one_epoch(
+    NeuralNetwork *net,
+    const FloatMatrix *X,      // Input:  (num_samples x input_dim)
+    const FloatMatrix *y_true, // Target: (num_samples x num_classes)
+    size_t batch_size, float learning_rate) {
+  size_t num_samples = X->rows;
+  size_t num_batches = (num_samples + batch_size - 1) / batch_size;
+
+  for (size_t batch = 0; batch < num_batches; ++batch) {
+    size_t start = batch * batch_size;
+    size_t end =
+        (start + batch_size < num_samples) ? (start + batch_size) : num_samples;
+    // size_t actual_batch_size = end - start;
+
+    // Slice input and target batch
+    FloatMatrix *X_batch = sm_slice_rows(X, start, end);
+    FloatMatrix *y_batch = sm_slice_rows(y_true, start, end);
+
+    // Forward pass
+    FloatMatrix **activations =
+        (FloatMatrix **)malloc((net->num_layers + 1) * sizeof(FloatMatrix *));
+    activations[0] = X_batch;
+    for (size_t i = 0; i < net->num_layers; ++i) {
+      activations[i + 1] = dense_forward(&net->layers[i], activations[i]);
+    }
+
+    // Output layer error (Softmax + CrossEntropy loss assumed)
+    FloatMatrix *grad = sm_clone(activations[net->num_layers]);
+    nm_d_softmax_crossentropy(activations[net->num_layers], y_batch, grad);
+
+    // Backward pass
+    for (ssize_t i = net->num_layers - 1; i >= 0; --i) {
+      dense_backward(&net->layers[i],
+                     activations[i],     // input to this layer
+                     activations[i + 1], // output of this layer
+                     grad, learning_rate);
+
+      if (i > 0) {
+        FloatMatrix *W_T = sm_transpose(net->layers[i].weights);
+        FloatMatrix *new_grad = sm_multiply(grad, W_T);
+        sm_destroy(W_T);
+        sm_destroy(grad);
+        grad = new_grad;
+      }
+    }
+
+    // Cleanup
+    sm_destroy(grad);
+    for (size_t i = 1; i <= net->num_layers; ++i) {
+      sm_destroy(activations[i]);
+    }
+    free(activations);
+    sm_destroy(X_batch);
+    sm_destroy(y_batch);
+  }
+}
+
+//
+
+// Predict function: Forward pass through all layers of the network
+FloatMatrix *predict(const NeuralNetwork *net, const FloatMatrix *input) {
+  if (!net || !input || net->num_layers == 0)
+    return NULL;
+
+  FloatMatrix *current = sm_clone(input);
+  for (size_t i = 0; i < net->num_layers; ++i) {
+    FloatMatrix *next = dense_forward(&net->layers[i], current);
+    sm_destroy(current);
+    current = next;
+  }
+  return current; // output layer result
+}
+
+FloatMatrix *nm_argmax_rowwise(const FloatMatrix *mat) {
+  if (!mat || !mat->values)
+    return NULL;
+
+  FloatMatrix *result = sm_create(mat->rows, 1);
+  if (!result)
+    return NULL;
+
+#pragma omp parallel for
+  for (size_t i = 0; i < mat->rows; ++i) {
+    float max_val = mat->values[i * mat->cols];
+    size_t max_idx = 0;
+    for (size_t j = 1; j < mat->cols; ++j) {
+      float val = mat->values[i * mat->cols + j];
+      if (val > max_val) {
+        max_val = val;
+        max_idx = j;
+      }
+    }
+    result->values[i] = (float)max_idx;
+  }
+
+  return result;
+}
+
+//
+void train(NeuralNetwork *net, const FloatMatrix *X, const FloatMatrix *Y,
+           size_t batch_size, float learning_rate, size_t epochs,
+           bool verbose) {
+  for (size_t epoch = 0; epoch < epochs; ++epoch) {
+    train_one_epoch(net, X, Y, batch_size, learning_rate);
+
+    if (verbose) {
+      FloatMatrix *out = predict(net, X);
+      float loss = nm_cross_entropy_loss(out, Y);
+      float acc = accuracy_score(out, Y);
+      log_info("Epoch %zu/%zu - Loss: %.5f - Accuracy: %.2f%%", epoch + 1,
+               epochs, loss, acc * 100.0f);
+      sm_destroy(out);
+    }
+  }
+}
+
+float accuracy_score(const FloatMatrix *predicted, const FloatMatrix *target) {
+  if (!predicted || !target || predicted->rows != target->rows ||
+      predicted->cols != target->cols)
+    return -1.0f;
+
+  FloatMatrix *pred_labels = nm_argmax_rowwise(predicted);
+  FloatMatrix *true_labels = nm_argmax_rowwise(target);
+
+  if (!pred_labels || !true_labels)
+    return -1.0f;
+
+  size_t correct = 0;
+  for (size_t i = 0; i < predicted->rows; ++i) {
+    if ((int)sm_get(pred_labels, i, 0) == (int)sm_get(true_labels, i, 0)) {
+      ++correct;
+    }
+  }
+
+  sm_destroy(pred_labels);
+  sm_destroy(true_labels);
+
+  return (float)correct / predicted->rows;
+}
+// Binary save/load for network weights
+bool save_network_bin(const char *path, const NeuralNetwork *net) {
+  FILE *f = fopen(path, "wb");
+  if (!f || !net) return false;
+
+  fwrite(&net->num_layers, sizeof(size_t), 1, f);
+  for (size_t l = 0; l < net->num_layers; ++l) {
+    DenseLayer *layer = &net->layers[l];
+    size_t w_rows = layer->weights->rows;
+    size_t w_cols = layer->weights->cols;
+    fwrite(&w_rows, sizeof(size_t), 1, f);
+    fwrite(&w_cols, sizeof(size_t), 1, f);
+    fwrite(layer->weights->values, sizeof(float), w_rows * w_cols, f);
+    fwrite(layer->bias->values, sizeof(float), layer->bias->cols, f);
+  }
+
+  fclose(f);
+  return true;
+}
+
+bool load_network_bin(const char *path, NeuralNetwork *net) {
+  FILE *f = fopen(path, "rb");
+  if (!f || !net) return false;
+
+  fread(&net->num_layers, sizeof(size_t), 1, f);
+  net->layers = calloc(net->num_layers, sizeof(DenseLayer));
+  if (!net->layers) return false;
+
+  for (size_t l = 0; l < net->num_layers; ++l) {
+    DenseLayer *layer = &net->layers[l];
+    size_t w_rows, w_cols;
+    fread(&w_rows, sizeof(size_t), 1, f);
+    fread(&w_cols, sizeof(size_t), 1, f);
+    layer->weights = sm_create(w_rows, w_cols);
+    layer->bias = sm_create_zeros(1, w_cols);
+    fread(layer->weights->values, sizeof(float), w_rows * w_cols, f);
+    fread(layer->bias->values, sizeof(float), w_cols, f);
+
+    // Assign default activation functions (assume ReLU for now)
+    layer->activation = nm_apply_relu;
+    layer->activation_derivative = nm_d_relu;
+  }
+
+  fclose(f);
+  return true;
 }

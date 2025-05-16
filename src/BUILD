@@ -95,7 +95,7 @@ cc_library(
         "//conditions:default": ["-lomp"],
     }),
     visibility = ["//visibility:public"],
-    deps = default_deps + [":sm", "@libomp"] + select({
+    deps = default_deps + [":sm", "//lib/log.c:log","@libomp"] + select({
         ":use_openblas": ["@openblas"],
         "//conditions:default": [],
     })

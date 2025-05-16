@@ -688,4 +688,33 @@ void test_sm_normalize_cols_should_normalize_each_column_to_unit_L2_norm(void) {
   sm_destroy(mat);
 }
 
+void test_sm_slice_rows_should_extract_selected_rows(void) {
+  float values[5][3] = {{1.0f, 2.0f, 3.0f},
+                        {4.0f, 5.0f, 6.0f},
+                        {7.0f, 8.0f, 9.0f},
+                        {10.0f, 11.0f, 12.0f},
+                        {13.0f, 14.0f, 15.0f}};
+
+  FloatMatrix *mat = sm_from_array_static(5, 3, values);
+  FloatMatrix *slice = sm_slice_rows(mat, 1, 4); // rows 1, 2, 3
+
+  TEST_ASSERT_NOT_NULL(slice);
+  TEST_ASSERT_EQUAL_UINT32(3, slice->rows);
+  TEST_ASSERT_EQUAL_UINT32(3, slice->cols);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 4.0f, sm_get(slice, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 5.0f, sm_get(slice, 0, 1));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 6.0f, sm_get(slice, 0, 2));
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 7.0f, sm_get(slice, 1, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 8.0f, sm_get(slice, 1, 1));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 9.0f, sm_get(slice, 1, 2));
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 10.0f, sm_get(slice, 2, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 11.0f, sm_get(slice, 2, 1));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 12.0f, sm_get(slice, 2, 2));
+
+  sm_destroy(slice);
+}
+
 //

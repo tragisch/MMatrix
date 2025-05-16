@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -184,4 +183,256 @@ void test_nm_active_library_should_return_non_null(void) {
   printf("Active library: %s\n", lib);
   TEST_ASSERT_NOT_NULL(lib);
 }
+
+void test_nm_d_relu_should_zero_out_gradients_where_activation_is_nonpositive(
+    void) {
+  float act_vals[1][5] = {{-1.0f, 0.0f, 0.5f, 2.0f, -0.3f}};
+  float grad_vals[1][5] = {{0.1f, 0.2f, 0.3f, 0.4f, 0.5f}};
+
+  FloatMatrix *act = sm_from_array_static(1, 5, act_vals);
+  FloatMatrix *grad = sm_from_array_static(1, 5, grad_vals);
+
+  nm_d_relu(act, grad);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, sm_get(grad, 0, 0)); // a <= 0
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, sm_get(grad, 0, 1)); // a == 0
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.3f, sm_get(grad, 0, 2)); // a > 0
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.4f, sm_get(grad, 0, 3)); // a > 0
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, sm_get(grad, 0, 4)); // a < 0
+
+  sm_destroy(act);
+  sm_destroy(grad);
+}
+
+void test_nm_d_sigmoid_should_apply_chain_rule(void) {
+  float act_vals[1][4] = {{0.0f, 0.5f, 1.0f, 0.8f}};
+  float grad_vals[1][4] = {{1.0f, 1.0f, 1.0f, 2.0f}};
+
+  FloatMatrix *act = sm_from_array_static(1, 4, act_vals);
+  FloatMatrix *grad = sm_from_array_static(1, 4, grad_vals);
+
+  nm_d_sigmoid(act, grad);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, sm_get(grad, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.25f, sm_get(grad, 0, 1)); // 0.5 * 0.5
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, sm_get(grad, 0, 2));  // 1 * 0
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.8f * 0.2f * 2.0f, sm_get(grad, 0, 3));
+
+  sm_destroy(act);
+  sm_destroy(grad);
+}
+
+void test_nm_d_tanh_should_apply_chain_rule(void) {
+  float act_vals[1][4] = {{-1.0f, 0.0f, 0.5f, 0.8f}};
+  float grad_vals[1][4] = {{1.0f, 1.0f, 2.0f, 2.0f}};
+
+  FloatMatrix *act = sm_from_array_static(1, 4, act_vals);
+  FloatMatrix *grad = sm_from_array_static(1, 4, grad_vals);
+
+  nm_d_tanh(act, grad);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f - 1.0f, sm_get(grad, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f * (1.0f - 0.0f), sm_get(grad, 0, 1));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 2.0f * (1.0f - 0.25f), sm_get(grad, 0, 2));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 2.0f * (1.0f - 0.64f), sm_get(grad, 0, 3));
+
+  sm_destroy(act);
+  sm_destroy(grad);
+}
+
+void test_nm_d_softmax_crossentropy_should_compute_difference(void) {
+  float pred_vals[1][3] = {{0.7f, 0.2f, 0.1f}};
+  float target_vals[1][3] = {{1.0f, 0.0f, 0.0f}};
+  float expected[1][3] = {{-0.3f, 0.2f, 0.1f}};
+
+  FloatMatrix *pred = sm_from_array_static(1, 3, pred_vals);
+  FloatMatrix *target = sm_from_array_static(1, 3, target_vals);
+  FloatMatrix *grad = sm_create_zeros(1, 3);
+
+  nm_d_softmax_crossentropy(pred, target, grad);
+
+  for (size_t j = 0; j < 3; ++j) {
+    TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected[0][j], sm_get(grad, 0, j));
+  }
+
+  sm_destroy(pred);
+  sm_destroy(target);
+  sm_destroy(grad);
+}
+
+void test_dense_forward_should_compute_linear_activation_output(void) {
+  float in_vals[1][2] = {{1.0f, 2.0f}};
+  float w_vals[2][2] = {{1.0f, 0.0f}, {0.0f, 1.0f}};
+  float b_vals[1][2] = {{0.0f, 0.0f}};
+
+  FloatMatrix *input = sm_from_array_static(1, 2, in_vals);
+  FloatMatrix *weights = sm_from_array_static(2, 2, w_vals);
+  FloatMatrix *bias = sm_from_array_static(1, 2, b_vals);
+
+  DenseLayer layer = {.weights = weights,
+                      .bias = bias,
+                      .activation = nm_apply_relu,
+                      .activation_derivative = nm_d_relu};
+
+  FloatMatrix *output = dense_forward(&layer, input);
+  TEST_ASSERT_NOT_NULL(output);
+  TEST_ASSERT_EQUAL_INT(1, output->rows);
+  TEST_ASSERT_EQUAL_INT(2, output->cols);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, sm_get(output, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 2.0f, sm_get(output, 0, 1));
+
+  sm_destroy(output);
+  // input, weights, bias are static and not freed here
+}
+
+void test_dense_backward_should_update_weights_and_bias(void) {
+  float in_vals[1][2] = {{1.0f, 2.0f}};
+  float w_vals[2][2] = {{0.5f, 0.0f}, {0.0f, 0.5f}};
+  float b_vals[1][2] = {{0.0f, 0.0f}};
+  float act_vals[1][2] = {{0.5f, 1.0f}};
+  float grad_vals[1][2] = {{1.0f, 2.0f}};
+
+  FloatMatrix *input = sm_from_array_static(1, 2, in_vals);
+  FloatMatrix *weights = sm_from_array_static(2, 2, w_vals);
+  FloatMatrix *bias = sm_from_array_static(1, 2, b_vals);
+  FloatMatrix *activation = sm_from_array_static(1, 2, act_vals);
+  FloatMatrix *grad = sm_from_array_static(1, 2, grad_vals);
+
+  DenseLayer layer = {.weights = weights,
+                      .bias = bias,
+                      .activation = nm_apply_relu,
+                      .activation_derivative = nm_d_relu};
+
+  dense_backward(&layer, input, activation, grad, 0.1f);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.5f - 0.1f * 1.0f,
+                           sm_get(weights, 0, 0)); // 0.4
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f - 0.1f * 2.0f,
+                           sm_get(weights, 0, 1)); // -0.2
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f - 0.1f * 2.0f,
+                           sm_get(weights, 1, 0)); // -0.2
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.5f - 0.1f * 4.0f,
+                           sm_get(weights, 1, 1)); // 0.1
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, -0.1f * 1.0f, sm_get(bias, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, -0.1f * 2.0f, sm_get(bias, 0, 1));
+}
+
+void test_nm_sum_rows_should_sum_across_rows(void) {
+  float values[3][4] = {{1.0f, 2.0f, 3.0f, 4.0f},
+                        {5.0f, 6.0f, 7.0f, 8.0f},
+                        {9.0f, 10.0f, 11.0f, 12.0f}};
+
+  FloatMatrix *mat = sm_from_array_static(3, 4, values);
+  FloatMatrix *sum = nm_sum_rows(mat);
+
+  TEST_ASSERT_NOT_NULL(sum);
+  TEST_ASSERT_EQUAL_UINT32(1, sum->rows);
+  TEST_ASSERT_EQUAL_UINT32(4, sum->cols);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 15.0f, sm_get(sum, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 18.0f, sm_get(sum, 0, 1));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 21.0f, sm_get(sum, 0, 2));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 24.0f, sm_get(sum, 0, 3));
+
+  sm_destroy(sum);
+  // static matrix 'mat' needs no destruction
+}
+
+void test_train_one_epoch_should_reduce_loss_on_xor_data(void) {
+  // XOR-Eingaben (4 Beispiele, 2 Features)
+  float x_vals[4][2] = {{0, 0}, {0, 1}, {1, 0}, {1, 1}};
+  // Zielwerte (One-Hot): 0 => [1,0], 1 => [0,1]
+  float y_vals[4][2] = {{1, 0}, {0, 1}, {0, 1}, {1, 0}};
+
+  FloatMatrix *X = sm_from_array_static(4, 2, x_vals);
+  FloatMatrix *Y = sm_from_array_static(4, 2, y_vals);
+
+  // Einfaches 2-2-2 Netz
+  DenseLayer layers[2];
+  layers[0].weights = sm_create_random_xavier(2, 2, 2, 2);
+  layers[0].bias = sm_create_zeros(1, 2);
+  layers[0].activation = nm_apply_sigmoid;
+  layers[0].activation_derivative = nm_d_sigmoid;
+
+  layers[1].weights = sm_create_random_xavier(2, 2, 2, 2);
+  layers[1].bias = sm_create_zeros(1, 2);
+  layers[1].activation = nm_apply_softmax;
+  layers[1].activation_derivative = NULL; // handled separately in training
+
+  NeuralNetwork net = {.layers = layers, .num_layers = 2};
+
+  // Vorher: Loss messen
+  FloatMatrix *out_before = dense_forward(&layers[0], X);
+  FloatMatrix *final_before = dense_forward(&layers[1], out_before);
+  float loss_before = nm_cross_entropy_loss(final_before, Y);
+  sm_destroy(out_before);
+  sm_destroy(final_before);
+
+  // 10 Epochen trainieren
+  for (int epoch = 0; epoch < 10; ++epoch) {
+    train_one_epoch(&net, X, Y, 4, 0.5f);
+  }
+
+  // Nachher: Loss erneut messen
+  FloatMatrix *out_after = dense_forward(&layers[0], X);
+  FloatMatrix *final_after = dense_forward(&layers[1], out_after);
+  float loss_after = nm_cross_entropy_loss(final_after, Y);
+  sm_destroy(out_after);
+  sm_destroy(final_after);
+
+  // Test: Verlust sollte gesunken sein
+  TEST_ASSERT_TRUE(loss_after < loss_before);
+
+  sm_destroy(layers[0].weights);
+  sm_destroy(layers[0].bias);
+  sm_destroy(layers[1].weights);
+  sm_destroy(layers[1].bias);
+}
 //
+
+void test_predict_should_return_output_for_forward_pass(void) {
+  float input_vals[1][2] = {{1.0f, 2.0f}};
+  FloatMatrix *input = sm_from_array_static(1, 2, input_vals);
+
+  // Set up simple network with 1 layer
+  DenseLayer layer;
+  float w_vals[2][2] = {{1.0f, 0.0f}, {0.0f, 1.0f}};
+  float b_vals[1][2] = {{0.0f, 0.0f}};
+  layer.weights = sm_from_array_static(2, 2, w_vals);
+  layer.bias = sm_from_array_static(1, 2, b_vals);
+  layer.activation = nm_apply_relu;
+  layer.activation_derivative = nm_d_relu;
+
+  NeuralNetwork net = {.layers = &layer, .num_layers = 1};
+
+  FloatMatrix *output = predict(&net, input);
+
+  TEST_ASSERT_NOT_NULL(output);
+  TEST_ASSERT_EQUAL_UINT32(1, output->rows);
+  TEST_ASSERT_EQUAL_UINT32(2, output->cols);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, sm_get(output, 0, 0));
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 2.0f, sm_get(output, 0, 1));
+
+  sm_destroy(output);
+}
+
+void test_nm_argmax_rowwise_should_return_index_of_max_per_row(void) {
+  float values[3][4] = {
+    {0.1f, 0.9f, 0.3f, 0.7f},  // max at index 1
+    {0.0f, 0.0f, 1.0f, 0.0f},  // max at index 2
+    {5.0f, 2.0f, 4.0f, 8.0f}   // max at index 3
+  };
+
+  FloatMatrix *mat = sm_from_array_static(3, 4, values);
+  FloatMatrix *indices = nm_argmax_rowwise(mat);
+
+  TEST_ASSERT_NOT_NULL(indices);
+  TEST_ASSERT_EQUAL_UINT32(3, indices->rows);
+  TEST_ASSERT_EQUAL_UINT32(1, indices->cols);
+
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, sm_get(indices, 0, 0));
+  TEST_ASSERT_EQUAL_FLOAT(2.0f, sm_get(indices, 1, 0));
+  TEST_ASSERT_EQUAL_FLOAT(3.0f, sm_get(indices, 2, 0));
+
+  sm_destroy(indices);
+}

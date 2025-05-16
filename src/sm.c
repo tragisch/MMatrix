@@ -1,4 +1,5 @@
 
+
 /*
  * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -126,6 +127,28 @@ FloatMatrix *sm_create_empty() {
   matrix->cols = 0;
   matrix->capacity = 0;
   matrix->values = NULL;
+  return matrix;
+}
+
+FloatMatrix *sm_create_zeros(size_t rows, size_t cols) {
+  if (rows < 1 || cols < 1) {
+    perror("Error: invalid matrix dimensions.\n");
+    return NULL;
+  }
+  FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
+  if (!matrix) {
+    perror("Error: could not allocate FloatMatrix struct.\n");
+    return NULL;
+  }
+  matrix->rows = rows;
+  matrix->cols = cols;
+  matrix->capacity = rows * cols;
+  matrix->values = (float *)calloc(rows * cols, sizeof(float));
+  if (!matrix->values) {
+    free(matrix);
+    perror("Error: could not allocate values array.\n");
+    return NULL;
+  }
   return matrix;
 }
 
@@ -970,6 +993,41 @@ void sm_resize(FloatMatrix *mat, size_t new_row, size_t new_col) {
   mat->rows = new_row;
   mat->cols = new_col;
   mat->capacity = new_row * new_col;
+}
+
+// Slices rows [start, end) from mat and returns a new FloatMatrix
+FloatMatrix *sm_slice_rows(const FloatMatrix *mat, size_t start, size_t end) {
+  if (!mat || start >= end || end > mat->rows) {
+    return NULL;
+  }
+
+  size_t num_rows = end - start;
+  size_t cols = mat->cols;
+  FloatMatrix *slice = sm_create(num_rows, cols);
+  if (!slice)
+    return NULL;
+
+  float *dst = slice->values;
+  const float *src = mat->values + start * cols;
+
+#if defined(__ARM_NEON)
+  size_t total = num_rows * cols;
+  size_t i = 0;
+  for (; i + 4 <= total; i += 4) {
+    vst1q_f32(&dst[i], vld1q_f32(&src[i]));
+  }
+  for (; i < total; ++i) {
+    dst[i] = src[i];
+  }
+
+#else
+#pragma omp parallel for
+  for (size_t i = 0; i < num_rows; ++i) {
+    memcpy(&dst[i * cols], &src[i * cols], cols * sizeof(float));
+  }
+#endif
+
+  return slice;
 }
 
 void sm_print(const FloatMatrix *matrix) {

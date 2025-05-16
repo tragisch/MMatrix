@@ -16,7 +16,9 @@
 #include <string.h>
 #include <time.h>
 
-// Struct for FloatMatrix
+/**************************************/
+/*         Float Matrix Struct.       */
+/**************************************/
 typedef struct FloatMatrix {
   size_t rows;
   size_t cols;
@@ -28,6 +30,7 @@ typedef struct FloatMatrix {
 /*         Matrix Creation            */
 /**************************************/
 FloatMatrix *sm_create_empty();
+FloatMatrix *sm_create_zeros(size_t rows, size_t cols);
 FloatMatrix *sm_create(size_t rows, size_t cols);
 FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values);
 FloatMatrix *sm_clone(const FloatMatrix *m);
@@ -50,6 +53,7 @@ FloatMatrix *sm_get_row(const FloatMatrix *mat, size_t i);
 FloatMatrix *sm_get_last_row(const FloatMatrix *mat);
 FloatMatrix *sm_get_col(const FloatMatrix *mat, size_t j);
 FloatMatrix *sm_get_last_col(const FloatMatrix *mat);
+FloatMatrix *sm_slice_rows(const FloatMatrix *mat, size_t start, size_t end);
 
 /**************************************/
 /*         Matrix Shape Ops           */
