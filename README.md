@@ -1,38 +1,79 @@
 # MMatrix
 
-A matrix C-library for MacOS. It is a wrapper for my purpose and to benchmark different matrix implementations.
+**MMatrix** is a C matrix library for macOS, supporting both dense and sparse matrix formats with SIMD and BLAS acceleration. It is modular, benchmark-oriented, and designed for scientific computing and neural network applications.
 
-### Features:
-- **sm**: float matrix (OpenBLAS or Apple's Accelerator, Apple's MPS)
-- **dm**: double matrix (OpenBLAS or Apple's Accelerator)
-- **dms**: double sparse matrix in COO format (using SuiteSparse)
-- **i/o**: console-print, 
-  - read/write MAT files (using libs matio, hdf5)
-  - read/wirte MarketMatrix files
+---
 
+## Features
 
-### Performance
-**sm:**
-- SIMD acceleration using OpenMP and NEON intrinsics for `sm` operations (add, diff, multiply, norm, etc.) - if available
-- Optimized fallback paths with transposed access to improve cache locality
-- Uses Apple Accelerate or OpenBLAS depending on build configuration
-- Optional GPU acceleration via Apple Metal Performance Shaders (MPS) for large float matrix multiplications
+- `sm`: Single-precision (float) dense matrix
+- `dm`: Double-precision (double) dense matrix
+- `dms`: Double-precision sparse matrix (COO format)
 
+All modules support:
 
-### Build
-To build library. Be sure openmp, openblas, suitesparse and matio is installed locally (via i.e. homebrew). Using [Bazel](https://bazel.build/):
+- Random matrix creation using PCG (permuted congruential generator)
+- Elementwise and matrix operations
+- Console-based printing
+- I/O for:
+  - MATLAB `.mat` files (via `matio` and `hdf5`)
+  - Matrix Market files
+
+---
+
+## Performance
+
+- Optimized with Apple Accelerate (vDSP, BLAS, LAPACK)
+- Optional use of Metal Performance Shaders (MPS)
+- SIMD acceleration with OpenMP and ARM NEON intrinsics
+- PCG-based random number generation for reproducibility and parallelism
+
+---
+
+## Build
+
+Ensure required dependencies are installed via Homebrew:
 
 ```bash
-bazel build //src:matrix --define USE_ACCELERATE=1  
+brew install openblas libomp suitesparse matio
 ```
 
-### Example
+Then build using Bazel:
 
+```bash
+bazel build //src:matrix
+```
 
-### Tests
+---
+
+## Run Tests
+
+Unit tests are written using [Unity](https://www.throwtheswitch.org/unity):
+
 ```bash
 bazel test //tests:all
 ```
 
-### License:
-see License File (MIT)
+---
+
+## Quick Example
+
+```c
+FloatMatrix *A = sm_create_random(128, 128);
+FloatMatrix *B = sm_transpose(A);
+sm_destroy(A);
+sm_destroy(B);
+```
+
+---
+
+## Supported Platforms
+
+- macOS (ARM64 preferred, supports Apple Silicon M1/M2/M3 ...)
+- Clang toolchain with OpenMP support required
+
+---
+
+## License
+
+MIT – see `LICENSE` file.
