@@ -62,45 +62,6 @@ cc_library(
     ],
 )
 
-cc_library(
-    name = "nm",
-    srcs = [
-        "nm.c",
-    ],
-    hdrs = [
-        "include/nm.h",
-    ],
-    copts = sm_copts + ["-fopenmp"] + select({
-        ":on_macos_arm64": [
-            "-DUSE_ACCELERATE_MPS",
-            "-DACCELERATE_NEW_LAPACK",
-            "-DUSE_MPS",
-            "-fobjc-arc",
-        ],
-        "//conditions:default": [],
-    }) + select({
-        ":use_openblas": [
-            "-DUSE_OPENBLAS",
-        ],
-        "//conditions:default": [],
-    }),
-    includes = ["include"],
-    linkopts = select({
-        ":on_macos_arm64": [
-            "-framework Accelerate",
-            "-framework Metal",
-            "-framework MetalPerformanceShaders",
-            "-lomp",
-        ],
-        "//conditions:default": ["-lomp"],
-    }),
-    visibility = ["//visibility:public"],
-    deps = default_deps + [":sm", "//lib/log.c:log","@libomp"] + select({
-        ":use_openblas": ["@openblas"],
-        "//conditions:default": [],
-    })
-)
-
 # double matrix library
 cc_library(
     name = "dm",

@@ -27,14 +27,6 @@ unity_test(
 )
 
 unity_test(
-    name = "test_nm",
-    srcs = ["test_nm.c",],
-    my_config = ["my_config.yml"],
-    deps = ["//src:matrix",],
-    tags = ["smoke"],
-)
-
-unity_test(
     name = "test_dms",
     srcs = ["test_dms.c",],
     my_config = ["my_config.yml"],
