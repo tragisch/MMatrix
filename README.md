@@ -1,6 +1,6 @@
 # MMatrix
 
-**MMatrix** is a C matrix library for macOS, supporting both dense and sparse matrix formats with SIMD and BLAS acceleration. It is modular, benchmark-oriented, and designed for scientific computing and neural network applications.
+**MMatrix** is my personal C matrix library playground for macOS, supporting both dense and sparse matrix formats with SIMD and BLAS acceleration.
 
 ---
 
@@ -23,6 +23,7 @@ All modules support:
 
 ## Performance
 
+Currently:
 - Optimized with Apple Accelerate (vDSP, BLAS, LAPACK)
 - Optional use of Metal Performance Shaders (MPS)
 - SIMD acceleration with OpenMP and ARM NEON intrinsics
