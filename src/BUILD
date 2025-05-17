@@ -179,6 +179,7 @@ cc_library(
             "-framework Accelerate",
             "-framework Metal",
             "-framework MetalPerformanceShaders",
+            "-lc++abi",
             "-lomp",
         ],
         "//conditions:default": ["-lomp"],

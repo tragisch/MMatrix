@@ -38,6 +38,12 @@ void tearDown(void) {
   // remove("test_matrix.mat");
 }
 
+void test_sm_active_library_should_return_non_null(void) {
+  const char *lib = sm_active_library();
+  printf("Active library: %s\n", lib);
+  TEST_ASSERT_NOT_NULL(lib);
+}
+
 void test_sm_create(void) {
 
   // Test case 1: Create a matrix with valid dimensions
@@ -124,10 +130,10 @@ void test_sm_create_array_from_matrix(void) {
   FloatMatrix *mat = sm_from_array_static(2, 3, data);
   TEST_ASSERT_NOT_NULL(mat);
 
-  double *arr = sm_create_array_from_matrix(mat);
+  float *arr = sm_create_array_from_matrix(mat);
   TEST_ASSERT_NOT_NULL(arr);
 
-  double expected[] = {1.5, 2.5, 3.5, 4.5, 5.5, 6.5};
+  float expected[] = {1.5, 2.5, 3.5, 4.5, 5.5, 6.5};
   for (size_t i = 0; i < 6; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected[i], arr[i]);
   }

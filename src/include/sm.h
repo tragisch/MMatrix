@@ -42,7 +42,7 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
 FloatMatrix *sm_from_array_ptrs(size_t rows, size_t cols, float **array);
 FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
                                   float array[rows][cols]);
-double *sm_create_array_from_matrix(FloatMatrix *matrix);
+float *sm_create_array_from_matrix(FloatMatrix *matrix);
 
 /**************************************/
 /*         Matrix Accessors           */

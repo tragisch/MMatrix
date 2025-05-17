@@ -13,10 +13,17 @@
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
+// Prevent automatic use of bfloat16 types in NEON vector operations
+#ifdef __ARM_FEATURE_BF16_VECTOR_ARITHMETIC
+#undef __ARM_FEATURE_BF16_VECTOR_ARITHMETIC
+#endif
+#ifdef __ARM_FEATURE_BF16_SCALAR_ARITHMETIC
+#undef __ARM_FEATURE_BF16_SCALAR_ARITHMETIC
+#endif
 #endif
 
 #define INIT_CAPACITY 100
-#define EPSILON 1e-5
+static const float EPSILON = 1e-5f;
 
 /*******************************/
 /*      Define Environment     */
@@ -29,7 +36,11 @@
 #elif defined(USE_OPENBLAS)
 #define ACTIVE_LIB "OpenBLAS"
 #else
+#if defined(__ARM_NEON)
+#define ACTIVE_LIB "No BLAS, ARM NEON"
+#else
 #define ACTIVE_LIB "No BLAS"
+#endif
 #endif
 
 #if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
@@ -328,14 +339,13 @@ FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
   return matrix;
 }
 
-double *sm_create_array_from_matrix(FloatMatrix *matrix) {
+float *sm_create_array_from_matrix(FloatMatrix *matrix) {
   if (matrix == NULL || matrix->values == NULL) {
     perror("Error: matrix is NULL.\n");
     return NULL;
   }
 
-  double *array =
-      (double *)malloc(matrix->rows * matrix->cols * sizeof(double));
+  float *array = (float *)malloc(matrix->rows * matrix->cols * sizeof(float));
   if (!array) {
     perror("Error: could not allocate array.\n");
     return NULL;
@@ -344,8 +354,7 @@ double *sm_create_array_from_matrix(FloatMatrix *matrix) {
 #pragma omp parallel for collapse(2)
   for (size_t i = 0; i < matrix->rows; ++i) {
     for (size_t j = 0; j < matrix->cols; ++j) {
-      array[i * matrix->cols + j] =
-          (double)matrix->values[i * matrix->cols + j];
+      array[i * matrix->cols + j] = (float)matrix->values[i * matrix->cols + j];
     }
   }
   return array;
@@ -659,7 +668,7 @@ bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2) {
     float32x4_t diff = vabsq_f32(vsubq_f32(a, b));
     float32x4_t eps = vdupq_n_f32(EPSILON);
     uint32x4_t cmp = vcgtq_f32(diff, eps);
-    if (vmaxvq_u32(cmp)) {
+    if (vmaxvq_u32(cmp) != 0) {
       equal = 0;
       break;
     }
@@ -1148,7 +1157,7 @@ float sm_density(const FloatMatrix *mat) {
     float32x4_t abs_v = vabsq_f32(v);
     float32x4_t eps = vdupq_n_f32(EPSILON);
     uint32x4_t cmp = vcgtq_f32(abs_v, eps);
-    counter += vaddvq_u32(cmp);
+    counter += (int)vaddvq_u32(cmp);
   }
   for (; i < size; ++i) {
     if (fabsf(mat->values[i]) > EPSILON) {

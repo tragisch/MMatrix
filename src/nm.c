@@ -1,5 +1,3 @@
-
-
 #include "nm.h"
 #include <float.h>
 #include <log.h>

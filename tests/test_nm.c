@@ -38,6 +38,12 @@ void tearDown(void) {
   // remove("test_matrix.mat");
 }
 
+void test_nm_active_library_should_return_non_null(void) {
+  const char *lib = nm_active_library();
+  printf("Active library: %s\n", lib);
+  TEST_ASSERT_NOT_NULL(lib);
+}
+
 void test_nm_apply_relu_should_set_negatives_to_zero(void) {
   float values[2][2] = {{-2.0f, 0.0f}, {3.0f, -1.5f}};
   FloatMatrix *mat = sm_from_array_static(2, 2, values);
@@ -176,12 +182,6 @@ void test_nm_softmax_denominator_should_compute_correct_sum(void) {
   float expected = expf(1.0f - 3.0f) + expf(2.0f - 3.0f) + expf(3.0f - 3.0f);
   float result = nm_softmax_denominator(vec, 3);
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected, result);
-}
-
-void test_nm_active_library_should_return_non_null(void) {
-  const char *lib = nm_active_library();
-  printf("Active library: %s\n", lib);
-  TEST_ASSERT_NOT_NULL(lib);
 }
 
 void test_nm_d_relu_should_zero_out_gradients_where_activation_is_nonpositive(
@@ -418,9 +418,9 @@ void test_predict_should_return_output_for_forward_pass(void) {
 
 void test_nm_argmax_rowwise_should_return_index_of_max_per_row(void) {
   float values[3][4] = {
-    {0.1f, 0.9f, 0.3f, 0.7f},  // max at index 1
-    {0.0f, 0.0f, 1.0f, 0.0f},  // max at index 2
-    {5.0f, 2.0f, 4.0f, 8.0f}   // max at index 3
+      {0.1f, 0.9f, 0.3f, 0.7f}, // max at index 1
+      {0.0f, 0.0f, 1.0f, 0.0f}, // max at index 2
+      {5.0f, 2.0f, 4.0f, 8.0f}  // max at index 3
   };
 
   FloatMatrix *mat = sm_from_array_static(3, 4, values);
