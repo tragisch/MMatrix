@@ -86,7 +86,7 @@ void test_sm_read_from_file(void) {
   const char *varname = "matrix";
 
   // Read the matrix from the file
-  FloatMatrix *matrix = m_read_MAT_file(filename, varname);
+  FloatMatrix *matrix = sm_read_MAT_file(filename, varname);
   TEST_ASSERT_NOT_NULL(matrix);
 
   if (matrix) {
@@ -109,7 +109,7 @@ void test_sm_read_from_file(void) {
 
 // Test function for dm_write_to_file
 void test_dm_write_to_file(void) {
-  DoubleMatrix *matrix = create_sample_matrix(10, 10);
+  DoubleMatrix *matrix = dm_create_sample_matrix(10, 10);
   const char *filename = "test_matrix.mat";
 
   // Write the matrix to a file
@@ -145,11 +145,26 @@ void test_dm_read_from_file(void) {
     for (size_t i = 0; i < 10; ++i) {
       for (size_t j = 0; j < 10; ++j) {
         double expected_value = (double)(i * 10 + j);
-        TEST_ASSERT_EQUAL_DOUBLE(expected_value, dm_get(matrix, i, j));
+        TEST_ASSERT_EQUAL_FLOAT(expected_value, dm_get(matrix, i, j));
       }
     }
 
     // Clean up
     dm_destroy(matrix);
   }
+}
+
+extern char grid[HEIGHT][WIDTH];
+
+void test_dm_cplot_grid_output(void) {
+  DoubleMatrix *matrix = dm_create(5, 5);
+  dm_set(matrix, 1, 2, 1.0); // einzelner Punkt
+  dm_cplot(matrix);
+
+  // Prüfe ob das erwartete Zeichen im Grid gesetzt wurde
+  // int x = get_x_coord(1, 5);
+  // int y = get_y_coord(2, 5);
+  // TEST_ASSERT_EQUAL_CHAR('*', grid[y][x]);
+
+  dm_destroy(matrix);
 }

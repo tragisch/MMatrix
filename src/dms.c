@@ -8,6 +8,13 @@
 
 #include "dms.h"
 
+#include <omp.h>
+#include <pcg_variants.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+
 #ifndef INIT_CAPACITY
 #define INIT_CAPACITY 100
 #endif
@@ -253,39 +260,32 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
 
 DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
                                       double density) {
-  if (density < 0.0 || density > 1.0) {
-    // perror("Error: invalid density value.\n");
-    return NULL;
-  }
-
   size_t nnz = (size_t)(rows * cols * density);
-  if (nnz < EPSILON) {
-    DoubleSparseMatrix *mat = dms_create(rows, cols, 0.0);
-    return mat;
+  if (nnz == 0)
+    return dms_create(rows, cols, 0);
+
+  DoubleSparseMatrix *mat = dms_create(rows, cols, nnz);
+  if (!mat)
+    return NULL;
+
+  unsigned int global_seed =
+      (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
+
+#pragma omp parallel
+  {
+    pcg32_random_t rng;
+    unsigned int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
+
+#pragma omp for
+    for (size_t k = 0; k < nnz; ++k) {
+      mat->row_indices[k] = pcg32_random_r(&rng) % rows;
+      mat->col_indices[k] = pcg32_random_r(&rng) % cols;
+      mat->values[k] = (double)pcg32_random_r(&rng) / UINT32_MAX;
+    }
   }
 
-  DoubleSparseMatrix *mat = dms_create(rows, cols, nnz + 1);
-  for (size_t i = 0; i < nnz; i++) {
-#ifdef __APPLE__
-    int i_row;
-    int i_col;
-    do {
-      i_row = arc4random_uniform((uint32_t)rows);
-      i_col = arc4random_uniform((uint32_t)cols);
-    } while (dms_get(mat, i_row, i_col) != 0.0);
-
-    dms_set(mat, i_row, i_col, (double)arc4random() / UINT32_MAX);
-#else
-    int i_row;
-    int i_col;
-    do {
-      i_row = rand() % rows;
-      i_col = rand() % cols;
-    } while (dms_get(mat, i_row, i_col) != 0.0);
-
-    dms_set(mat, i_row, i_col, (double)rand() / RAND_MAX);
-#endif
-  }
+  mat->nnz = nnz;
   return mat;
 }
 

@@ -10,6 +10,7 @@
 
 #include "sm.h"
 #include <omp.h>
+#include <pcg_variants.h>
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
@@ -224,10 +225,12 @@ FloatMatrix *sm_create_random(size_t rows, size_t cols) {
   unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
 #pragma omp parallel
   {
-    unsigned int seed = global_seed ^ omp_get_thread_num();
+    pcg32_random_t rng;
+    unsigned int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
-      mat->values[i] = (float)rand_r(&seed) / RAND_MAX;
+      mat->values[i] = (float)pcg32_random_r(&rng) / UINT32_MAX;
     }
   }
 
@@ -251,12 +254,14 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
 #pragma omp parallel
   {
-    unsigned int seed = global_seed ^ omp_get_thread_num();
+    pcg32_random_t rng;
+    unsigned int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform (approximate standard normal)
-      float u1 = (float)rand_r(&seed) / RAND_MAX;
-      float u2 = (float)rand_r(&seed) / RAND_MAX;
+      float u1 = (float)pcg32_random_r(&rng) / UINT32_MAX;
+      float u2 = (float)pcg32_random_r(&rng) / UINT32_MAX;
       float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
       mat->values[i] = z * stddev;
     }
@@ -284,12 +289,14 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
   unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
 #pragma omp parallel
   {
-    unsigned int seed = global_seed ^ omp_get_thread_num();
+    pcg32_random_t rng;
+    unsigned int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform: generate standard normal distributed value
-      float u1 = (float)rand_r(&seed) / RAND_MAX;
-      float u2 = (float)rand_r(&seed) / RAND_MAX;
+      float u1 = (float)pcg32_random_r(&rng) / UINT32_MAX;
+      float u2 = (float)pcg32_random_r(&rng) / UINT32_MAX;
       float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
       mat->values[i] = z * stddev;
     }

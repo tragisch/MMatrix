@@ -39,6 +39,8 @@ sm_copts = [
 
 default_deps = [
     "@matio",
+    "@libomp",
+    "@pcg",
 ]
 
 # matrix library
@@ -58,7 +60,6 @@ cc_library(
         ":dm",
         ":sm",
         ":dms",
-        ":nm",
     ],
 )
 
@@ -104,10 +105,10 @@ cc_library(
     }),
     visibility = ["//visibility:public"],
     deps = select({
-        "//conditions:default": default_deps + ["@libomp"],
-        ":use_accelerate": default_deps + ["@libomp"],
-        ":use_accelerate_mps": default_deps +["@libomp"],
-        ":use_openblas": default_deps + ["@openblas", "@libomp"],
+        "//conditions:default": default_deps + [],
+        ":use_accelerate": default_deps + [],
+        ":use_accelerate_mps": default_deps +[],
+        ":use_openblas": default_deps + ["@openblas"],
     }),
 )
 
@@ -146,7 +147,7 @@ cc_library(
         "//conditions:default": ["-lomp"],
     }),
     visibility = ["//visibility:public"],
-    deps = default_deps + [":sm_mps_objc", "@libomp"] + select({
+    deps = default_deps + [":sm_mps_objc"] + select({
         ":use_openblas": ["@openblas"],
         "//conditions:default": [],
     })
@@ -170,11 +171,14 @@ cc_library(
     hdrs = [
         "include/dms.h",
     ],
-    includes = ["include"],
-    deps = default_deps + [
-        "@suitesparse",
-        "@libomp"
+    copts = [
+    "-O3",
+    "-ffast-math",
+    "-funsafe-math-optimizations",
     ],
+    includes = ["include"],
+    deps = default_deps + ["@suitesparse"],
+    visibility = ["//visibility:public"],
 )
 
 # build configurations for different matrix libraries

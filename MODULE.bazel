@@ -110,6 +110,13 @@ git_repository(
     build_file = "@//:third_party/dbg-macro.BUILD",
 )
 
+git_repository(
+    name = "pcg",
+    commit = "83252d9c23df9c82ecb42210afed61a7b42402d7",
+    remote = "https://github.com/imneme/pcg-c.git",
+    build_file = "@//:third_party/pcg.BUILD",
+)
+
 
 #############################
 # Hombrew Local Libraries

@@ -8,13 +8,26 @@
 
 #include "dm.h"
 #include <omp.h>
+#include <pcg_variants.h>
 
 #define INIT_CAPACITY 100
-#define EPSILON 1e-9
+static const double EPSILON = 1e-9;
 
 /*******************************/
 /*      Define Environment     */
 /*******************************/
+
+/*******************************/
+/*      Define Environment     */
+/*******************************/
+
+#if defined(USE_ACCELERATE)
+#define ACTIVE_LIB "Apple Accelerate"
+#elif defined(USE_OPENBLAS)
+#define ACTIVE_LIB "OpenBLAS"
+#else
+#define ACTIVE_LIB "No BLAS"
+#endif
 
 #ifdef USE_ACCELERATE
 #define BLASINT int
@@ -89,6 +102,7 @@ size_t dm_rank_euler(const DoubleMatrix *mat) {
 
   // Count the number of non-zero rows in the row-echelon form
   size_t rank = 0;
+#pragma omp parallel for reduction(+ : rank)
   for (size_t i = 0; i < copy->rows; i++) {
     int has_non_zero_element = 0;
     for (size_t j = 0; j < copy->cols; j++) {
@@ -108,31 +122,36 @@ size_t dm_rank_euler(const DoubleMatrix *mat) {
   return rank;
 }
 
-// Random number generation
-double dm_rand_number() {
-#ifdef __APPLE__
-  uint32_t random_uint32 = arc4random();
-#else
-  uint32_t random_uint32 = rand();
-#endif
-  return (double)random_uint32 / (double)UINT32_MAX;
+// Convert DoubleMatrix to column-major double array
+double *dm_to_column_major(const DoubleMatrix *mat) {
+  if (!mat || !mat->values) {
+    perror("Error: matrix is NULL.\n");
+    return NULL;
+  }
+
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+  double *col_major = (double *)malloc(rows * cols * sizeof(double));
+  if (!col_major) {
+    perror("Error: could not allocate column-major array.\n");
+    return NULL;
+  }
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < rows; ++i) {
+    for (size_t j = 0; j < cols; ++j) {
+      col_major[j * rows + i] = mat->values[i * cols + j];
+    }
+  }
+
+  return col_major;
 }
 
 /*******************************/
 /*      Public Functions      */
 /*******************************/
 
-char *dm_active_library() {
-#ifdef USE_ACCELERATE
-  return "Apple's Accelerate";
-#elif defined(USE_ACCELERATE_MPS)
-  return "Apple's Accelerate MPS";
-#elif defined(USE_OPENBLAS)
-  return "OpenBLAS";
-#else
-  return "No BLAS";
-#endif
-}
+const char *dm_active_library() { return ACTIVE_LIB; }
 
 DoubleMatrix *dm_create_empty() {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
@@ -183,17 +202,22 @@ DoubleMatrix *dm_create_identity(size_t n) {
   return identity;
 }
 
-double dm_rand_number();
-
 DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
   DoubleMatrix *mat = dm_create(rows, cols);
+  size_t total = rows * cols;
 
-  for (int i = 0; i < mat->rows; i++) {
-    for (int j = 0; j < mat->cols; j++) {
-      double value = dm_rand_number();
-      dm_set(mat, i, j, value);
+  unsigned int global_seed = (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
+#pragma omp parallel
+  {
+    pcg32_random_t rng;
+    unsigned int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
+#pragma omp for
+    for (size_t i = 0; i < total; ++i) {
+      mat->values[i] = (double)pcg32_random_r(&rng) / UINT32_MAX;
     }
   }
+
   return mat;
 }
 
@@ -254,19 +278,7 @@ DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     return NULL;
   }
   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
-#ifdef USE_ACCELERATE
-
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (BLASINT)mat1->rows,
-              (BLASINT)mat2->cols, (BLASINT)mat1->cols, 1.0, mat1->values,
-              (BLASINT)mat1->cols, mat2->values, (BLASINT)mat2->cols, 0.0,
-              product->values, (BLASINT)product->cols);
-
-#elif defined(USE_ACCELERATE_MPS)
-  printf("Using Accelerate MPS for matrix multiplication.\n");
-  mps_matrix_multiply(mat1->values, mat1->rows, mat1->cols, mat2->values,
-                      mat2->rows, mat2->cols, product->values);
-
-#elif defined(USE_OPENBLAS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
   cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (BLASINT)mat1->rows,
               (BLASINT)mat2->cols, (BLASINT)mat1->cols, 1.0, mat1->values,
@@ -274,20 +286,28 @@ DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
               product->values, (BLASINT)product->cols);
 
 #else
+
   // Fallback to manual multiplication
   DoubleMatrix *mat2_transposed = dm_transpose(mat2);
 
-#pragma omp parallel for
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat2->cols; j++) {
+  double *a = mat1->values;
+  double *bT = mat2_transposed->values;
+  double *c = product->values;
+  size_t rows = mat1->rows;
+  size_t cols = mat2->cols;
+  size_t inner = mat1->cols;
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
       double sum = 0.0;
-      for (size_t k = 0; k < mat1->cols; k++) {
-        sum += dm_get(mat1, i, k) * dm_get(mat2_transposed, j, k);
+#pragma omp simd reduction(+ : sum)
+      for (size_t k = 0; k < inner; k++) {
+        sum += a[i * inner + k] * bT[j * inner + k];
       }
-      dm_set(product, i, j, sum);
+      c[i * cols + j] = sum;
     }
   }
-
   dm_destroy(mat2_transposed);
 
 #endif
@@ -305,17 +325,19 @@ DoubleMatrix *dm_transpose(const DoubleMatrix *mat) {
   if (mat == NULL || mat->values == NULL)
     return NULL;
 
-  DoubleMatrix *transposed = dm_create(mat->cols, mat->rows);
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+  DoubleMatrix *transposed = dm_create(cols, rows);
 
   double *src = mat->values;
   double *dst = transposed->values;
 
-#pragma omp parallel for collapse(2) schedule(dynamic)
-  for (size_t ii = 0; ii < mat->rows; ii += BLOCK_SIZE) {
-    for (size_t jj = 0; jj < mat->cols; jj += BLOCK_SIZE) {
-      for (size_t i = ii; i < ii + BLOCK_SIZE && i < mat->rows; i++) {
-        for (size_t j = jj; j < jj + BLOCK_SIZE && j < mat->cols; j++) {
-          dst[j * mat->rows + i] = src[i * mat->cols + j];
+#pragma omp parallel for collapse(2)
+  for (size_t ii = 0; ii < rows; ii += BLOCK_SIZE) {
+    for (size_t jj = 0; jj < cols; jj += BLOCK_SIZE) {
+      for (size_t i = ii; i < ii + BLOCK_SIZE && i < rows; i++) {
+        for (size_t j = jj; j < jj + BLOCK_SIZE && j < cols; j++) {
+          dst[j * rows + i] = src[i * cols + j];
         }
       }
     }
@@ -344,10 +366,29 @@ DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return NULL;
   }
-  DoubleMatrix *sum = dm_create_clone(mat1);
-  dm_inplace_add(sum, mat2);
 
-  return sum;
+  DoubleMatrix *result = dm_create_clone(mat1);
+  if (!result)
+    return NULL;
+
+  double *a = result->values;
+  const double *b = mat2->values;
+  size_t size = result->rows * result->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vaddD(a, 1, b, 1, a, 1, size);
+#elif defined(USE_OPENBLAS)
+  for (size_t i = 0; i < size; ++i) {
+    a[i] += b[i];
+  }
+#else
+#pragma omp parallel for
+  for (size_t i = 0; i < size; ++i) {
+    a[i] += b[i];
+  }
+#endif
+
+  return result;
 }
 
 DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
@@ -355,9 +396,29 @@ DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return NULL;
   }
-  DoubleMatrix *difference = dm_create_clone(mat1);
-  dm_inplace_diff(difference, mat2);
-  return difference;
+
+  DoubleMatrix *result = dm_create_clone(mat1);
+  if (!result)
+    return NULL;
+
+  double *a = result->values;
+  const double *b = mat2->values;
+  size_t size = result->rows * result->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vsubD(b, 1, a, 1, a, 1, size); // result = a - b
+#elif defined(USE_OPENBLAS)
+  for (size_t i = 0; i < size; ++i) {
+    a[i] -= b[i];
+  }
+#else
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    a[i] -= b[i];
+  }
+#endif
+
+  return result;
 }
 
 double dm_determinant(const DoubleMatrix *mat) {
@@ -378,8 +439,7 @@ double dm_determinant(const DoubleMatrix *mat) {
     return det;
   } else {
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
     DoubleMatrix *lu = dm_create_clone(mat);
@@ -428,8 +488,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   }
   DoubleMatrix *inverse = dm_create_clone(mat);
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
   if (ipiv == NULL) {
@@ -579,8 +638,7 @@ void dm_destroy(DoubleMatrix *mat) {
 }
 
 double dm_trace(const DoubleMatrix *mat) {
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   return cblas_ddot((BLASINT)(mat->rows), mat->values, (BLASINT)mat->cols + 1,
                     mat->values, (BLASINT)mat->cols + 1);
 #else
@@ -593,8 +651,7 @@ double dm_trace(const DoubleMatrix *mat) {
 }
 
 double dm_norm(const DoubleMatrix *mat) {
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   return cblas_dnrm2((BLASINT)(mat->rows * mat->cols), mat->values, 1);
 #else
   double norm = 0;
@@ -610,8 +667,7 @@ size_t dm_rank(const DoubleMatrix *mat) {
     return 0; // No matrix, no rank
   }
   int rank = 0;
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   BLASINT m = (BLASINT)mat->rows;
   BLASINT n = (BLASINT)mat->cols;
   BLASINT lda = n;
@@ -689,16 +745,21 @@ void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
-  // Using Apple's Accelerate framework (= BLAS)
-  cblas_daxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
-              mat1->values, 1);
+
+  double *a = mat1->values;
+  const double *b = mat2->values;
+  size_t size = mat1->rows * mat1->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vaddD(a, 1, b, 1, a, 1, size);
+#elif defined(USE_OPENBLAS)
+  for (size_t i = 0; i < size; ++i) {
+    a[i] += b[i];
+  }
 #else
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat1->cols; j++) {
-      dm_set(mat1, i, j, dm_get(mat1, i, j) + dm_get(mat2, i, j));
-    }
+#pragma omp parallel for
+  for (size_t i = 0; i < size; ++i) {
+    a[i] += b[i];
   }
 #endif
 }
@@ -709,16 +770,21 @@ void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
-  // Using Apple's Accelerate framework (= BLAS)
-  cblas_daxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
-              mat1->values, 1);
+
+  double *a = mat1->values;
+  const double *b = mat2->values;
+  size_t size = mat1->rows * mat1->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vsubD(b, 1, a, 1, a, 1, size); // result = a - b
+#elif defined(USE_OPENBLAS)
+  for (size_t i = 0; i < size; ++i) {
+    a[i] -= b[i];
+  }
 #else
-  for (size_t i = 0; i < mat1->rows; i++) {
-    for (size_t j = 0; j < mat1->cols; j++) {
-      dm_set(mat1, i, j, dm_get(mat1, i, j) - dm_get(mat2, i, j));
-    }
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    a[i] -= b[i];
   }
 #endif
 }
@@ -740,14 +806,121 @@ void dm_inplace_transpose(DoubleMatrix *mat) {
   }
 }
 
-// In-place scale
 void dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar) {
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
-    defined(USE_ACCELERATE_MPS)
-  cblas_dscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
+  double *a = mat->values;
+  size_t size = mat->rows * mat->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vsmulD(a, 1, &scalar, a, 1, size);
+#elif defined(USE_OPENBLAS)
+  cblas_dscal((BLASINT)size, scalar, a, 1);
 #else
-  for (size_t i = 0; i < mat->rows * mat->cols; i++) {
-    mat->values[i] *= scalar;
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    a[i] *= scalar;
+  }
+#endif
+}
+
+DoubleMatrix *dm_elementwise_multiply(const DoubleMatrix *mat1,
+                                      const DoubleMatrix *mat2) {
+  if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    return NULL;
+  }
+
+  DoubleMatrix *result = dm_create_clone(mat1);
+  if (!result)
+    return NULL;
+
+  double *a = result->values;
+  const double *b = mat2->values;
+  size_t size = result->rows * result->cols;
+
+#pragma omp parallel for
+  for (size_t i = 0; i < size; ++i) {
+    a[i] *= b[i];
+  }
+
+  return result;
+}
+
+// Elementwise division (SIMD-optimized)
+DoubleMatrix *dm_div(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+  if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    return NULL;
+  }
+
+  DoubleMatrix *result = dm_create_clone(mat1);
+  if (!result)
+    return NULL;
+
+  double *a = result->values;
+  const double *b = mat2->values;
+  size_t size = result->rows * result->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vdivD(b, 1, a, 1, a, 1, size);
+#elif defined(USE_OPENBLAS)
+  for (size_t i = 0; i < size; ++i) {
+    a[i] /= b[i];
+  }
+#else
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    a[i] /= b[i];
+  }
+#endif
+
+  return result;
+}
+
+void dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
+                                     const DoubleMatrix *mat2) {
+  if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    return;
+  }
+
+  double *a = mat1->values;
+  const double *b = mat2->values;
+  size_t size = mat1->rows * mat1->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vmulD(a, 1, b, 1, a, 1, size);
+#elif defined(USE_OPENBLAS)
+  for (size_t i = 0; i < size; ++i) {
+    a[i] *= b[i];
+  }
+#else
+#pragma omp parallel for
+  for (size_t i = 0; i < size; ++i) {
+    a[i] *= b[i];
+  }
+#endif
+}
+
+void dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+  if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
+    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    return;
+  }
+
+  double *a = mat1->values;
+  const double *b = mat2->values;
+  size_t size = mat1->rows * mat1->cols;
+
+#if defined(USE_ACCELERATE)
+  vDSP_vdivD(b, 1, a, 1, a, 1, size);
+#elif defined(USE_OPENBLAS)
+  for (size_t i = 0; i < size; ++i) {
+    a[i] /= b[i];
+  }
+#else
+#pragma omp parallel for simd
+  for (size_t i = 0; i < size; ++i) {
+    a[i] /= b[i];
   }
 #endif
 }

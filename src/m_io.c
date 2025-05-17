@@ -132,22 +132,25 @@ static void init_grid(void) {
 /*******************************/
 
 static void __print_element(FloatMatrix *count, size_t x, size_t y) {
-  sm_set(count, x, y, sm_get(count, x, y) + 1);
-  plot(x, y, '*');
+  if (x < count->cols && y < count->rows) {
+    count->values[y * count->cols + x]++;
+    plot(x, y, '*');
+  }
 }
 
-// static void print_structure_dense(DoubleMatrix *mat, DoubleMatrix *count) {
-//   for (size_t i = 0; i < mat->rows; i++) {
-//     for (size_t j = 0; j < mat->cols; j++) {
-//       if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
-//         int x = (int)get_x_coord(i, mat->rows);
-//         int y = (int)get_y_coord(j, mat->cols);
-//         __print_element(count, x, y);
-//       }
-//     }
-//   }
-// }
+static void print_structure_dense(DoubleMatrix *mat, FloatMatrix *count) {
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
+        int x = (int)get_x_coord(i, mat->rows);
+        int y = (int)get_y_coord(j, mat->cols);
+        __print_element(count, x, y);
+      }
+    }
+  }
+}
 
+/* Removed unsafe version
 static void print_structure_dense(float *values, size_t rows, size_t cols,
                                   FloatMatrix *count) {
   for (size_t i = 0; i < rows; i++) {
@@ -160,6 +163,7 @@ static void print_structure_dense(float *values, size_t rows, size_t cols,
     }
   }
 }
+*/
 
 static void print_structure_coo(DoubleSparseMatrix *mat, FloatMatrix *count,
                                 double density) {
@@ -200,7 +204,7 @@ void dm_cplot(DoubleMatrix *mat) {
   printf("Matrix (%zu x %zu), density: %lf\n", mat->rows, mat->cols, density);
   FloatMatrix *count = sm_create(WIDTH, HEIGHT);
 
-  print_structure_dense((float *)mat->values, mat->rows, mat->cols, count);
+  print_structure_dense(mat, count);
 
   show_grid(count);
 }
