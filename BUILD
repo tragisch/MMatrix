@@ -17,5 +17,5 @@ installer(
         "//src:matrix_header", # must be collected in a filegroup
         "//:LICENSE.txt",      # if available
         ],
-    system_integration = True, # symlink to /usr/local/lib and /usr/local/include
+    system_integration = False, # set "True" symlink to /usr/local/lib and /usr/local/include
 )

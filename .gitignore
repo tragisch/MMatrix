@@ -106,3 +106,5 @@ MODULE.bazel.lock
 *.png
 StyleGuide.md
 _archive/*
+MODULE.bazel.lock
+MODULE.bazel.lock

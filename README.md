@@ -39,10 +39,19 @@ You can install the compiled library and headers into a custom directory using t
 bazel run //:matrix_installer -- /your/installation/path
 ```
 
-To also create symbolic links into system-wide directories (e.g., `/usr/local/include`, `/usr/local/lib`), you can enable system integration:
+To also create symbolic links into system-wide directories (e.g., `/usr/local/include`, `/usr/local/lib`), you can enable system integration in BUILD - File:
 
 ```bash
-bazel run //:matrix_installer -- --system /your/installation/path
+installer(
+    name = "matrix_installer",
+    data = [
+        "//src:matrix",        # the target to be installed
+        "//src:matrix_test",   # must be collected in a filegroup
+        "//src:matrix_header", # must be collected in a filegroup
+        "//:LICENSE.txt",      # if available
+        ],
+    system_integration = False, # set "True" symlink to /usr/local/lib and /usr/local/include
+)
 ```
 
 This will:
