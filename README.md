@@ -30,7 +30,20 @@ Currently:
 - PCG-based random number generation for reproducibility and parallelism
 
 ---
+## Build
 
+Ensure required dependencies are installed via Homebrew:
+
+```bash
+brew install openblas libomp suitesparse matio
+```
+
+Then build using Bazel:
+
+```bash
+bazel build //src:matrix
+```
+---
 ## Installation
 
 You can install the compiled library and headers into a custom directory using the Bazel installer target:
@@ -51,19 +64,6 @@ This will:
 - Install public headers into `include/`
 - Optionally create symlinks for easy access from standard system locations
 
-## Build
-
-Ensure required dependencies are installed via Homebrew:
-
-```bash
-brew install openblas libomp suitesparse matio
-```
-
-Then build using Bazel:
-
-```bash
-bazel build //src:matrix
-```
 
 ---
 
