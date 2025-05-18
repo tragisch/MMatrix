@@ -1,5 +1,5 @@
 load("@phst_license_test//:def.bzl", "license_test")
-load("//tools:install_library.bzl", "install_library_macro")
+load("//tools/bazel/install:def.bzl", "installer")
 
 # identify missing license headers "bazel run //:license_test"
 license_test(
@@ -9,15 +9,13 @@ license_test(
     marker = "//:MODULE.bazel",
 )
 
-filegroup(
-    name = "all_headers",
-    srcs = glob(["src/include/*.h"]),
-    visibility = ["//visibility:public"],
-)
-
-# install library macro
-install_library_macro(
-    name = "install_my_lib",
-    srcs = ["//src:matrix"],
-    hdrs = ["//src/include:all_headers"],
+installer(
+    name = "matrix_installer",
+    data = [
+        "//src:matrix",        # the target to be installed
+        "//src:matrix_test",   # must be collected in a filegroup
+        "//src:matrix_header", # must be collected in a filegroup
+        "//:LICENSE.txt",      # if available
+        ],
+    system_integration = True, # symlink to /usr/local/lib and /usr/local/include
 )

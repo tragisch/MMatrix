@@ -43,6 +43,12 @@ default_deps = [
     "@pcg",
 ]
 
+filegroup(
+    name = "matrix_header",
+    srcs = glob(["include/*.h"]),
+    visibility = ["//visibility:public"],
+)
+
 # matrix library
 cc_library(
     name = "matrix",

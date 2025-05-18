@@ -31,6 +31,26 @@ Currently:
 
 ---
 
+## Installation
+
+You can install the compiled library and headers into a custom directory using the Bazel installer target:
+
+```bash
+bazel run //:matrix_installer -- /your/installation/path
+```
+
+To also create symbolic links into system-wide directories (e.g., `/usr/local/include`, `/usr/local/lib`), you can enable system integration:
+
+```bash
+bazel run //:matrix_installer -- --system /your/installation/path
+```
+
+This will:
+
+- Copy the compiled static library (`libmatrix.a`) and dependencies into `lib/`
+- Install public headers into `include/`
+- Optionally create symlinks for easy access from standard system locations
+
 ## Build
 
 Ensure required dependencies are installed via Homebrew:
@@ -76,5 +96,5 @@ sm_destroy(B);
 ---
 
 ## License
-
-MIT – see `LICENSE` file.
+This project is primarily licensed under the MIT License (see LICENSE).
+It includes files from the Bazel project, licensed under the Apache License 2.0 (see tools/bazel/install/*, ).
