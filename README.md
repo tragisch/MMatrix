@@ -59,7 +59,6 @@ installer(
     name = "matrix_installer",
     data = [
         "//src:matrix",        # the target to be installed
-        "//src:matrix_test",   # must be collected in a filegroup
         "//src:matrix_header", # must be collected in a filegroup
         "//:LICENSE.txt",      # if available
         ],
