@@ -14,7 +14,7 @@ unity_test(
     name = "test_dm",
     srcs = ["test_dm.c",],
     my_config = ["my_config.yml"],
-    deps = ["//src:matrix",],
+    deps = ["//src:dm",],
     tags = ["smoke"],
 )
 
@@ -22,7 +22,7 @@ unity_test(
     name = "test_sm",
     srcs = ["test_sm.c",],
     my_config = ["my_config.yml"],
-    deps = ["//src:matrix",],
+    deps = ["//src:sm",],
     tags = ["smoke"],
 )
 
@@ -30,7 +30,7 @@ unity_test(
     name = "test_dms",
     srcs = ["test_dms.c",],
     my_config = ["my_config.yml"],
-     deps = ["//src:matrix",],
+     deps = ["//src:dms",],
     tags = ["smoke"],
 )
 

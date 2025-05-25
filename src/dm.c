@@ -104,15 +104,12 @@ size_t dm_rank_euler(const DoubleMatrix *mat) {
   size_t rank = 0;
 #pragma omp parallel for reduction(+ : rank)
   for (size_t i = 0; i < copy->rows; i++) {
-    int has_non_zero_element = 0;
+    const double *row = &copy->values[i * copy->cols];
     for (size_t j = 0; j < copy->cols; j++) {
-      if (fabs(dm_get(copy, i, j)) > EPSILON) {
-        has_non_zero_element = 1;
+      if (fabs(row[j]) > EPSILON) {
+        rank++;
         break;
       }
-    }
-    if (has_non_zero_element) {
-      rank++;
     }
   }
 
@@ -151,9 +148,9 @@ double *dm_to_column_major(const DoubleMatrix *mat) {
 /*      Public Functions      */
 /*******************************/
 
-const char *dm_active_library() { return ACTIVE_LIB; }
+const char *dm_active_library(void) { return ACTIVE_LIB; }
 
-DoubleMatrix *dm_create_empty() {
+DoubleMatrix *dm_create_empty(void) {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->rows = 0;
   matrix->cols = 0;
@@ -206,7 +203,8 @@ DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
   DoubleMatrix *mat = dm_create(rows, cols);
   size_t total = rows * cols;
 
-  unsigned int global_seed = (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
+  unsigned int global_seed =
+      (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
 #pragma omp parallel
   {
     pcg32_random_t rng;
@@ -412,7 +410,7 @@ DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] -= b[i];
   }
 #else
-#pragma omp parallel for simd
+#pragma omp simd
   for (size_t i = 0; i < size; ++i) {
     a[i] -= b[i];
   }
@@ -603,8 +601,8 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   }
 
   // copy values from old matrix to new matrix:
-  for (int i = 0; i < new_row; i++) {
-    for (int j = 0; j < new_col; j++) {
+  for (size_t i = 0; i < new_row; i++) {
+    for (size_t j = 0; j < new_col; j++) {
       if (i >= mat->rows || j >= mat->cols) {
         new_values[i * new_col + j] = 0.0;
       } else {
@@ -643,8 +641,13 @@ double dm_trace(const DoubleMatrix *mat) {
                     mat->values, (BLASINT)mat->cols + 1);
 #else
   double trace = 0;
-  for (size_t i = 0; i < mat->rows; i++) {
-    trace += dm_get(mat, i, i);
+  size_t size = mat->rows;
+  const double *values = mat->values;
+  size_t stride = mat->cols + 1;
+
+#pragma omp simd reduction(+ : trace)
+  for (size_t i = 0; i < size; i++) {
+    trace += values[i * stride];
   }
   return trace;
 #endif
@@ -655,9 +658,14 @@ double dm_norm(const DoubleMatrix *mat) {
   return cblas_dnrm2((BLASINT)(mat->rows * mat->cols), mat->values, 1);
 #else
   double norm = 0;
-  for (size_t i = 0; i < mat->rows * mat->cols; i++) {
-    norm += mat->values[i] * mat->values[i];
+  const double *values = mat->values;
+  size_t size = mat->rows * mat->cols;
+
+#pragma omp simd reduction(+ : norm)
+  for (size_t i = 0; i < size; i++) {
+    norm += values[i] * values[i];
   }
+
   return sqrt(norm);
 #endif
 }
@@ -757,7 +765,7 @@ void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] += b[i];
   }
 #else
-#pragma omp parallel for
+#pragma omp simd
   for (size_t i = 0; i < size; ++i) {
     a[i] += b[i];
   }
@@ -782,7 +790,7 @@ void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] -= b[i];
   }
 #else
-#pragma omp parallel for simd
+#pragma omp simd
   for (size_t i = 0; i < size; ++i) {
     a[i] -= b[i];
   }
@@ -867,7 +875,7 @@ DoubleMatrix *dm_div(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] /= b[i];
   }
 #else
-#pragma omp parallel for simd
+#pragma omp simd
   for (size_t i = 0; i < size; ++i) {
     a[i] /= b[i];
   }
@@ -918,7 +926,7 @@ void dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] /= b[i];
   }
 #else
-#pragma omp parallel for simd
+#pragma omp simd
   for (size_t i = 0; i < size; ++i) {
     a[i] /= b[i];
   }

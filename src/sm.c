@@ -103,7 +103,7 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   return rank;
 }
 
-static unsigned int sm_random_seed() {
+static unsigned int sm_random_seed(void) {
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
   return (unsigned int)(ts.tv_nsec ^ ts.tv_sec);
@@ -131,9 +131,9 @@ float *sm_to_column_major(const FloatMatrix *mat) {
 /*      Public Functions      */
 /*******************************/
 
-const char *sm_active_library() { return ACTIVE_LIB; }
+const char *sm_active_library(void) { return ACTIVE_LIB; }
 
-FloatMatrix *sm_create_empty() {
+FloatMatrix *sm_create_empty(void) {
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
   matrix->rows = 0;
   matrix->cols = 0;
@@ -222,12 +222,12 @@ FloatMatrix *sm_create_random(size_t rows, size_t cols) {
   FloatMatrix *mat = sm_create(rows, cols);
   size_t size = rows * cols;
 
-  unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
+  unsigned int global_seed = sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
 #pragma omp parallel
   {
     pcg32_random_t rng;
-    unsigned int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
+    int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       mat->values[i] = (float)pcg32_random_r(&rng) / UINT32_MAX;
@@ -251,18 +251,18 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   float stddev = sqrtf(2.0f / fan_in);
   size_t size = rows * cols;
 
-  unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
+  unsigned int global_seed = sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
 #pragma omp parallel
   {
     pcg32_random_t rng;
-    unsigned int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
+    int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform (approximate standard normal)
       float u1 = (float)pcg32_random_r(&rng) / UINT32_MAX;
       float u2 = (float)pcg32_random_r(&rng) / UINT32_MAX;
-      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
+      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
       mat->values[i] = z * stddev;
     }
   }
@@ -286,18 +286,18 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
   float stddev = sqrtf(2.0f / (fan_in + fan_out));
   size_t size = rows * cols;
 
-  unsigned int global_seed = sm_random_seed() ^ (uintptr_t)mat;
+  unsigned int global_seed = sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
 #pragma omp parallel
   {
     pcg32_random_t rng;
-    unsigned int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
+    int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform: generate standard normal distributed value
       float u1 = (float)pcg32_random_r(&rng) / UINT32_MAX;
       float u2 = (float)pcg32_random_r(&rng) / UINT32_MAX;
-      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * M_PI * u2);
+      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
       mat->values[i] = z * stddev;
     }
   }
@@ -547,7 +547,7 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   float *a_col = sm_to_column_major(a_copy);
   float *b_col = sm_to_column_major(b_copy);
 
-  int *ipiv = malloc(n * sizeof(int));
+  int *ipiv = malloc((size_t)n * sizeof(int));
   int info;
 
   // Solve AX = B using LAPACK
@@ -584,7 +584,7 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   FloatMatrix *a_copy = sm_clone(A);
   FloatMatrix *b_copy = sm_clone(b);
 
-  int *ipiv = malloc(n * sizeof(int));
+  int *ipiv = malloc((size_t)n * sizeof(int));
   int info;
 
   info = LAPACKE_sgesv(LAPACK_ROW_MAJOR,
@@ -726,10 +726,10 @@ bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
     return false;
 
   for (size_t pivot = 0; pivot < n; pivot++) {
-    float max_val = fabs(mat->values[pivot * n + pivot]);
+    float max_val = (float)fabs(mat->values[pivot * n + pivot]);
     size_t max_row = pivot;
     for (size_t row = pivot + 1; row < n; row++) {
-      float val = fabs(mat->values[row * n + pivot]);
+      float val = (float)fabs(mat->values[row * n + pivot]);
       if (val > max_val) {
         max_val = val;
         max_row = row;
@@ -892,7 +892,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   sgetri_(&n, inverse->values, &n, ipiv, &work_opt, &lwork, &info);
 
   lwork = (BLASINT)work_opt;
-  float *work = (float *)malloc(lwork * sizeof(float));
+  float *work = (float *)malloc((size_t)lwork * sizeof(float));
   if (work == NULL) {
     free(ipiv);
     free(inverse->values);
@@ -1111,7 +1111,7 @@ size_t sm_rank(const FloatMatrix *mat) {
   if (mat == NULL || mat->values == NULL) {
     return 0; // No matrix, no rank
   }
-  int rank = 0;
+  size_t rank = 0;
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
     defined(USE_ACCELERATE_MPS)
   BLASINT m = (BLASINT)mat->rows;
@@ -1124,22 +1124,22 @@ size_t sm_rank(const FloatMatrix *mat) {
 
   sgeqrf_(&m, &n, mat->values, &lda, NULL, &wkopt, &lwork, &info);
   lwork = (BLASINT)wkopt;
-  work = (float *)malloc(lwork * sizeof(float));
+  work = (float *)malloc((size_t)lwork * sizeof(float));
   if (work == NULL) {
-    return -1; // Memory allocation failed
+    return 0; // Memory allocation failed
   }
 
-  float *tau = (float *)malloc((m < n ? m : n) * sizeof(float));
+  float *tau = (float *)malloc((size_t)(m < n ? m : n) * sizeof(float));
   if (tau == NULL) {
     free(work);
-    return -1; // Memory allocation failed
+    return 0; // Memory allocation failed
   }
 
   sgeqrf_(&m, &n, mat->values, &lda, tau, work, &lwork, &info);
   free(work);
   free(tau);
   if (info != 0) {
-    return -1; // QR factorization failed
+    return 0; // QR factorization failed
   }
 
   int k = (m < n) ? m : n;
@@ -1410,11 +1410,11 @@ void sm_inplace_normalize_cols(FloatMatrix *mat) {
 #if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
   for (size_t j = 0; j < cols; ++j) {
     float norm;
-    vDSP_svesq(&mat->values[j], cols, &norm, rows);
+    vDSP_svesq(&mat->values[j], (vDSP_Stride)cols, &norm, (vDSP_Length)rows);
     norm = sqrtf(norm);
     if (norm > 1e-8f) {
       float inv = 1.0f / norm;
-      vDSP_vsmul(&mat->values[j], cols, &inv, &mat->values[j], cols, rows);
+      vDSP_vsmul(&mat->values[j], (vDSP_Stride)cols, &inv, &mat->values[j], (vDSP_Stride)cols, (vDSP_Length)rows);
     }
   }
 #else

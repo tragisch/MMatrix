@@ -7,7 +7,6 @@
  */
 
 #include "dm.h"
-#include "m_io.h"
 
 /******************************
  ** Test preconditions:
@@ -129,10 +128,10 @@ void test_dm_get_row() {
   TEST_ASSERT_EQUAL_INT(1, vec->rows);
 
   // check vector values
-  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(vec, 1, 0));
-  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(vec, 1, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(vec, 1, 2));
-  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(vec, 1, 3));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(vec, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(vec, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(vec, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(vec, 0, 3));
 
   // free memory
   dm_destroy(mat);
@@ -143,9 +142,9 @@ void test_dm_get_col(void) {
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
   DoubleMatrix *mat = dm_create_from_2D_array(3, 2, values);
   DoubleMatrix *vec = dm_get_col(mat, 1);
-  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(vec, 0, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(vec, 1, 1));
-  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(vec, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(vec, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(vec, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(vec, 2, 0));
   TEST_ASSERT_EQUAL(3, vec->rows);
   dm_destroy(mat);
   dm_destroy(vec);

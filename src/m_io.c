@@ -78,7 +78,7 @@ static void show_grid(FloatMatrix *count) {
   for (int y = 0; y < HEIGHT; y++) {
     for (int x = 0; x < WIDTH; x++) {
       // Check if the character has a color escape code
-      int color = (int)sm_get(count, x, y);
+      int color = (int)sm_get(count, (size_t)x, (size_t)y);
       if (color > 1) {
         // get color escape code
         int grey_color = grey_shades[color];
@@ -134,7 +134,7 @@ static void init_grid(void) {
 static void __print_element(FloatMatrix *count, size_t x, size_t y) {
   if (x < count->cols && y < count->rows) {
     count->values[y * count->cols + x]++;
-    plot(x, y, '*');
+    plot((int)x, (int)y, '*');
   }
 }
 
@@ -144,7 +144,7 @@ static void print_structure_dense(DoubleMatrix *mat, FloatMatrix *count) {
       if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
         int x = (int)get_x_coord(i, mat->rows);
         int y = (int)get_y_coord(j, mat->cols);
-        __print_element(count, x, y);
+        __print_element(count, (size_t)x, (size_t)y);
       }
     }
   }
@@ -178,7 +178,7 @@ static void print_structure_coo(DoubleSparseMatrix *mat, FloatMatrix *count,
     if (rand_number < density) {
       int x = get_x_coord(mat->row_indices[i], mat->rows);
       int y = get_y_coord(mat->col_indices[i], mat->cols);
-      __print_element(count, x, y);
+      __print_element(count, (size_t)x, (size_t)y);
     }
   }
 }
@@ -219,7 +219,7 @@ void sm_cplot(FloatMatrix *mat) {
       if (fabsf(mat->values[i * mat->cols + j]) > EPSILON) {
         int x = (int)get_x_coord(i, mat->rows);
         int y = (int)get_y_coord(j, mat->cols);
-        sm_set(count, x, y, sm_get(count, x, y) + 1);
+        sm_set(count, (size_t)x, (size_t)y, sm_get(count, (size_t)x, (size_t)y) + 1);
         plot(x, y, '*');
       }
     }

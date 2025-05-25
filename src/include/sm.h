@@ -29,7 +29,7 @@ typedef struct FloatMatrix {
 /**************************************/
 /*         Matrix Creation            */
 /**************************************/
-FloatMatrix *sm_create_empty();
+FloatMatrix *sm_create_empty(void);
 FloatMatrix *sm_create_zeros(size_t rows, size_t cols);
 FloatMatrix *sm_create(size_t rows, size_t cols);
 FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values);
@@ -115,7 +115,7 @@ bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order);
 /*         Matrix Utilities           */
 /**************************************/
 void sm_print(const FloatMatrix *matrix);
-const char *sm_active_library();
+const char *sm_active_library(void);
 void sm_destroy(FloatMatrix *mat);
 
 #endif // sm_H

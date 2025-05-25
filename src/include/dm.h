@@ -16,7 +16,6 @@
 #include <string.h>
 #include <time.h>
 
-
 /**************************************/
 /*         Matrix Struct              */
 /**************************************/
@@ -30,7 +29,7 @@ typedef struct DoubleMatrix {
 /**************************************/
 /*         Matrix Creation            */
 /**************************************/
-DoubleMatrix *dm_create_empty();
+DoubleMatrix *dm_create_empty(void);
 DoubleMatrix *dm_create_with_values(size_t rows, size_t cols, double *values);
 DoubleMatrix *dm_create(size_t rows, size_t cols);
 DoubleMatrix *dm_create_clone(const DoubleMatrix *m);
@@ -64,8 +63,10 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col);
 /*       Matrix Arithmetic            */
 /**************************************/
 DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2);
-DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat, const double number);
-DoubleMatrix *dm_elementwise_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2);
+DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,
+                                    const double number);
+DoubleMatrix *dm_elementwise_multiply(const DoubleMatrix *mat1,
+                                      const DoubleMatrix *mat2);
 DoubleMatrix *dm_div(const DoubleMatrix *mat1, const DoubleMatrix *mat2);
 DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2);
 DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2);
@@ -84,7 +85,8 @@ void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2);
 void dm_inplace_transpose(DoubleMatrix *mat);
 void dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar);
 void dm_inplace_gauss_elimination(DoubleMatrix *mat);
-void dm_inplace_elementwise_multiply(DoubleMatrix *mat1, const DoubleMatrix *mat2);
+void dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
+                                     const DoubleMatrix *mat2);
 void dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2);
 
 /**************************************/
@@ -114,7 +116,7 @@ double *dm_to_column_major(const DoubleMatrix *mat);
 /*              File I/O              */
 /**************************************/
 void dm_print(const DoubleMatrix *matrix);
-const char *dm_active_library();
+const char *dm_active_library(void);
 
 /**************************************/
 /*         Memory Management          */

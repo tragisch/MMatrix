@@ -93,7 +93,7 @@ DoubleSparseMatrix *dms_create_with_values(size_t rows, size_t cols, size_t nnz,
   return mat;
 }
 
-DoubleSparseMatrix *dms_create_empty() {
+DoubleSparseMatrix *dms_create_empty(void) {
   DoubleSparseMatrix *mat = malloc(sizeof(DoubleSparseMatrix));
   if (!mat) {
     perror("Error allocating memory for matrix struct");
@@ -195,9 +195,9 @@ DoubleSparseMatrix *dms_create_identity(size_t n) {
 }
 
 cs *dms_to_cs(const DoubleSparseMatrix *coo) {
-  int m = coo->rows;
-  int n = coo->cols;
-  int nz = coo->nnz;
+  int m = (int)coo->rows;
+  int n = (int)coo->cols;
+  int nz = (int)coo->nnz;
 
   // Allocate a CSparse matrix in COO format
   cs *T = cs_spalloc(m, n, nz, 1, 1);
@@ -205,7 +205,7 @@ cs *dms_to_cs(const DoubleSparseMatrix *coo) {
     return NULL;
 
   // Fill the CSparse matrix with the data from the DoubleSparseMatrix
-  for (size_t k = 0; k < nz; k++) {
+  for (size_t k = 0; k < (size_t)nz; k++) {
     cs_entry(T, coo->row_indices[k], coo->col_indices[k], coo->values[k]);
   }
 
@@ -223,18 +223,18 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
   if (!coo)
     return NULL;
 
-  coo->rows = A->m;
-  coo->cols = A->n;
-  coo->nnz = A->nzmax;
-  coo->capacity = A->nzmax + INIT_CAPACITY;
+  coo->rows = (size_t)A->m;
+  coo->cols = (size_t)A->n;
+  coo->nnz = (size_t)A->nzmax;
+  coo->capacity = (size_t)(A->nzmax + INIT_CAPACITY);
 
   // Allocate memory for the COO arrays
   coo->row_indices =
-      (size_t *)malloc(dms_max_int(coo->nnz, coo->capacity) * sizeof(size_t));
+      (size_t *)malloc((size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(size_t));
   coo->col_indices =
-      (size_t *)malloc(dms_max_int(coo->nnz, coo->capacity) * sizeof(size_t));
+      (size_t *)malloc((size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(size_t));
   coo->values =
-      (double *)malloc(dms_max_int(coo->nnz, coo->capacity) * sizeof(double));
+      (double *)malloc((size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(double));
 
   if (!coo->row_indices || !coo->col_indices || !coo->values) {
     free(coo->row_indices);
@@ -246,10 +246,10 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
 
   // Fill the COO arrays with the data from the CSC matrix
   size_t nnz_index = 0;
-  for (size_t col = 0; col < A->n; col++) {
-    for (size_t p = A->p[col]; p < A->p[col + 1]; p++) {
-      coo->row_indices[nnz_index] = A->i[p];
-      coo->col_indices[nnz_index] = col;
+  for (int col = 0; col < A->n; col++) {
+    for (int p = A->p[col]; p < A->p[col + 1]; p++) {
+      coo->row_indices[nnz_index] = (size_t)A->i[p];
+      coo->col_indices[nnz_index] = (size_t)col;
       coo->values[nnz_index] = A->x[p];
       nnz_index++;
     }
@@ -271,13 +271,13 @@ DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
   unsigned int global_seed =
       (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
 
-#pragma omp parallel
+  #pragma omp parallel
   {
     pcg32_random_t rng;
-    unsigned int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ thread_id, thread_id);
+    int thread_id = omp_get_thread_num();
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
 
-#pragma omp for
+    #pragma omp for
     for (size_t k = 0; k < nnz; ++k) {
       mat->row_indices[k] = pcg32_random_r(&rng) % rows;
       mat->col_indices[k] = pcg32_random_r(&rng) % cols;

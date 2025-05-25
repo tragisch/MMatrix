@@ -1,40 +1,45 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 
-
-# define the platforms
-constraint_setting(name = "custom_os")
-constraint_value(
-    name = "macos_arm64",
-    constraint_setting = ":custom_os",
-)
-
 platform(
     name = "macos_arm64_platform",
     constraint_values = [
         "@platforms//os:macos",
         "@platforms//cpu:arm64",
-        ":macos_arm64",
     ],
 )
 
 config_setting(
     name = "on_macos_arm64",
-    constraint_values = [":macos_arm64"],
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
 )
 
 # build options for different architectures
 dm_copts = [
-    "-O2",
-    "-fno-fast-math",
-    "-Xpreprocessor",
+    "-O3",
+    "-Xpreprocessor", # needs to accept -fopenmp
+    "-fopenmp",
+    "-Wall", 
+    "-Wextra",
+    "-Wpedantic",
+    "-Wconversion",
+    "-Wsign-conversion"
 ]
 
 sm_copts = [
     "-O3",
     "-ffast-math",
     "-funsafe-math-optimizations",
-    "-Xpreprocessor",
+    "-Xpreprocessor", # needs to accept -fopenmp
+    "-fopenmp",
+    "-Wall", 
+    "-Wextra", 
+    "-Wpedantic",
+    "-Wconversion",
+    "-Wsign-conversion"
 ]
 
 default_deps = [
@@ -60,6 +65,14 @@ cc_library(
         "include/m_convert.h",
         "include/m_io.h",
     ],
+    copts = [
+        "-O3",
+        "-Wall", 
+        "-Wextra",
+        "-Wpedantic",
+        "-Wconversion",
+        "-Wsign-conversion"
+    ],
     includes = ["include"],
     visibility = ["//visibility:public"],
     deps = [
@@ -78,36 +91,29 @@ cc_library(
     hdrs = [
         "include/dm.h",
     ],
-    copts = select({
-        "//conditions:default": dm_copts + ["-fopenmp"],
-        ":use_accelerate": dm_copts + [
+    copts = dm_copts + select({
+        ":on_macos_arm64": [
             "-DUSE_ACCELERATE",
             "-DACCELERATE_NEW_LAPACK",
         ],
-        ":use_accelerate_mps": dm_copts + [
-            "-DUSE_ACCELERATE",
-            "-DACCELERATE_NEW_LAPACK",
-        ],
-        ":use_openblas": dm_copts + [
+        "//conditions:default": [],
+    }) + select({
+        ":use_openblas": [
             "-DUSE_OPENBLAS",
         ],
+        "//conditions:default": [],
     }),
+
+
     includes = ["include"],
+
     linkopts = select({
-        "//conditions:default": ["-lomp"],
-        ":use_accelerate": [
+        ":on_macos_arm64": [
             "-framework Accelerate",
-             "-lomp",
-        ],
-        ":use_accelerate_mps": [
-            "-framework Accelerate",
-             "-lomp",
-        ],
-        ":use_openblas": [
-            "-L/opt/homebrew/opt/openblas/lib",
-            "-lopenblas",
+            "-lc++abi",
             "-lomp",
         ],
+        "//conditions:default": ["-lomp"],
     }),
     visibility = ["//visibility:public"],
     deps = select({
@@ -127,7 +133,7 @@ cc_library(
     hdrs = [
         "include/sm.h",
     ],
-    copts = sm_copts + ["-fopenmp"] + select({
+    copts = sm_copts + select({
         ":on_macos_arm64": [
             "-DUSE_ACCELERATE_MPS",
             "-DACCELERATE_NEW_LAPACK",
@@ -179,8 +185,14 @@ cc_library(
     ],
     copts = [
     "-O3",
+    "-Xpreprocessor",
     "-ffast-math",
     "-funsafe-math-optimizations",
+    "-Wall", 
+    "-Wextra",
+    "-Wpedantic",
+    "-Wconversion",
+    "-Wsign-conversion"
     ],
     includes = ["include"],
     deps = default_deps + ["@suitesparse"],

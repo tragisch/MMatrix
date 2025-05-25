@@ -26,7 +26,7 @@ typedef struct DoubleSparseMatrix {
 } DoubleSparseMatrix;
 
 // Function declarations
-DoubleSparseMatrix *dms_create_empty();
+DoubleSparseMatrix *dms_create_empty(void);
 DoubleSparseMatrix *dms_create_with_values(size_t rows, size_t cols, size_t nnz,
                                            size_t *row_indices,
                                            size_t *col_indices, double *values);

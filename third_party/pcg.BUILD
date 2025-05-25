@@ -5,5 +5,9 @@ cc_library(
     srcs = glob(["src/*.c"]),
     hdrs = ["include/pcg_variants.h"],
     includes = ["include"],
+    copts = [
+        "-O2",
+         "-Wno-macro-redefined"
+    ],
     visibility = ["//visibility:public"],
 )

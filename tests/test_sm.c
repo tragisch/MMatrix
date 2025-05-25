@@ -6,7 +6,6 @@
  * See the LICENSE file in the root directory for details.
  */
 
-#include "m_io.h"
 #include "sm.h"
 
 /******************************
