@@ -91,12 +91,13 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   size_t rank = 0;
 #pragma omp parallel for reduction(+ : rank)
   for (size_t i = 0; i < rows; i++) {
+    size_t found = 0;
     for (size_t j = 0; j < cols; j++) {
       if (fabs(copy->values[i * cols + j]) > EPSILON) {
-        rank++;
-        break;
+        found = 1;
       }
     }
+    rank += found;
   }
 
   sm_destroy(copy);
@@ -118,9 +119,10 @@ float *sm_to_column_major(const FloatMatrix *mat) {
     return NULL;
   }
 
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < rows; ++i) {
-    for (size_t j = 0; j < cols; ++j) {
+#pragma omp parallel for
+  for (size_t j = 0; j < cols; ++j) {
+#pragma omp simd
+    for (size_t i = 0; i < rows; ++i) {
       col_major[j * rows + i] = mat->values[i * cols + j];
     }
   }
@@ -222,12 +224,14 @@ FloatMatrix *sm_create_random(size_t rows, size_t cols) {
   FloatMatrix *mat = sm_create(rows, cols);
   size_t size = rows * cols;
 
-  unsigned int global_seed = sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
+  unsigned int global_seed =
+      sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
 #pragma omp parallel
   {
     pcg32_random_t rng;
     int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
+                    (unsigned int)thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       mat->values[i] = (float)pcg32_random_r(&rng) / UINT32_MAX;
@@ -251,12 +255,14 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   float stddev = sqrtf(2.0f / fan_in);
   size_t size = rows * cols;
 
-  unsigned int global_seed = sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
+  unsigned int global_seed =
+      sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
 #pragma omp parallel
   {
     pcg32_random_t rng;
     int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
+                    (unsigned int)thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform (approximate standard normal)
@@ -286,12 +292,14 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
   float stddev = sqrtf(2.0f / (fan_in + fan_out));
   size_t size = rows * cols;
 
-  unsigned int global_seed = sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
+  unsigned int global_seed =
+      sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
 #pragma omp parallel
   {
     pcg32_random_t rng;
     int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
+                    (unsigned int)thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform: generate standard normal distributed value
@@ -564,10 +572,15 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
     return NULL;
   }
 
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < b_copy->rows; ++i) {
-    for (size_t j = 0; j < b_copy->cols; ++j) {
-      b_copy->values[i * b_copy->cols + j] = b_col[j * b_copy->rows + i];
+  float *restrict dst = b_copy->values;
+  float *restrict src = b_col;
+  size_t rows = b_copy->rows;
+  size_t cols = b_copy->cols;
+
+#pragma omp parallel
+  for (size_t i = 0; i < rows; ++i) {
+    for (size_t j = 0; j < cols; ++j) {
+      dst[i * cols + j] = src[j * rows + i];
     }
   }
 
@@ -1414,7 +1427,8 @@ void sm_inplace_normalize_cols(FloatMatrix *mat) {
     norm = sqrtf(norm);
     if (norm > 1e-8f) {
       float inv = 1.0f / norm;
-      vDSP_vsmul(&mat->values[j], (vDSP_Stride)cols, &inv, &mat->values[j], (vDSP_Stride)cols, (vDSP_Length)rows);
+      vDSP_vsmul(&mat->values[j], (vDSP_Stride)cols, &inv, &mat->values[j],
+                 (vDSP_Stride)cols, (vDSP_Length)rows);
     }
   }
 #else

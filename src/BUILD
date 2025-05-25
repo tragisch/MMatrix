@@ -17,6 +17,18 @@ config_setting(
     ],
 )
 
+perf_copts =[
+    "-Wuninitialized",
+    "-Winline",
+    "-Wframe-larger-than=1024",
+    "-Wstack-protector",
+    "-Wpadded",
+    "-Wsign-conversion",
+    "-Wprofile-instr-missing",
+    "-fvectorize",
+    "-Rpass-analysis=loop-vectorize",
+]
+
 # build options for different architectures
 dm_copts = [
     "-O3",
@@ -26,8 +38,8 @@ dm_copts = [
     "-Wextra",
     "-Wpedantic",
     "-Wconversion",
-    "-Wsign-conversion"
-]
+    "-Wsign-conversion",
+] # + perf_copts
 
 sm_copts = [
     "-O3",
@@ -39,8 +51,8 @@ sm_copts = [
     "-Wextra", 
     "-Wpedantic",
     "-Wconversion",
-    "-Wsign-conversion"
-]
+    "-Wsign-conversion",
+] # + perf_copts
 
 default_deps = [
     "@matio",
