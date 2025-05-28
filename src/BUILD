@@ -1,58 +1,32 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 
-platform(
-    name = "macos_arm64_platform",
-    constraint_values = [
-        "@platforms//os:macos",
-        "@platforms//cpu:arm64",
-    ],
-)
-
-config_setting(
-    name = "on_macos_arm64",
-    constraint_values = [
-        "@platforms//os:macos",
-        "@platforms//cpu:arm64",
-    ],
-)
-
-perf_copts =[
-    "-Wuninitialized",
-    "-Winline",
-    "-Wframe-larger-than=1024",
-    "-Wstack-protector",
-    "-Wpadded",
-    "-Wsign-conversion",
-    "-Wprofile-instr-missing",
-    "-fvectorize",
-    "-Rpass-analysis=loop-vectorize",
-]
-
-# build options for different architectures
-dm_copts = [
+perf_copts = [
     "-O3",
-    "-Xpreprocessor", # needs to accept -fopenmp
-    "-fopenmp",
-    "-Wall", 
+    "-fvectorize",
+    "-ffast-math",
+    "-funsafe-math-optimizations",
+    "-funroll-loops",
+    "-fomit-frame-pointer",
+    "-march=native", # apple specific
+    "-Wall",
     "-Wextra",
     "-Wpedantic",
     "-Wconversion",
     "-Wsign-conversion",
-] # + perf_copts
+]
+
+# build options for different architectures
+dm_copts = [
+    "-Xpreprocessor",
+    "-fopenmp",
+] + perf_copts
 
 sm_copts = [
-    "-O3",
-    "-ffast-math",
-    "-funsafe-math-optimizations",
-    "-Xpreprocessor", # needs to accept -fopenmp
+    "-Xpreprocessor",
     "-fopenmp",
-    "-Wall", 
-    "-Wextra", 
-    "-Wpedantic",
-    "-Wconversion",
-    "-Wsign-conversion",
-] # + perf_copts
+] + perf_copts
 
 default_deps = [
     "@matio",
@@ -64,6 +38,16 @@ filegroup(
     name = "matrix_header",
     srcs = glob(["include/*.h"]),
     visibility = ["//visibility:public"],
+)
+
+
+cc_binary(
+    name = "benchmark_sm_multiply",
+    srcs = ["sm_benchmark_multiply.cpp"],
+    deps = [
+        ":sm",
+        "@google_benchmark//:benchmark_main",
+    ],
 )
 
 # matrix library
@@ -104,23 +88,18 @@ cc_library(
         "include/dm.h",
     ],
     copts = dm_copts + select({
-        ":on_macos_arm64": [
+        ":use_accelerate": [
             "-DUSE_ACCELERATE",
             "-DACCELERATE_NEW_LAPACK",
         ],
-        "//conditions:default": [],
-    }) + select({
         ":use_openblas": [
             "-DUSE_OPENBLAS",
         ],
         "//conditions:default": [],
     }),
-
-
     includes = ["include"],
-
     linkopts = select({
-        ":on_macos_arm64": [
+        ":use_accelerate": [
             "-framework Accelerate",
             "-lc++abi",
             "-lomp",
@@ -128,11 +107,9 @@ cc_library(
         "//conditions:default": ["-lomp"],
     }),
     visibility = ["//visibility:public"],
-    deps = select({
-        "//conditions:default": default_deps + [],
-        ":use_accelerate": default_deps + [],
-        ":use_accelerate_mps": default_deps +[],
-        ":use_openblas": default_deps + ["@openblas"],
+    deps = default_deps + select({
+        ":use_openblas": ["@openblas"],
+        "//conditions:default": [],
     }),
 )
 
@@ -146,35 +123,43 @@ cc_library(
         "include/sm.h",
     ],
     copts = sm_copts + select({
-        ":on_macos_arm64": [
+        ":use_accelerate_mps": [
             "-DUSE_ACCELERATE_MPS",
             "-DACCELERATE_NEW_LAPACK",
             "-DUSE_MPS",
             "-fobjc-arc",
         ],
-        "//conditions:default": [],
-    }) + select({
         ":use_openblas": [
             "-DUSE_OPENBLAS",
+        ],
+        ":use_accelerate": [
+            "-DUSE_ACCELERATE",
+            "-DACCELERATE_NEW_LAPACK",
         ],
         "//conditions:default": [],
     }),
     includes = ["include"],
     linkopts = select({
-        ":on_macos_arm64": [
+        ":use_accelerate_mps": [
             "-framework Accelerate",
             "-framework Metal",
             "-framework MetalPerformanceShaders",
             "-lc++abi",
             "-lomp",
         ],
+        ":use_accelerate": [
+            "-framework Accelerate",
+            "-lc++abi",
+            "-lomp",
+        ],
         "//conditions:default": ["-lomp"],
     }),
     visibility = ["//visibility:public"],
-    deps = default_deps + [":sm_mps_objc"] + select({
+    deps = default_deps + select({
+        ":use_accelerate_mps": [":sm_mps_objc"],
         ":use_openblas": ["@openblas"],
         "//conditions:default": [],
-    })
+    }),
 )
 
 # Objective-C library for Metal Performance Shaders (on macOS)
@@ -227,7 +212,3 @@ config_setting(
     name = "use_accelerate_mps",
     values = {"define": "USE_ACCELERATE_MPS=1"},
 )
-
-
-
-

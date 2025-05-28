@@ -1,69 +1,68 @@
-# build
-# ld: warning: -undefined dynamic_lookup may not work with chained fixups
-# temporary solution: https://github.com/bazelbuild/bazel/issues/16413
-# build --linkopt=-Wl,-no_fixup_chains
-build --platforms=//src:macos_arm64_platform
+# This is a Bazel configuration file that sets up various build and test options.
 
 ###############################
-#   test                      #
+# Debug & Analyze             #
 ###############################
 
-test --test_verbose_timeout_warnings 
-test --verbose_failures
-test --keep_going 
-test --test_output=all
+# Debug & Analyze
+build:debug --compilation_mode=dbg
+build:debug --strip=never
+build:debug --copt=-O0
+build:debug --copt=-g
+build:debug --copt=-fno-omit-frame-pointer
+build:debug --copt=-Wno-macro-redefined
+build:debug --linkopt=-fno-omit-frame-pointer
+build:debug --define=DEBUG=1
+
+# Optional: ASAN + UBSAN 
+build:debug --copt=-fsanitize=address
+build:debug --copt=-fsanitize=undefined
+build:debug --linkopt=-fsanitize=address
+build:debug --linkopt=-fsanitize=undefined
+
+# Optional: Analyzer via scan-build
+build:debug --run_under='scan-build --status-bugs'
+
+# Profile:
+build:debug --profile=profile.gz 
+build:debug --generate_json_trace_profile
+build:debug --noslim_profile
+
+build:debug --sandbox_debug
+build:debug --features=layering_check
+build:debug --experimental_generate_json_trace_profile
+
+# bazel build //... --config=debug
 
 ###############################
-# sanitizer                   #
+# Clang Report                #
 ###############################
 
-build:asan_ubsan --strip=never
+build:debug_clang_report --compilation_mode=opt
+build:debug_clang_report --strip=never
+build:debug_clang_report --copt=-ftime-report
+build:debug_clang_report --copt=-O2
+build:debug_clang_report --copt=-Rpass=loop-vectorize
+build:debug_clang_report --copt=-Rpass-missed=loop-vectorize
 
-# AddressSanitizer (ASan)
-build:asan_ubsan --copt=-fsanitize=address
-build:asan_ubsan --linkopt=-fsanitize=address
-
-# UndefinedBehaviorSanitizer (UBSan)
-build:asan_ubsan --copt=-fsanitize=undefined
-build:asan_ubsan --linkopt=-fsanitize=undefined
-
-# common flags for both ASan and UBSan
-build:asan_ubsan --copt=-DASAN_UBSAN_ENABLED
-build:asan_ubsan --copt=-fno-omit-frame-pointer
-build:asan_ubsan --copt=-O1
-build:asan_ubsan --copt=-g
-build:asan_ubsan --copt=-Wno-macro-redefined ## Suppress warnings about redefined macros in ASan/UBSan headers
-build:asan_ubsan --linkopt=-fno-omit-frame-pointer
-
-# Enable ASan and UBSan for all targets
-# build --config=asan_ubsan
-
-# MSan and TSan are not supported on macOS/Clang.
+# bazel build //... --config=debug_clang_report
 
 ###############################
-#   Analyzer                  #
+# Heap Dump Bazel             #
 ###############################
 
-build:analyze --config=asan_ubsan
-build:analyze --action_env=CC=clang
-build:analyze --copt=-fno-omit-frame-pointer
-build:analyze --run_under='scan-build --status-bugs'
-
-# Enable the analyzer for all targets
-# build --config=analyze
-
+build --heap_dump_on_oom
 
 ###############################
-# Profile                     #
+# Benchmark                   #
 ###############################
 
-build --generate_json_trace_profile
+build:benchmark --compilation_mode=opt
+build:benchmark --strip=always
+build:benchmark --define=NDEBUG=1
+build:benchmark --output_filter=
 
-###############################
-# macOS SDK Version           #
-###############################
-
-# build --macos_sdk_version=15.1
+# bazel build //... --config=benchmark
 
 ###############################
 # Output                      #
@@ -74,16 +73,18 @@ build --generate_json_trace_profile
 query --output=label_kind
 
 ###############################
-# Build Debug                 #
+# Test                      #
 ###############################
 
-build --compilation_mode=dbg --spawn_strategy=local
+test --test_verbose_timeout_warnings 
+test --verbose_failures
+test --keep_going 
+test --test_output=all
 
 ###############################
 # Coverage                  #
 ###############################
 
-# # Use Clang as the compiler
 coverage --collect_code_coverage
 coverage --copt=-fprofile-instr-generate
 coverage --copt=-fcoverage-mapping

@@ -44,7 +44,10 @@ static const float EPSILON = 1e-5f;
 #endif
 #endif
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
+#define BLASINT int
+#include <Accelerate/Accelerate.h>
+#elif defined(USE_ACCELERATE_MPS)
 #define BLASINT int
 #include "sm_mps.h"
 #include <Accelerate/Accelerate.h>
@@ -121,7 +124,7 @@ float *sm_to_column_major(const FloatMatrix *mat) {
 
 #pragma omp parallel for
   for (size_t j = 0; j < cols; ++j) {
-#pragma omp simd
+#pragma omp parallel for
     for (size_t i = 0; i < rows; ++i) {
       col_major[j * rows + i] = mat->values[i * cols + j];
     }
@@ -655,13 +658,15 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
       x->values[i * rhs + k] = sum;
     }
 
-    for (ssize_t i = n - 1; i >= 0; --i) {
+    size_t i = n;
+    do {
+      --i;
       float sum = x->values[i * rhs + k];
       for (size_t j = i + 1; j < n; ++j) {
         sum -= lu->values[i * n + j] * x->values[j * rhs + k];
       }
       x->values[i * rhs + k] = sum / lu->values[i * n + i];
-    }
+    } while (i != 0);
   }
 
   sm_destroy(lu);
@@ -969,13 +974,15 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     }
 
     // Rückwärtseinsetzen (U * x = y)
-    for (ssize_t i = n - 1; i >= 0; i--) {
+    size_t i = n;
+    do {
+      --i;
       float sum = inverse->values[i * n + col];
       for (size_t j = i + 1; j < n; j++) {
         sum -= copy->values[i * n + j] * inverse->values[j * n + col];
       }
       inverse->values[i * n + col] = sum / copy->values[i * n + i];
-    }
+    } while (i != 0);
   }
 
   free(pivot_order);
