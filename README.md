@@ -28,6 +28,17 @@ Currently:
 - Optional use of Metal Performance Shaders (MPS)
 - SIMD acceleration with OpenMP and ARM NEON intrinsics
 - PCG-based random number generation for reproducibility and parallelism
+  
+My Mac:
+MacBook Air M3 (24GB)  
+
+| Library sm_multiply()                    | 50x50     | 64x64     | 128x128   | 256x256   | 512x512   | 1024x1024   | 2048x2048   | 4096x4096   | 5000x5000   | RMS       | BigO  |
+|:--------------------------|:----------|:----------|:----------|:----------|:----------|:------------|:------------|:------------|:------------|:----------|:------------------|
+| Apple Accelerate          | 1.59 µs   | 1.28 µs   | 4.25 µs   | 24.43 µs  | 166.80 µs | 1.51 ms     | 12.25 ms    | 99.57 ms    | 190.57 ms   | 4.55e-11  | 0.00151 × N^3     |
+| Metal Performance Shaders | 1.68 µs   | 1.31 µs   | 4.17 µs   | 24.40 µs  | 166.60 µs | 1.51 ms     | 5.49 ms     | 23.23 ms    | 31.92 ms    | 7.33e-11  | 1.31041 × N^2     |
+| Naive                     | 177.63 µs | 366.40 µs | 2.89 ms   | 22.58 ms  | 179.10 ms |             |             |             |             | 4.15e-13  | 1.33566 × N^3     |
+| No BLAS, ARM NEON         | 14.66 µs  | 16.91 µs  | 37.10 µs  | 171.77 µs | 1.16 ms   | 9.77 ms     | 111.41 ms   | 1.48 s      | 3.20 s      | 1.66e-10  | 0.02464 × N^3     |
+| OpenBLAS                  | 3.52 µs   | 14.89 µs  | 119.13 µs | 211.83 µs | 1.00 ms   | 7.37 ms     | 42.95 ms    | 289.20 ms   | 478.63 ms   | 9.10e-11  | 0.00392 × N^3     |
 
 ---
 ## Build

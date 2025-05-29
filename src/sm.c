@@ -1,5 +1,3 @@
-
-
 /*
  * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -38,7 +36,7 @@ static const float EPSILON = 1e-5f;
 #define ACTIVE_LIB "OpenBLAS"
 #else
 #if defined(__ARM_NEON)
-#define ACTIVE_LIB "No BLAS, ARM NEON"
+#define ACTIVE_LIB "OpenMP or ARM NEON"
 #else
 #define ACTIVE_LIB "No BLAS"
 #endif
@@ -453,6 +451,52 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   return product;
 }
 
+// Cache-efficient matrix multiplication using transposed B and dot products
+// (like mat_mul4)
+FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B) {
+  if (!A || !B || A->cols != B->rows) {
+    perror("Error: invalid matrix dimensions for sm_multiply_4.");
+    return NULL;
+  }
+
+  size_t n_a_rows = A->rows;
+  size_t n_a_cols = A->cols;
+  size_t n_b_cols = B->cols;
+
+  FloatMatrix *product = sm_create(n_a_rows, n_b_cols);
+  if (!product)
+    return NULL;
+
+  FloatMatrix *B_T;
+  if (B->rows == B->cols) {
+    B_T = sm_clone(B);
+    sm_inplace_square_transpose(B_T);
+  } else {
+    B_T = sm_transpose(B);
+  }
+
+  if (!B_T) {
+    sm_destroy(product);
+    return NULL;
+  }
+
+#pragma omp parallel for collapse(2) if (n_a_rows > 500 || n_b_cols > 500)
+  for (size_t i = 0; i < n_a_rows; ++i) {
+    for (size_t j = 0; j < n_b_cols; ++j) {
+      float *row_a = &A->values[i * n_a_cols];
+      float *row_bT = &B_T->values[j * n_a_cols];
+      float sum = 0.0f;
+      for (size_t k = 0; k < n_a_cols; ++k) {
+        sum += row_a[k] * row_bT[k];
+      }
+      product->values[i * n_b_cols + j] = sum;
+    }
+  }
+
+  sm_destroy(B_T);
+  return product;
+}
+
 void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
                                      const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
@@ -522,12 +566,15 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat) {
     return copy;
   }
 
-  FloatMatrix *transposed = sm_create(mat->cols, mat->rows);
+  size_t n = mat->rows;
+  size_t m = mat->cols;
+
+  FloatMatrix *transposed = sm_create(m, n);
 
   float *src = mat->values;
   float *dst = transposed->values;
 
-#pragma omp parallel for collapse(2) schedule(dynamic)
+#pragma omp parallel for collapse(2) schedule(dynamic) if (n > 500 || m > 500)
   for (size_t ii = 0; ii < mat->rows; ii += BLOCK_SIZE) {
     for (size_t jj = 0; jj < mat->cols; jj += BLOCK_SIZE) {
       for (size_t i = ii; i < ii + BLOCK_SIZE && i < mat->rows; i++) {
@@ -1292,7 +1339,7 @@ void sm_inplace_square_transpose(FloatMatrix *mat) {
 
   size_t n = mat->rows;
 
-#pragma omp parallel for collapse(2) schedule(dynamic)
+#pragma omp parallel for collapse(2) schedule(dynamic) if (n > 500)
   for (size_t ii = 0; ii < n; ii += BLOCK_SIZE) {
     for (size_t jj = ii; jj < n; jj += BLOCK_SIZE) {
       for (size_t i = ii; i < ii + BLOCK_SIZE && i < n; i++) {

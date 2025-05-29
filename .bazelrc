@@ -42,8 +42,14 @@ build:debug_clang_report --compilation_mode=opt
 build:debug_clang_report --strip=never
 build:debug_clang_report --copt=-ftime-report
 build:debug_clang_report --copt=-O2
-build:debug_clang_report --copt=-Rpass=loop-vectorize
-build:debug_clang_report --copt=-Rpass-missed=loop-vectorize
+
+###############################
+# Report OpenMP              #
+###############################
+
+# build:report_omp --copt=-Rpass=loop-vectorize
+# build:report_omp  --copt=-Rpass-missed=loop-vectorize
+build:report_omp  --copt=-Rpass-analysis=loop-vectorize
 
 # bazel build //... --config=debug_clang_report
 

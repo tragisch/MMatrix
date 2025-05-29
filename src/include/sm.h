@@ -72,6 +72,7 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat);
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2);
+FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B);
 FloatMatrix *sm_elementwise_multiply(const FloatMatrix *mat1,
                                      const FloatMatrix *mat2);
 FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number);
