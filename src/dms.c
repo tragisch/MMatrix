@@ -206,7 +206,7 @@ cs *dms_to_cs(const DoubleSparseMatrix *coo) {
 
   // Fill the CSparse matrix with the data from the DoubleSparseMatrix
   for (size_t k = 0; k < (size_t)nz; k++) {
-    cs_entry(T, coo->row_indices[k], coo->col_indices[k], coo->values[k]);
+    cs_entry(T, (int32_t)coo->row_indices[k], (int32_t)coo->col_indices[k], coo->values[k]);
   }
 
   // Convert the COO matrix to CSC format
@@ -260,7 +260,8 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
 
 DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
                                       double density) {
-  size_t nnz = (size_t)(rows * cols * density);
+  double nnz_d = (double)rows * (double)cols * density;
+  size_t nnz = (size_t)nnz_d;
   if (nnz == 0)
     return dms_create(rows, cols, 0);
 
@@ -271,13 +272,13 @@ DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
   unsigned int global_seed =
       (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
 
-  #pragma omp parallel
+#pragma omp parallel
   {
     pcg32_random_t rng;
     int thread_id = omp_get_thread_num();
     pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
 
-    #pragma omp for
+  #pragma omp for 
     for (size_t k = 0; k < nnz; ++k) {
       mat->row_indices[k] = pcg32_random_r(&rng) % rows;
       mat->col_indices[k] = pcg32_random_r(&rng) % cols;

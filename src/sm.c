@@ -9,6 +9,13 @@
 #include "sm.h"
 #include <omp.h>
 #include <pcg_variants.h>
+#include <time.h>
+
+
+#ifndef CLOCK_REALTIME
+#define CLOCK_REALTIME 0
+#endif
+
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
@@ -24,6 +31,10 @@
 #define INIT_CAPACITY 100
 static const float EPSILON = 1e-5f;
 
+#ifndef M_PI // on Linux not defined in math.h
+#define M_PI  3.14159265358979323846264338327950288f
+#endif 
+
 /*******************************/
 /*      Define Environment     */
 /*******************************/
@@ -38,7 +49,7 @@ static const float EPSILON = 1e-5f;
 #if defined(__ARM_NEON)
 #define ACTIVE_LIB "OpenMP or ARM NEON"
 #else
-#define ACTIVE_LIB "No BLAS"
+#define ACTIVE_LIB "OpenMP"
 #endif
 #endif
 
@@ -53,6 +64,8 @@ static const float EPSILON = 1e-5f;
 #define BLASINT int
 #include <cblas.h>
 #include <lapacke.h>
+#else
+// nothing
 #endif
 
 // Block size used for cache-optimized transpose operations
@@ -235,7 +248,7 @@ FloatMatrix *sm_create_random(size_t rows, size_t cols) {
                     (unsigned int)thread_id);
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
-      mat->values[i] = (float)pcg32_random_r(&rng) / UINT32_MAX;
+      mat->values[i] = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
     }
   }
 
@@ -253,7 +266,7 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   if (!mat)
     return NULL;
 
-  float stddev = sqrtf(2.0f / fan_in);
+  float stddev = sqrtf(2.0f / (float)fan_in);
   size_t size = rows * cols;
 
   unsigned int global_seed =
@@ -267,8 +280,8 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform (approximate standard normal)
-      float u1 = (float)pcg32_random_r(&rng) / UINT32_MAX;
-      float u2 = (float)pcg32_random_r(&rng) / UINT32_MAX;
+      float u1 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
+      float u2 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
       float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
       mat->values[i] = z * stddev;
     }
@@ -290,7 +303,7 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
   if (!mat)
     return NULL;
 
-  float stddev = sqrtf(2.0f / (fan_in + fan_out));
+  float stddev = sqrtf(2.0f / (float)(fan_in + fan_out));
   size_t size = rows * cols;
 
   unsigned int global_seed =
@@ -304,8 +317,8 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
 #pragma omp for
     for (size_t i = 0; i < size; ++i) {
       // Box-Muller Transform: generate standard normal distributed value
-      float u1 = (float)pcg32_random_r(&rng) / UINT32_MAX;
-      float u2 = (float)pcg32_random_r(&rng) / UINT32_MAX;
+      float u1 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
+      float u2 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
       float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
       mat->values[i] = z * stddev;
     }
@@ -1339,7 +1352,7 @@ void sm_inplace_square_transpose(FloatMatrix *mat) {
 
   size_t n = mat->rows;
 
-#pragma omp parallel for collapse(2) schedule(dynamic) if (n > 500)
+#pragma omp parallel for collapse(2) if (n > 500)
   for (size_t ii = 0; ii < n; ii += BLOCK_SIZE) {
     for (size_t jj = ii; jj < n; jj += BLOCK_SIZE) {
       for (size_t i = ii; i < ii + BLOCK_SIZE && i < n; i++) {

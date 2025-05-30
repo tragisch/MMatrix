@@ -722,7 +722,7 @@ size_t dm_rank(const DoubleMatrix *mat) {
   if (mat == NULL || mat->values == NULL) {
     return 0; // No matrix, no rank
   }
-  int rank = 0;
+  size_t rank = 0;
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   BLASINT m = (BLASINT)mat->rows;
   BLASINT n = (BLASINT)mat->cols;

@@ -171,7 +171,7 @@ static void print_structure_coo(DoubleSparseMatrix *mat, FloatMatrix *count,
 #ifdef __APPLE__
     uint32_t random_uint32 = arc4random();
 #else
-    uint32_t random_uint32 = rand();
+    uint32_t random_uint32 = (uint32_t)rand();
 #endif
     double rand_number = (double)random_uint32 / (double)UINT32_MAX;
 

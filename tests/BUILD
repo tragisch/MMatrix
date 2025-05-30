@@ -38,7 +38,7 @@ unity_test(
     name = "test_convert",
     srcs = ["test_convert.c",],
     my_config = ["my_config.yml"],
-    deps = ["//src:matrix",],
+    deps = ["//src:matrix"],
     tags = ["smoke"],
 )
 
