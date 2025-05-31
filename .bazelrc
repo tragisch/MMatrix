@@ -100,14 +100,18 @@ coverage --coverage_output_generator=@bazel_tools//tools/coverage:coverage_repor
 coverage --instrumentation_filter=//src/...  
 
 
-build:homebrew_clang --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
-build:homebrew_clang --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
-build:homebrew_clang --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
-build:homebrew_clang --cxxopt=-stdlib=libc++  # optional
-build:homebrew_clang --linkopt=-fuse-ld=lld
+###############################
+# Linux Toolchain (LLVM)      #
+###############################
 
-test:homebrew_clang --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
-test:homebrew_clang --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
-test:homebrew_clang --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
-test:homebrew_clang --cxxopt=-stdlib=libc++  # optional
-test:homebrew_clang --linkopt=-fuse-ld=lld
+build:linux_llvm --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
+build:linux_llvm --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
+build:linux_llvm --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+build:linux_llvm --cxxopt=-stdlib=libc++  # optional
+build:linux_llvm --linkopt=-fuse-ld=lld
+
+test:linux_llvm --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
+test:linux_llvm --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
+test:linux_llvm --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+test:linux_llvm --cxxopt=-stdlib=libc++  # optional
+test:linux_llvm --linkopt=-fuse-ld=lld
