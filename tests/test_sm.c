@@ -386,6 +386,36 @@ void test_sm_multiply_5x5(void) {
   sm_destroy(expected_mat);
 }
 
+void test_sm_multiply4_5x5(void) {
+  float values1[5][5] = {{1.0f, 2.0f, 3.0f, 4.0f, 5.0f},
+                         {6.0f, 7.0f, 8.0f, 9.0f, 10.0f},
+                         {11.0f, 12.0f, 13.0f, 14.0f, 15.0f},
+                         {16.0f, 17.0f, 18.0f, 19.0f, 20.0f},
+                         {21.0f, 22.0f, 23.0f, 24.0f, 25.0f}};
+
+  float values2[5][5] = {{1.0f, 2.0f, 3.0f, 4.0f, 5.0f},
+                         {6.0f, 7.0f, 8.0f, 9.0f, 10.0f},
+                         {11.0f, 12.0f, 13.0f, 14.0f, 15.0f},
+                         {16.0f, 17.0f, 18.0f, 19.0f, 20.0f},
+                         {21.0f, 22.0f, 23.0f, 24.0f, 25.0f}};
+
+  float expected[5][5] = {{215.f, 230.f, 245.f, 260.f, 275.f},
+                          {490.f, 530.f, 570.f, 610.f, 650.f},
+                          {765.f, 830.f, 895.f, 960.f, 1025.f},
+                          {1040.f, 1130.f, 1220.f, 1310.f, 1400.f},
+                          {1315.f, 1430.f, 1545.f, 1660.f, 1775.f}};
+
+  FloatMatrix *mat1 = sm_from_array_static(5, 5, values1);
+  FloatMatrix *mat2 = sm_from_array_static(5, 5, values2);
+  FloatMatrix *result = sm_multiply_4(mat1, mat2);
+  FloatMatrix *expected_mat = sm_from_array_static(5, 5, expected);
+  TEST_ASSERT_TRUE(sm_is_equal(result, expected_mat));
+  sm_destroy(mat1);
+  sm_destroy(mat2);
+  sm_destroy(result);
+  sm_destroy(expected_mat);
+}
+
 void test_sm_multiply_by_number(void) {
   float values[2][3] = {{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
   float expected[2][3] = {{2.0f, 4.0f, 6.0f}, {8.0f, 10.0f, 12.0f}};
