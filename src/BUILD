@@ -103,7 +103,6 @@ package_copts = select({
     ":use_accelerate_mps": [
         "-DUSE_ACCELERATE_MPS",
         "-DACCELERATE_NEW_LAPACK",
-     #   "-DUSE_MPS",
         "-fobjc-arc",
     ],
     ":use_openblas": [
