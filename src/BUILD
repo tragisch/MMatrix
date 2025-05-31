@@ -1,7 +1,6 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
-load("@bazel_skylib//lib:selects.bzl", "selects")
 
 #############################
 # Define platforms
@@ -113,7 +112,7 @@ package_copts = select({
     "//conditions:default": [],
 })
 
-openmp_copts = []
+openmp_copts = [] #"-fopenmp"
 
 #############################
 # Linker options (separat!)
@@ -140,12 +139,7 @@ mps_linkopts = select({
     "//conditions:default": [],
 })
 
-openblas_linkopts = select({
-    ":use_openblas": [
-      "-lopenblas",
-    ],
-    "//conditions:default": [],
-})
+openblas_linkopts = []
 
 #############################
 # Dependencies
@@ -176,6 +170,7 @@ cc_binary(
     srcs = ["matrix_example.c"],
     deps = [
         ":sm",
+        "@openblas",
     ],
 )
 
@@ -227,6 +222,7 @@ objc_library(
     name = "sm_mps_objc",
     hdrs = ["sm_mps.h"],
     srcs = ["sm_mps.m"],
+    includes = ["."],
     copts = ["-ObjC"],
 )
 

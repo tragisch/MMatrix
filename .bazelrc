@@ -43,6 +43,8 @@ build:debug_clang_report --strip=never
 build:debug_clang_report --copt=-ftime-report
 build:debug_clang_report --copt=-O2
 
+# bazel build //... --config=debug_clang_report
+
 ###############################
 # Report OpenMP              #
 ###############################
@@ -50,8 +52,6 @@ build:debug_clang_report --copt=-O2
 # build:report_omp --copt=-Rpass=loop-vectorize
 # build:report_omp  --copt=-Rpass-missed=loop-vectorize
 build:report_omp  --copt=-Rpass-analysis=loop-vectorize
-
-# bazel build //... --config=debug_clang_report
 
 ###############################
 # Heap Dump Bazel             #
