@@ -18,13 +18,13 @@ module(
 
 bazel_dep(name = "platforms", version = "0.0.11")
 bazel_dep(name = "zlib", version = "1.3.1.bcr.4")
+bazel_dep(name = "apple_support", version = "1.22.0")
 bazel_dep(name = "rules_cc", version = "0.1.1")
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "cgrindel_bazel_starlib", version = "0.25.0")
 bazel_dep(name = "rules_shell", version = "0.4.0")
 bazel_dep(name = "rules_java", version = "8.11.0")
 bazel_dep(name = "google_benchmark", version = "1.9.2")
-bazel_dep(name = "suitesparse", version = "7.10.1.bcr.1")
 
 
 bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
@@ -61,14 +61,6 @@ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "ht
 git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
 
-# mpc - A C library for the arithmetic of complex numbers with arbitrarily high precision and correct rounding of the result.
-http_archive(
-    name = "mpc",
-    build_file = "@//:third_party/mpc.BUILD",
-    sha256 = "da6e798accec57d7b0512ecc38adc151961adefde09811c1c25ee993a653e47c",
-    strip_prefix = "mpc-0.9.0",
-    url = "https://github.com/orangeduck/mpc/archive/refs/tags/0.9.0.tar.gz",
-)
 
 # unity - A simple unit testing library for C.
 http_archive(
@@ -144,10 +136,10 @@ new_local_repository(
     path = "/opt/homebrew/opt/openblas/",
 )
 
-# # suite-sparse is a collection of sparse matrix libraries
-# new_local_repository(
-#     name = "suitesparse",
-#     build_file = "@//:third_party/suitesparse.BUILD",
-#     path = "/opt/homebrew/opt/suite-sparse/",
-# )
+# suite-sparse is a collection of sparse matrix libraries
+new_local_repository(
+    name = "suitesparse",
+    build_file = "@//:third_party/suitesparse.BUILD",
+    path = "/opt/homebrew/opt/suite-sparse/",
+)
 
