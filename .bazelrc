@@ -98,3 +98,16 @@ coverage --linkopt=-fprofile-instr-generate
 coverage --linkopt=-fcoverage-mapping
 coverage --coverage_output_generator=@bazel_tools//tools/coverage:coverage_report_generator
 coverage --instrumentation_filter=//src/...  
+
+
+build:homebrew_clang --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
+build:homebrew_clang --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
+build:homebrew_clang --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+build:homebrew_clang --cxxopt=-stdlib=libc++  # optional
+build:homebrew_clang --linkopt=-fuse-ld=lld
+
+test:homebrew_clang --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
+test:homebrew_clang --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
+test:homebrew_clang --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+test:homebrew_clang --cxxopt=-stdlib=libc++  # optional
+test:homebrew_clang --linkopt=-fuse-ld=lld

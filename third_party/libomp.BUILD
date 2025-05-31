@@ -4,7 +4,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 cc_library(
     name = "libomp",
     srcs = [
-        "lib/libomp.dylib",
+        "lib/libomp.a",
     ],
     hdrs = [
         "include/omp.h",

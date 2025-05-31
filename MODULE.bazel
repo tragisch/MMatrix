@@ -24,7 +24,7 @@ bazel_dep(name = "cgrindel_bazel_starlib", version = "0.25.0")
 bazel_dep(name = "rules_shell", version = "0.4.0")
 bazel_dep(name = "rules_java", version = "8.11.0")
 bazel_dep(name = "google_benchmark", version = "1.9.2")
-bazel_dep(name = "suitesparse", version = "7.10.1.bcr.1")
+#bazel_dep(name = "suitesparse", version = "7.10.1.bcr.1")
 
 
 bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
@@ -134,20 +134,20 @@ new_local_repository(
 new_local_repository(
     name = "libomp",
     build_file = "@//:third_party/libomp.BUILD",
-    path = "/opt/homebrew/opt/libomp",
+    path = "/home/linuxbrew/.linuxbrew/opt/libomp/",
 )
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
 new_local_repository(
     name = "openblas",
     build_file = "@//:third_party/openblas.BUILD",
-    path = "/opt/homebrew/opt/openblas/",
+    path = "/home/linuxbrew/.linuxbrew/opt/openblas/",
 )
 
-# # suite-sparse is a collection of sparse matrix libraries
-# new_local_repository(
-#     name = "suitesparse",
-#     build_file = "@//:third_party/suitesparse.BUILD",
-#     path = "/opt/homebrew/opt/suite-sparse/",
-# )
+# suite-sparse is a collection of sparse matrix libraries
+new_local_repository(
+    name = "suitesparse",
+    build_file = "@//:third_party/suitesparse.BUILD",
+    path = "/home/linuxbrew/.linuxbrew/opt/suitesparse/",
+)
 

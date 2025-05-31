@@ -24,6 +24,21 @@ config_setting(
 )
 
 #############################
+# Test platform detection
+#############################
+
+genrule(
+    name = "platform_check_genrule",
+    outs = ["platform_check.txt"],
+    cmd = select({
+        ":macos_arm64": "echo 'Detected platform: macOS ARM64' > $@",
+        ":linux_x86_64": "echo 'Detected platform: Linux x86_64' > $@",
+        "//conditions:default": "echo 'Detected platform: Unknown or Default' > $@",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+#############################
 # Feature flags
 #############################
 
@@ -83,13 +98,13 @@ perf_copts = select({
 
 package_copts = select({
     ":use_accelerate": [
-        "-DUSE_ACCELERATE_MPS",
+        "-DUSE_ACCELERATE",
         "-DACCELERATE_NEW_LAPACK",
     ],
     ":use_accelerate_mps": [
         "-DUSE_ACCELERATE_MPS",
         "-DACCELERATE_NEW_LAPACK",
-        "-DUSE_MPS",
+     #   "-DUSE_MPS",
         "-fobjc-arc",
     ],
     ":use_openblas": [
@@ -98,7 +113,7 @@ package_copts = select({
     "//conditions:default": [],
 })
 
-openmp_copts = ["-fopenmp"]
+openmp_copts = []
 
 #############################
 # Linker options (separat!)
@@ -126,7 +141,9 @@ mps_linkopts = select({
 })
 
 openblas_linkopts = select({
-    ":use_openblas": ["-lopenblas"],
+    ":use_openblas": [
+      "-lopenblas",
+    ],
     "//conditions:default": [],
 })
 
