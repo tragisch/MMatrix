@@ -139,9 +139,10 @@ This project depends on:
 - [matio](https://sourceforge.net/projects/matio/)
 - [LLVM](https://llvm.org/) (via Homebrew)
 
-All dependencies are pulled via Bazel modules or expected to be installed via Homebrew.
+All dependencies are pulled via [Bazel](https://bazel.build) modules or expected to be installed via [Homebrew](https://brew.sh).
 
 ---
+
 
 ## License
 This project is primarily licensed under the MIT License (see LICENSE).

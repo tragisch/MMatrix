@@ -11,11 +11,9 @@
 #include <pcg_variants.h>
 #include <time.h>
 
-
 #ifndef CLOCK_REALTIME
 #define CLOCK_REALTIME 0
 #endif
-
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
@@ -32,8 +30,8 @@
 static const float EPSILON = 1e-5f;
 
 #ifndef M_PI // on Linux not defined in math.h
-#define M_PI  3.14159265358979323846264338327950288f
-#endif 
+#define M_PI 3.14159265358979323846264338327950288f
+#endif
 
 /*******************************/
 /*      Define Environment     */
@@ -526,7 +524,7 @@ void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
 #else
 
   float *a = mat1->values;
-  float *b = mat2->values;
+  const float *b = mat2->values;
 
 #ifdef __ARM_NEON
   size_t i = 0;

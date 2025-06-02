@@ -1,6 +1,6 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 
 #############################
 # Define platforms
@@ -111,20 +111,19 @@ package_copts = select({
     "//conditions:default": [],
 })
 
-openmp_copts = [] #"-fopenmp"
+openmp_copts = []  #"-fopenmp"
 
 #############################
 # Linker options (separat!)
 #############################
 
-openmp_linkopts = select({
-    ":macos_arm64": ["-lomp"],
-    ":linux_x86_64": ["-lgomp"],
-    "//conditions:default": [],
-})
+openmp_linkopts = []
 
 accelerate_linkopts = select({
-    ":use_accelerate": ["-framework Accelerate", "-lc++abi"],
+    ":use_accelerate": [
+        "-framework Accelerate",
+        "-lc++abi",
+    ],
     "//conditions:default": [],
 })
 
@@ -179,13 +178,23 @@ cc_binary(
 
 cc_library(
     name = "matrix",
-    srcs = ["m_convert.c", "m_io.c"],
-    hdrs = ["include/m_convert.h", "include/m_io.h"],
+    srcs = [
+        "m_convert.c",
+        "m_io.c",
+    ],
+    hdrs = [
+        "include/m_convert.h",
+        "include/m_io.h",
+    ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     includes = ["include"],
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
-    deps = [":dm", ":sm", ":dms"],
+    deps = [
+        ":dm",
+        ":dms",
+        ":sm",
+    ],
 )
 
 cc_library(
@@ -193,8 +202,8 @@ cc_library(
     srcs = ["dm.c"],
     hdrs = ["include/dm.h"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     includes = ["include"],
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + select({
         ":use_openblas": ["@openblas"],
@@ -207,8 +216,8 @@ cc_library(
     srcs = ["sm.c"],
     hdrs = ["include/sm.h"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     includes = ["include"],
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + select({
         ":use_accelerate_mps": [":sm_mps_objc"],
@@ -219,10 +228,10 @@ cc_library(
 
 objc_library(
     name = "sm_mps_objc",
-    hdrs = ["sm_mps.h"],
     srcs = ["sm_mps.m"],
-    includes = ["."],
+    hdrs = ["sm_mps.h"],
     copts = ["-ObjC"],
+    includes = ["."],
 )
 
 cc_library(
@@ -232,8 +241,8 @@ cc_library(
     copts = default_copts + perf_copts + package_copts + openmp_copts + [
         "-O3",
     ],
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     includes = ["include"],
-    deps = default_deps + ["@suitesparse"],
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
+    deps = default_deps + ["@suitesparse"],
 )

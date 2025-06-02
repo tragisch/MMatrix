@@ -22,6 +22,7 @@ Skylark rules for installing files using Bazel.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 _INSTALLER_GEN_SUFFIX = "_gen"
 _TEMPLATE_TARGET = "//tools/install:installer_template"
@@ -158,10 +159,10 @@ def installer(name, data, compilation_mode = "opt", executable = True, target_su
         target_subdir = target_subdir,
         system_integration = system_integration,
     )
-
-    native.sh_binary(
+    sh_binary(
         name = name,
         srcs = [":" + installer_name],
         data = [":" + installer_name],
         deps = ["@bazel_tools//tools/bash/runfiles"],
+    )
     )

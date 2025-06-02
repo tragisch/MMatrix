@@ -26,7 +26,6 @@ bazel_dep(name = "rules_shell", version = "0.4.0")
 bazel_dep(name = "rules_java", version = "8.11.0")
 bazel_dep(name = "google_benchmark", version = "1.9.2")
 
-
 bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
 
 #############################
@@ -60,8 +59,6 @@ git_override(
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
-
-
 # unity - A simple unit testing library for C.
 http_archive(
     name = "Unity",
@@ -83,7 +80,6 @@ http_archive(
         "https://github.com/tbeu/matio/releases/download/v1.5.27/matio-1.5.27.tar.gz",
     ],
 )
-
 
 # csparse is a C library for sparse matrices.
 git_repository(
@@ -108,7 +104,6 @@ git_repository(
     build_file = "@//:third_party/pcg.BUILD",
 )
 
-
 #############################
 # Hombrew Local Libraries
 #############################
@@ -126,14 +121,14 @@ new_local_repository(
 new_local_repository(
     name = "libomp",
     build_file = "@//:third_party/libomp.BUILD",
-    path = "/home/linuxbrew/.linuxbrew/opt/libomp/",
+    path = "/opt/homebrew/opt/libomp",
 )
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
 new_local_repository(
     name = "openblas",
     build_file = "@//:third_party/openblas.BUILD",
-    path = "/home/linuxbrew/.linuxbrew/opt/openblas/",
+    path = "/opt/homebrew/opt/openblas/",
 )
 
 # suite-sparse is a collection of sparse matrix libraries
@@ -142,4 +137,3 @@ new_local_repository(
     build_file = "@//:third_party/suitesparse.BUILD",
     path = "/opt/homebrew/opt/suite-sparse/",
 )
-
