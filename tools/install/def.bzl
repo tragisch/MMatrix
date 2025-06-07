@@ -17,7 +17,7 @@
 
 """Installer Rules
 
-Skylark rules for installing files using Bazel.
+Starlark rules for installing files using Bazel.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
@@ -164,5 +164,4 @@ def installer(name, data, compilation_mode = "opt", executable = True, target_su
         srcs = [":" + installer_name],
         data = [":" + installer_name],
         deps = ["@bazel_tools//tools/bash/runfiles"],
-    )
     )

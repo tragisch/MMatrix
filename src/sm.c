@@ -7,6 +7,7 @@
  */
 
 #include "sm.h"
+
 #include <omp.h>
 #include <pcg_variants.h>
 #include <time.h>
@@ -29,7 +30,7 @@
 #define INIT_CAPACITY 100
 static const float EPSILON = 1e-5f;
 
-#ifndef M_PI // on Linux not defined in math.h
+#ifndef M_PI  // on Linux not defined in math.h
 #define M_PI 3.14159265358979323846264338327950288f
 #endif
 
@@ -56,8 +57,9 @@ static const float EPSILON = 1e-5f;
 #include <Accelerate/Accelerate.h>
 #elif defined(USE_ACCELERATE_MPS)
 #define BLASINT int
-#include "sm_mps.h"
 #include <Accelerate/Accelerate.h>
+
+#include "sm_mps.h"
 #elif defined(USE_OPENBLAS)
 #define BLASINT int
 #include <cblas.h>
@@ -88,8 +90,7 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   size_t n = dummy->rows;
   for (size_t pivot = 0; pivot < n; pivot++) {
     float pivot_val = dummy->values[pivot * dummy->cols + pivot];
-    if (fabs(pivot_val) < EPSILON)
-      continue;
+    if (fabs(pivot_val) < EPSILON) continue;
     for (size_t row = pivot + 1; row < n; row++) {
       float factor = dummy->values[row * dummy->cols + pivot] / pivot_val;
       dummy->values[row * dummy->cols + pivot] = 0.0f;
@@ -180,8 +181,7 @@ FloatMatrix *sm_create_zeros(size_t rows, size_t cols) {
 
 FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values) {
   FloatMatrix *matrix = sm_create(rows, cols);
-  if (!matrix)
-    return NULL;
+  if (!matrix) return NULL;
   memcpy(matrix->values, values, rows * cols * sizeof(float));
   return matrix;
 }
@@ -210,16 +210,14 @@ FloatMatrix *sm_create(size_t rows, size_t cols) {
 
 FloatMatrix *sm_clone(const FloatMatrix *mat) {
   FloatMatrix *copy = sm_create(mat->rows, mat->cols);
-  if (!copy)
-    return NULL;
+  if (!copy) return NULL;
   memcpy(copy->values, mat->values, mat->rows * mat->cols * sizeof(float));
   return copy;
 }
 
 FloatMatrix *sm_create_identity(size_t n) {
   FloatMatrix *identity = sm_create(n, n);
-  if (!identity)
-    return NULL;
+  if (!identity) return NULL;
 
   for (size_t i = 0; i < n; i++) {
     identity->values[i * n + i] = 1.0f;
@@ -261,8 +259,7 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   }
 
   FloatMatrix *mat = sm_create(rows, cols);
-  if (!mat)
-    return NULL;
+  if (!mat) return NULL;
 
   float stddev = sqrtf(2.0f / (float)fan_in);
   size_t size = rows * cols;
@@ -291,15 +288,13 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
 // Xavier (Glorot) initialization: Normal distribution
 FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
                                      size_t fan_out) {
-
   if (cols != 0 && rows > SIZE_MAX / cols) {
     perror("Overflow detected in matrix allocation.");
     return NULL;
   }
 
   FloatMatrix *mat = sm_create(rows, cols);
-  if (!mat)
-    return NULL;
+  if (!mat) return NULL;
 
   float stddev = sqrtf(2.0f / (float)(fan_in + fan_out));
   size_t size = rows * cols;
@@ -333,8 +328,7 @@ FloatMatrix *sm_from_array_ptrs(size_t rows, size_t cols, float **array) {
   }
 
   FloatMatrix *mat = sm_create(rows, cols);
-  if (!mat)
-    return NULL;
+  if (!mat) return NULL;
 
 #pragma omp parallel for
   for (size_t i = 0; i < rows; i++) {
@@ -354,8 +348,7 @@ FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
   }
 
   FloatMatrix *matrix = sm_create(rows, cols);
-  if (!matrix)
-    return NULL;
+  if (!matrix) return NULL;
 
 #pragma omp parallel for
   for (size_t i = 0; i < rows; ++i) {
@@ -389,8 +382,7 @@ float *sm_create_array_from_matrix(FloatMatrix *matrix) {
 
 FloatMatrix *sm_get_row(const FloatMatrix *mat, size_t i) {
   FloatMatrix *row = sm_create(1, mat->cols);
-  if (!row)
-    return NULL;
+  if (!row) return NULL;
   memcpy(row->values, &mat->values[i * mat->cols], mat->cols * sizeof(float));
   return row;
 }
@@ -401,8 +393,7 @@ FloatMatrix *sm_get_last_row(const FloatMatrix *mat) {
 
 FloatMatrix *sm_get_col(const FloatMatrix *mat, size_t j) {
   FloatMatrix *col = sm_create(mat->rows, 1);
-  if (!col)
-    return NULL;
+  if (!col) return NULL;
   for (size_t i = 0; i < mat->rows; i++) {
     col->values[i] = mat->values[i * mat->cols + j];
   }
@@ -475,8 +466,7 @@ FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B) {
   size_t n_b_cols = B->cols;
 
   FloatMatrix *product = sm_create(n_a_rows, n_b_cols);
-  if (!product)
-    return NULL;
+  if (!product) return NULL;
 
   FloatMatrix *B_T;
   if (B->rows == B->cols) {
@@ -554,8 +544,7 @@ FloatMatrix *sm_elementwise_multiply(const FloatMatrix *mat1,
   }
 
   FloatMatrix *result = sm_clone(mat1);
-  if (!result)
-    return NULL;
+  if (!result) return NULL;
 
   sm_inplace_elementwise_multiply(result, mat2);
   return result;
@@ -568,8 +557,7 @@ FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number) {
 }
 
 FloatMatrix *sm_transpose(const FloatMatrix *mat) {
-  if (mat == NULL || mat->values == NULL)
-    return NULL;
+  if (mat == NULL || mat->values == NULL) return NULL;
 
   if (sm_is_square(mat)) {
     FloatMatrix *copy = sm_clone(mat);
@@ -662,12 +650,12 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   int info;
 
   info = LAPACKE_sgesv(LAPACK_ROW_MAJOR,
-                       n,    // number of equations
-                       nrhs, // number of right-hand sides
+                       n,     // number of equations
+                       nrhs,  // number of right-hand sides
                        a_copy->values,
-                       lda, // leading dimension of A (= cols in row-major)
+                       lda,  // leading dimension of A (= cols in row-major)
                        ipiv, b_copy->values,
-                       ldb // leading dimension of B (= cols in row-major)
+                       ldb  // leading dimension of B (= cols in row-major)
   );
 
   free(ipiv);
@@ -798,8 +786,7 @@ FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 #define TOLERANCE EPSILON
 bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
   size_t n = mat->rows;
-  if (mat->cols != n)
-    return false;
+  if (mat->cols != n) return false;
 
   for (size_t pivot = 0; pivot < n; pivot++) {
     float max_val = (float)fabs(mat->values[pivot * n + pivot]);
@@ -858,8 +845,7 @@ float sm_determinant(const FloatMatrix *mat) {
                 a[2] * (a[3] * a[7] - a[4] * a[6]);
     return det;
   } else {
-
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
 
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
@@ -884,8 +870,7 @@ float sm_determinant(const FloatMatrix *mat) {
 
 #else
     FloatMatrix *copy = sm_clone(mat);
-    if (!copy)
-      return 0.0f;
+    if (!copy) return 0.0f;
 
     size_t n = mat->rows;
     float *a = copy->values;
@@ -941,7 +926,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     perror("the Matrix has to be square!");
     return NULL;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
   FloatMatrix *inverse = sm_clone(mat);
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
@@ -997,8 +982,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
 
   size_t n = mat->cols;
   FloatMatrix *copy = sm_clone(mat);
-  if (!copy)
-    return NULL;
+  if (!copy) return NULL;
 
   FloatMatrix *inverse = sm_create_identity(n);
   if (!inverse) {
@@ -1098,8 +1082,7 @@ FloatMatrix *sm_slice_rows(const FloatMatrix *mat, size_t start, size_t end) {
   size_t num_rows = end - start;
   size_t cols = mat->cols;
   FloatMatrix *slice = sm_create(num_rows, cols);
-  if (!slice)
-    return NULL;
+  if (!slice) return NULL;
 
   float *dst = slice->values;
   const float *src = mat->values + start * cols;
@@ -1136,8 +1119,7 @@ void sm_print(const FloatMatrix *matrix) {
 }
 
 void sm_destroy(FloatMatrix *mat) {
-  if (!mat)
-    return;
+  if (!mat) return;
   if (mat->values) {
     free(mat->values);
   }
@@ -1154,7 +1136,7 @@ float sm_trace(const FloatMatrix *mat) {
 }
 
 float sm_norm(const FloatMatrix *mat) {
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
   return cblas_snrm2((BLASINT)(mat->rows * mat->cols), mat->values, 1);
 #else
@@ -1187,10 +1169,10 @@ float sm_norm(const FloatMatrix *mat) {
 
 size_t sm_rank(const FloatMatrix *mat) {
   if (mat == NULL || mat->values == NULL) {
-    return 0; // No matrix, no rank
+    return 0;  // No matrix, no rank
   }
   size_t rank = 0;
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
   BLASINT m = (BLASINT)mat->rows;
   BLASINT n = (BLASINT)mat->cols;
@@ -1204,20 +1186,20 @@ size_t sm_rank(const FloatMatrix *mat) {
   lwork = (BLASINT)wkopt;
   work = (float *)malloc((size_t)lwork * sizeof(float));
   if (work == NULL) {
-    return 0; // Memory allocation failed
+    return 0;  // Memory allocation failed
   }
 
   float *tau = (float *)malloc((size_t)(m < n ? m : n) * sizeof(float));
   if (tau == NULL) {
     free(work);
-    return 0; // Memory allocation failed
+    return 0;  // Memory allocation failed
   }
 
   sgeqrf_(&m, &n, mat->values, &lda, tau, work, &lwork, &info);
   free(work);
   free(tau);
   if (info != 0) {
-    return 0; // QR factorization failed
+    return 0;  // QR factorization failed
   }
 
   int k = (m < n) ? m : n;
@@ -1285,7 +1267,7 @@ void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
               mat1->values, 1);
@@ -1316,7 +1298,7 @@ void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
     perror("Error: invalid matrix dimensions.\n");
     return;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
   // Using Apple's Accelerate framework (= BLAS)
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
@@ -1367,7 +1349,7 @@ void sm_inplace_square_transpose(FloatMatrix *mat) {
 
 // In-place scale
 void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) ||                        \
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
   cblas_sscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
 #else
@@ -1434,16 +1416,14 @@ FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   }
 
   FloatMatrix *result = sm_clone(mat1);
-  if (!result)
-    return NULL;
+  if (!result) return NULL;
 
   sm_inplace_div(result, mat2);
   return result;
 }
 
 void sm_inplace_normalize_rows(FloatMatrix *mat) {
-  if (!mat || mat->rows == 0 || mat->cols == 0)
-    return;
+  if (!mat || mat->rows == 0 || mat->cols == 0) return;
 
   size_t rows = mat->rows;
   size_t cols = mat->cols;
@@ -1479,8 +1459,7 @@ void sm_inplace_normalize_rows(FloatMatrix *mat) {
 
 // Normalize each column of the matrix to unit norm (L2)
 void sm_inplace_normalize_cols(FloatMatrix *mat) {
-  if (!mat || mat->rows == 0 || mat->cols == 0)
-    return;
+  if (!mat || mat->rows == 0 || mat->cols == 0) return;
 
   size_t rows = mat->rows;
   size_t cols = mat->cols;

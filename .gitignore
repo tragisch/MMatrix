@@ -103,6 +103,7 @@ MODULE.bazel.lock
 /lib/*
 *.in
 *.clang-tidy
+compile_commands.json
 *.png
 StyleGuide.md
 _archive/*

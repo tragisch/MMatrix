@@ -24,6 +24,7 @@ bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "cgrindel_bazel_starlib", version = "0.25.0")
 bazel_dep(name = "rules_shell", version = "0.4.0")
 bazel_dep(name = "rules_java", version = "8.11.0")
+bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
 bazel_dep(name = "google_benchmark", version = "1.9.2")
 
 bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
@@ -104,6 +105,13 @@ git_repository(
     build_file = "@//:third_party/pcg.BUILD",
 )
 
+git_repository(
+    name = "openblas",
+    commit = "02267d86f541fb82e3feae6647a0cbb4625f48df",  # 29.05.2025
+    remote = "https://github.com/OpenMathLib/OpenBLAS.git",
+    build_file = "@//:third_party/openblas.BUILD",
+)
+
 #############################
 # Hombrew Local Libraries (MacOS)
 #############################
@@ -125,11 +133,11 @@ new_local_repository(
 )
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
-new_local_repository(
-    name = "openblas",
-    build_file = "@//:third_party/openblas.BUILD",
-    path = "/opt/homebrew/opt/openblas/",
-)
+# new_local_repository(
+#     name = "openblas",
+#     build_file = "@//:third_party/openblas.BUILD",
+#     path = "/opt/homebrew/opt/openblas/",
+# )
 
 # suite-sparse is a collection of sparse matrix libraries
 new_local_repository(
@@ -156,12 +164,12 @@ new_local_repository(
 # new_local_repository(
 #     name = "openblas",
 #     build_file = "@//:third_party/openblas.BUILD",
-#     path = "home/linuxbrew/.linuxbrew/opt/openblas/",
+#     path = "/home/linuxbrew/.linuxbrew/opt/openblas/",
 # )
 
 # # suite-sparse is a collection of sparse matrix libraries
 # new_local_repository(
 #     name = "suitesparse",
 #     build_file = "@//:third_party/suitesparse.BUILD",
-#     path = "home/linuxbrew/.linuxbrew/opt/suite-sparse/",
+#     path = "/home/linuxbrew/.linuxbrew/opt/suite-sparse/",
 # )
