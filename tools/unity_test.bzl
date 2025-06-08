@@ -1,4 +1,3 @@
-
 """Module docstring describing the purpose of the file."""
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
@@ -19,9 +18,10 @@ def unity_test(name,  srcs, my_config=None, deps=None,  **kwargs):
     cc_test(
         name = name,
         deps = deps,
-        srcs = srcs + [runner_file_name(file_name)],
+        srcs = [runner_file_name(file_name)] + srcs,
         size = "small",
         visibility = ["//visibility:public"],
+        linkstatic = True,
         **kwargs
     )
 

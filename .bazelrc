@@ -46,6 +46,16 @@ build:debug_clang_report --copt=-O2
 # bazel build //... --config=debug_clang_report
 
 ###############################
+# cache                        #
+###############################
+
+# Enable remote caching
+# build --remote_cache=https://your-remote-cache-url
+
+# Enable local caching
+build --disk_cache=.cache/bazel_cache
+
+###############################
 # Report OpenMP              #
 ###############################
 

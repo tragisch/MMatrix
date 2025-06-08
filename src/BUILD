@@ -232,6 +232,7 @@ objc_library(
     hdrs = ["sm_mps.h"],
     copts = ["-ObjC"],
     includes = ["."],
+    target_compatible_with = ["@platforms//os:macos"],
 )
 
 cc_library(
