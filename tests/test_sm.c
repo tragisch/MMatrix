@@ -44,7 +44,6 @@ void test_sm_active_library_should_return_non_null(void) {
 }
 
 void test_sm_create(void) {
-
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
   size_t cols = 4;
@@ -95,7 +94,7 @@ void test_sm_create_from_array(void) {
   for (size_t i = 0; i < rows; ++i) {
     free(array[i]);
   }
-  free(array);
+  free((void *)array);
 }
 
 void test_sm_create_from_2D_array(void) {
@@ -132,7 +131,7 @@ void test_sm_create_array_from_matrix(void) {
   float *arr = sm_create_array_from_matrix(mat);
   TEST_ASSERT_NOT_NULL(arr);
 
-  float expected[] = {1.5, 2.5, 3.5, 4.5, 5.5, 6.5};
+  float expected[] = {1.5f, 2.5f, 3.5f, 4.5f, 5.5f, 6.5f};
   for (size_t i = 0; i < 6; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected[i], arr[i]);
   }
@@ -299,12 +298,12 @@ void test_sm_random_xavier_distribution(void) {
     sum_sq += v * v;
   }
 
-  float mean = sum / n;
-  float variance = sum_sq / n - mean * mean;
+  float mean = sum / (float)n;
+  float variance = sum_sq / (float)n - mean * mean;
   float stddev = sqrtf(variance);
-  float expected_stddev = sqrtf(2.0f / (fan_in + fan_out));
+  float expected_stddev = sqrtf(2.0f / ((float)fan_in + (float)fan_out));
 
-  TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, mean); // Average_mean ≈ 0
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, mean);  // Average_mean ≈ 0
   TEST_ASSERT_FLOAT_WITHIN(0.05f, expected_stddev, stddev);
 
   sm_destroy(mat);
@@ -328,15 +327,15 @@ void test_sm_random_he_distribution(void) {
     sum_sq += v * v;
   }
 
-  float mean = sum / n;
-  float variance = sum_sq / n - mean * mean;
+  float mean = sum / (float)n;
+  float variance = sum_sq / (float)n - mean * mean;
   float stddev = sqrtf(variance);
-  float expected_stddev = sqrtf(2.0f / fan_in);
+  float expected_stddev = sqrtf(2.0f / (float)fan_in);
 
   // Toleranzen: etwas großzügig, da Zufall im Spiel ist
-  TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, mean); // Mittelwert ≈ 0
+  TEST_ASSERT_FLOAT_WITHIN(0.05f, 0.0f, mean);  // Mittelwert ≈ 0
   TEST_ASSERT_FLOAT_WITHIN(0.05f, expected_stddev,
-                           stddev); // Varianz wie erwartet
+                           stddev);  // Varianz wie erwartet
 
   sm_destroy(mat);
 }
@@ -567,9 +566,9 @@ void test_sm_determinant_5x5(void) {
       values[i][j] = (float)(i * 5 + j) + 1;
     }
   }
-  values[3][3] = 2.5;
-  values[2][2] = 0.0;
-  values[1][1] = 0.0;
+  values[3][3] = 2.5f;
+  values[2][2] = 0.0f;
+  values[1][1] = 0.0f;
 
   FloatMatrix *mat = sm_from_array_static(5, 5, values);
 
@@ -583,7 +582,7 @@ void sm_back_substitution(const FloatMatrix *mat, float *solution) {
   size_t cols = mat->cols;
 
   // Rückwärtseinsetzen
-  for (int i = rows - 1; i >= 0; i--) {
+  for (size_t i = rows - 1; i >= 0; i--) {
     float sum = 0.0f;
     for (size_t j = i + 1; j < cols - 1; j++) {
       sum += sm_get(mat, i, j) * solution[j];
@@ -694,14 +693,14 @@ void test_sm_normalize_rows_should_normalize_each_row_to_unit_L2_norm(void) {
   sm_inplace_normalize_rows(mat);
 
   // Erste Zeile: sqrt(3^2 + 0^2 + 4^2) = 5.0
-  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 0, 0)); // 3/5
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 0, 0));  // 3/5
   TEST_ASSERT_FLOAT_WITHIN(0.001, 0.0f, sm_get(mat, 0, 1));
-  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 0, 2)); // 4/5
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 0, 2));  // 4/5
 
   // Zweite Zeile: sqrt(0^2 + 6^2 + 8^2) = 10.0
   TEST_ASSERT_FLOAT_WITHIN(0.001, 0.0f, sm_get(mat, 1, 0));
-  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 1, 1)); // 6/10
-  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 1, 2)); // 8/10
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 1, 1));  // 6/10
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 1, 2));  // 8/10
 
   sm_destroy(mat);
 }
@@ -713,8 +712,8 @@ void test_sm_normalize_cols_should_normalize_each_column_to_unit_L2_norm(void) {
   sm_inplace_normalize_cols(mat);
 
   // Erste Spalte: sqrt(3^2 + 4^2) = 5.0
-  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 0, 0)); // 3/5
-  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 1, 0)); // 4/5
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.6f, sm_get(mat, 0, 0));  // 3/5
+  TEST_ASSERT_FLOAT_WITHIN(0.001, 0.8f, sm_get(mat, 1, 0));  // 4/5
 
   // Zweite Spalte: sqrt(0^2 + 5^2) = 5.0
   TEST_ASSERT_FLOAT_WITHIN(0.001, 0.0f, sm_get(mat, 0, 1));
@@ -731,7 +730,7 @@ void test_sm_slice_rows_should_extract_selected_rows(void) {
                         {13.0f, 14.0f, 15.0f}};
 
   FloatMatrix *mat = sm_from_array_static(5, 3, values);
-  FloatMatrix *slice = sm_slice_rows(mat, 1, 4); // rows 1, 2, 3
+  FloatMatrix *slice = sm_slice_rows(mat, 1, 4);  // rows 1, 2, 3
 
   TEST_ASSERT_NOT_NULL(slice);
   TEST_ASSERT_EQUAL_UINT32(3, slice->rows);

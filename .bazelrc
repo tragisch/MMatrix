@@ -1,6 +1,16 @@
 # This is a Bazel configuration file that sets up various build and test options.
 
 ###############################
+# cache                        #
+###############################
+
+# Enable remote caching
+# build --remote_cache=https://your-remote-cache-url
+
+# Enable local caching
+build --disk_cache=.cache/bazel_cache
+
+###############################
 # Debug & Analyze             #
 ###############################
 
