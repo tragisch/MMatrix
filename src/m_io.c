@@ -7,6 +7,9 @@
  */
 
 #include "m_io.h"
+
+#include <log.h>
+
 #include "sm.h"
 
 #ifndef INIT_CAPACITY
@@ -20,7 +23,7 @@
 const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
                            235, 234, 233, 232, 231, 230, 229, 228,
                            227, 226, 225, 224, 223, 222, 221};
-char grid[HEIGHT][WIDTH]; // Actual definition (only once)
+char grid[HEIGHT][WIDTH];  // Actual definition (only once)
 
 /*******************************/
 /*       Plot & Progress       */
@@ -219,7 +222,8 @@ void sm_cplot(FloatMatrix *mat) {
       if (fabsf(mat->values[i * mat->cols + j]) > EPSILON) {
         int x = (int)get_x_coord(i, mat->rows);
         int y = (int)get_y_coord(j, mat->cols);
-        sm_set(count, (size_t)x, (size_t)y, sm_get(count, (size_t)x, (size_t)y) + 1);
+        sm_set(count, (size_t)x, (size_t)y,
+               sm_get(count, (size_t)x, (size_t)y) + 1);
         plot(x, y, '*');
       }
     }
@@ -231,144 +235,115 @@ void sm_cplot(FloatMatrix *mat) {
 /*          MAT-FILEs          */
 /*******************************/
 
-int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
-  // Create a MAT file
-  mat_t *matfp = Mat_CreateVer(filename, NULL, MAT_FT_MAT5);
-  if (NULL == matfp) {
-    fprintf(stderr, "Error creating MAT file %s\n", filename);
+void mio_set_format(MIOFormat fmt) { g_mio_format = fmt; }
+MIOFormat mio_get_format(void) { return g_mio_format; }
+
+void mio_set_compression(MIOCompression comp) { g_mio_compression = comp; }
+MIOCompression mio_get_compression(void) { return g_mio_compression; }
+
+static int write_MAT_file_generic(const char *filename, size_t rows,
+                                  size_t cols, void *data,
+                                  enum matio_classes cls, enum matio_types type,
+                                  enum mat_ft version,
+                                  enum matio_compression compression) {
+  mat_t *matfp = Mat_CreateVer(filename, NULL, version);
+  if (!matfp) {
+    log_error("Fehler beim Erstellen der MAT-Datei %s", filename);
     return -1;
   }
 
-  // Define the dimensions of the matrix
-  size_t dims[2] = {matrix->rows, matrix->cols};
-
-  // Create a Matio matrix variable
-  matvar_t *matvar = Mat_VarCreate("matrix", MAT_C_DOUBLE, MAT_T_DOUBLE, 2,
-                                   dims, matrix->values, 0);
-  if (NULL == matvar) {
-    fprintf(stderr, "Error creating matrix variable\n");
+  size_t dims[2] = {rows, cols};
+  matvar_t *matvar = Mat_VarCreate("matrix", cls, type, 2, dims, data, 0);
+  if (!matvar) {
+    log_error("Fehler beim Erstellen der Matrix-Variable");
     Mat_Close(matfp);
     return -1;
   }
 
-  // Write the variable to the MAT file
-  Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);
-
-  // Free the matrix variable and close the MAT file
+  Mat_VarWrite(matfp, matvar, compression);
   Mat_VarFree(matvar);
   Mat_Close(matfp);
 
   return 0;
+}
+
+int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
+  enum matio_compression comp = (g_mio_compression == MIO_COMPRESS_ZLIB)
+                                    ? MAT_COMPRESSION_ZLIB
+                                    : MAT_COMPRESSION_NONE;
+
+  return write_MAT_file_generic(filename, matrix->rows, matrix->cols,
+                                matrix->values, MAT_C_DOUBLE, MAT_T_DOUBLE,
+                                MAT_FT_MAT5, comp);
 }
 
 int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename) {
-  mat_t *matfp = Mat_CreateVer(filename, NULL, MAT_FT_MAT5);
-  if (NULL == matfp) {
-    fprintf(stderr, "Error creating MAT file %s\n", filename);
-    return -1;
+  enum matio_compression comp = (g_mio_compression == MIO_COMPRESS_ZLIB)
+                                    ? MAT_COMPRESSION_ZLIB
+                                    : MAT_COMPRESSION_NONE;
+
+  return write_MAT_file_generic(filename, matrix->rows, matrix->cols,
+                                matrix->values, MAT_C_SINGLE, MAT_T_SINGLE,
+                                MAT_FT_MAT5, comp);
+}
+
+typedef void *(*matrix_alloc_fn)(size_t rows, size_t cols);
+
+static matvar_t *read_MAT_variable(const char *filename, const char *varname) {
+  mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
+  if (!matfp) {
+    log_error("Error opening MAT file\n");
+    exit(1);
   }
 
-  size_t dims[2] = {matrix->rows, matrix->cols};
-
-  matvar_t *matvar = Mat_VarCreate("matrix", MAT_C_SINGLE, MAT_T_SINGLE, 2,
-                                   dims, matrix->values, 0);
-  if (NULL == matvar) {
-    fprintf(stderr, "Error creating matrix variable\n");
-    Mat_Close(matfp);
-    return -1;
-  }
-
-  Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);
-  Mat_VarFree(matvar);
+  matvar_t *matvar = Mat_VarRead(matfp, varname);
   Mat_Close(matfp);
 
-  return 0;
+  if (!matvar) {
+    log_error("Variable %s not found in MAT-Datei %s", varname, filename);
+    return NULL;
+  }
+
+  if (matvar->rank != 2) {
+    log_error("Variable %s is not a 2D-Matrix", varname);
+    Mat_VarFree(matvar);
+    return NULL;
+  }
+
+  return matvar;
 }
 
 DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname) {
-  // Open the MAT file
-  mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
-  if (NULL == matfp) {
-    fprintf(stderr, "Error opening MAT file %s\n", filename);
-    return NULL;
-  }
-
-  // Read the variable
-  matvar_t *matvar = Mat_VarRead(matfp, varname);
-  if (NULL == matvar) {
-    fprintf(stderr, "Variable %s not found in MAT file %s\n", varname,
-            filename);
-    Mat_Close(matfp);
-    return NULL;
-  }
-
-  // Extract matrix dimensions
-  if (matvar->rank != 2) {
-    fprintf(stderr, "Variable %s is not a 2D matrix\n", varname);
-    Mat_VarFree(matvar);
-    Mat_Close(matfp);
-    return NULL;
-  }
+  matvar_t *matvar = read_MAT_variable(filename, varname);
+  if (!matvar) return NULL;
 
   size_t rows = matvar->dims[0];
   size_t cols = matvar->dims[1];
-
-  // Create a DoubleMatrix and copy the data
   DoubleMatrix *matrix = dm_create(rows, cols);
   if (!matrix) {
-    fprintf(stderr, "Error allocating memory for matrix\n");
+    log_error("Error allocating matrix\n");
     Mat_VarFree(matvar);
-    Mat_Close(matfp);
-    return NULL;
+    exit(1);
   }
-
   memcpy(matrix->values, matvar->data, rows * cols * sizeof(double));
-
-  // Free the matvar and close the MAT file
   Mat_VarFree(matvar);
-  Mat_Close(matfp);
-
   return matrix;
 }
 
 FloatMatrix *sm_read_MAT_file(const char *filename, const char *varname) {
-  mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
-  if (NULL == matfp) {
-    fprintf(stderr, "Error opening MAT file %s\n", filename);
-    return NULL;
-  }
-
-  matvar_t *matvar = Mat_VarRead(matfp, varname);
-  if (NULL == matvar) {
-    fprintf(stderr, "Variable %s not found in MAT file %s\n", varname,
-            filename);
-    Mat_Close(matfp);
-    return NULL;
-  }
-
-  if (matvar->rank != 2) {
-    fprintf(stderr, "Variable %s is not a 2D matrix\n", varname);
-    Mat_VarFree(matvar);
-    Mat_Close(matfp);
-    return NULL;
-  }
+  matvar_t *matvar = read_MAT_variable(filename, varname);
+  if (!matvar) return NULL;
 
   size_t rows = matvar->dims[0];
   size_t cols = matvar->dims[1];
-
   FloatMatrix *matrix = sm_create(rows, cols);
   if (!matrix) {
-    fprintf(stderr, "Error allocating memory for matrix\n");
+    log_error("Error allocating matrix\n");
     Mat_VarFree(matvar);
-    Mat_Close(matfp);
-    return NULL;
+    exit(1);
   }
-
   memcpy(matrix->values, matvar->data, rows * cols * sizeof(float));
-
   Mat_VarFree(matvar);
-  Mat_Close(matfp);
-
   return matrix;
 }
 
@@ -406,7 +381,7 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
   // Open the Matrix Market file for reading
   fp = fopen(filename, "r");
   if (fp == NULL) {
-    printf("Error: Unable to open file.\n");
+    log_error("Error: Unable to open file.\n");
     exit(1);
   }
 

@@ -8,6 +8,7 @@
 
 #include "sm.h"
 
+#include <log.h>
 #include <omp.h>
 #include <pcg_variants.h>
 #include <time.h>
@@ -80,7 +81,7 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   size_t cols = mat->cols;
   FloatMatrix *copy = sm_create(rows, cols);
   if (!copy) {
-    perror("Error: Memory allocation for matrix copy failed.\n");
+    log_error("Error: Memory allocation for matrix copy failed.\n");
     return 0;
   }
   memcpy(copy->values, mat->values, rows * cols * sizeof(float));
@@ -128,7 +129,7 @@ float *sm_to_column_major(const FloatMatrix *mat) {
   size_t cols = mat->cols;
   float *col_major = malloc(rows * cols * sizeof(float));
   if (!col_major) {
-    perror("Failed to allocate column-major buffer");
+    log_error("Failed to allocate column-major buffer");
     return NULL;
   }
 
@@ -159,12 +160,12 @@ FloatMatrix *sm_create_empty(void) {
 
 FloatMatrix *sm_create_zeros(size_t rows, size_t cols) {
   if (rows < 1 || cols < 1) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
   if (!matrix) {
-    perror("Error: could not allocate FloatMatrix struct.\n");
+    log_error("Error: could not allocate FloatMatrix struct.\n");
     return NULL;
   }
   matrix->rows = rows;
@@ -173,7 +174,7 @@ FloatMatrix *sm_create_zeros(size_t rows, size_t cols) {
   matrix->values = (float *)calloc(rows * cols, sizeof(float));
   if (!matrix->values) {
     free(matrix);
-    perror("Error: could not allocate values array.\n");
+    log_error("Error: could not allocate values array.\n");
     return NULL;
   }
   return matrix;
@@ -188,12 +189,12 @@ FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values) {
 
 FloatMatrix *sm_create(size_t rows, size_t cols) {
   if (rows < 1 || cols < 1) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
   if (!matrix) {
-    perror("Error: could not allocate FloatMatrix struct.\n");
+    log_error("Error: could not allocate FloatMatrix struct.\n");
     return NULL;
   }
   matrix->rows = rows;
@@ -202,7 +203,7 @@ FloatMatrix *sm_create(size_t rows, size_t cols) {
   matrix->values = (float *)calloc(rows * cols, sizeof(float));
   if (!matrix->values) {
     free(matrix);
-    perror("Error: could not allocate values array.\n");
+    log_error("Error: could not allocate values array.\n");
     return NULL;
   }
   return matrix;
@@ -227,7 +228,7 @@ FloatMatrix *sm_create_identity(size_t n) {
 
 FloatMatrix *sm_create_random(size_t rows, size_t cols) {
   if (cols != 0 && rows > SIZE_MAX / cols) {
-    perror("Overflow detected in matrix allocation.");
+    log_error("Overflow detected in matrix allocation.");
     return NULL;
   }
 
@@ -254,7 +255,7 @@ FloatMatrix *sm_create_random(size_t rows, size_t cols) {
 // He initialization (He-et-al.) random matrix creation
 FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   if (cols != 0 && rows > SIZE_MAX / cols) {
-    perror("Overflow detected in matrix allocation.");
+    log_error("Overflow detected in matrix allocation.");
     return NULL;
   }
 
@@ -289,7 +290,7 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
 FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
                                      size_t fan_out) {
   if (cols != 0 && rows > SIZE_MAX / cols) {
-    perror("Overflow detected in matrix allocation.");
+    log_error("Overflow detected in matrix allocation.");
     return NULL;
   }
 
@@ -323,7 +324,7 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
 FloatMatrix *sm_from_array_ptrs(size_t rows, size_t cols, float **array) {
   // check if the array is NULL
   if (array == NULL) {
-    perror("Error: array is NULL.\n");
+    log_error("Error: array is NULL.\n");
     return NULL;
   }
 
@@ -343,7 +344,7 @@ FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
                                   float array[rows][cols]) {
   // check if the array is NULL
   if (array == NULL) {
-    perror("Error: array is NULL.\n");
+    log_error("Error: array is NULL.\n");
     return NULL;
   }
 
@@ -361,13 +362,13 @@ FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
 
 float *sm_create_array_from_matrix(FloatMatrix *matrix) {
   if (matrix == NULL || matrix->values == NULL) {
-    perror("Error: matrix is NULL.\n");
+    log_error("Error: matrix is NULL.\n");
     return NULL;
   }
 
   float *array = (float *)malloc(matrix->rows * matrix->cols * sizeof(float));
   if (!array) {
-    perror("Error: could not allocate array.\n");
+    log_error("Error: could not allocate array.\n");
     return NULL;
   }
 
@@ -406,7 +407,7 @@ FloatMatrix *sm_get_last_col(const FloatMatrix *mat) {
 
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (mat1->cols != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   FloatMatrix *product = sm_create(mat1->rows, mat2->cols);
@@ -457,7 +458,7 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 // (like mat_mul4)
 FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B) {
   if (!A || !B || A->cols != B->rows) {
-    perror("Error: invalid matrix dimensions for sm_multiply_4.");
+    log_error("Error: invalid matrix dimensions for sm_multiply_4.");
     return NULL;
   }
 
@@ -501,7 +502,7 @@ FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B) {
 void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
                                      const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    log_error("Error: invalid matrix dimensions for Hadamard product.\n");
     return;
   }
 
@@ -539,7 +540,7 @@ void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
 FloatMatrix *sm_elementwise_multiply(const FloatMatrix *mat1,
                                      const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    log_error("Error: invalid matrix dimensions for Hadamard product.\n");
     return NULL;
   }
 
@@ -589,7 +590,7 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat) {
 
 FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   if (!A || !b || A->rows != A->cols || A->rows != b->rows) {
-    perror("Error: invalid matrix dimensions for solve.\n");
+    log_error("Error: invalid matrix dimensions for solve.\n");
     return NULL;
   }
 #if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
@@ -678,7 +679,7 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   size_t *pivot_order = (size_t *)malloc(n * sizeof(size_t));
 
   if (!sm_lu_decompose(lu, pivot_order)) {
-    perror("Error: LU decomposition failed.\n");
+    log_error("Error: LU decomposition failed.\n");
     sm_destroy(lu);
     sm_destroy(x);
     free(pivot_order);
@@ -764,7 +765,7 @@ bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   FloatMatrix *sum = sm_clone(mat1);
@@ -774,7 +775,7 @@ FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   FloatMatrix *difference = sm_clone(mat1);
@@ -830,7 +831,7 @@ bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
 
 float sm_determinant(const FloatMatrix *mat) {
   if (mat->cols != mat->rows) {
-    perror("the Matrix has to be square!");
+    log_error("the Matrix has to be square!");
     return 0.0f;
   }
   if (mat->cols == 1) {
@@ -856,7 +857,7 @@ float sm_determinant(const FloatMatrix *mat) {
 
     sgetrf_(&cols, &rows, lu->values, &cols, ipiv, &info);
     if (info != 0) {
-      perror("Error: dgetrf failed.\n");
+      log_error("Error: dgetrf failed.\n");
       free(ipiv);
       sm_destroy(lu);
       return 0;
@@ -923,7 +924,7 @@ float sm_determinant(const FloatMatrix *mat) {
 
 FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   if (mat->cols != mat->rows || mat->rows == 0 || mat->cols == 0) {
-    perror("the Matrix has to be square!");
+    log_error("the Matrix has to be square!");
     return NULL;
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
@@ -933,7 +934,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   if (ipiv == NULL) {
     free(inverse->values);
     free(inverse);
-    perror("Error: Memory allocation for ipiv failed.\n");
+    log_error("Error: Memory allocation for ipiv failed.\n");
     return NULL;
   }
   BLASINT info = 0;
@@ -944,7 +945,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
-    perror("Error: dgetrf failed.\n");
+    log_error("Error: dgetrf failed.\n");
     return NULL;
   }
 
@@ -958,7 +959,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
-    perror("Error: Memory allocation for work array failed.\n");
+    log_error("Error: Memory allocation for work array failed.\n");
     return NULL;
   }
 
@@ -968,7 +969,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   if (info != 0) {
     free(inverse->values);
     free(inverse);
-    perror("Error: dgetri failed.\n");
+    log_error("Error: dgetri failed.\n");
     return NULL;
   }
   return inverse;
@@ -976,7 +977,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   // Neue Nicht-BLAS-Variante: LU-Zerlegung und
   // Vorwärts-/Rückwärtssubstitution
   if (!sm_is_square(mat)) {
-    perror("Error: Matrix must be square.\n");
+    log_error("Error: Matrix must be square.\n");
     return NULL;
   }
 
@@ -998,7 +999,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   }
 
   if (!sm_lu_decompose(copy, pivot_order)) {
-    perror("Error: LU decomposition failed.\n");
+    log_error("Error: LU decomposition failed.\n");
     free(pivot_order);
     sm_destroy(copy);
     sm_destroy(inverse);
@@ -1050,7 +1051,7 @@ void sm_resize(FloatMatrix *mat, size_t new_row, size_t new_col) {
   // allocate new memory for dense matrix:
   float *new_values = (float *)calloc(new_row * new_col, sizeof(float));
   if (new_values == NULL) {
-    perror("Error: could not reallocate memory for dense matrix.\n");
+    log_error("Error: could not reallocate memory for dense matrix.\n");
     exit(EXIT_FAILURE);
   }
 
@@ -1264,7 +1265,7 @@ bool sm_is_equal_size(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 // In-place operations
 void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return;
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
@@ -1295,7 +1296,7 @@ void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
 // In-place difference
 void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return;
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
@@ -1326,7 +1327,7 @@ void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
 
 void sm_inplace_square_transpose(FloatMatrix *mat) {
   if (mat == NULL || mat->values == NULL || mat->rows != mat->cols) {
-    perror("Error: In-place transposition requires a square matrix.");
+    log_error("Error: In-place transposition requires a square matrix.");
     return;
   }
 
@@ -1376,7 +1377,7 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
 // In-place division
 void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    log_error("Error: invalid matrix dimensions for elementwise division.\n");
     return;
   }
 
@@ -1411,7 +1412,7 @@ void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
 
 FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    log_error("Error: invalid matrix dimensions for elementwise division.\n");
     return NULL;
   }
 

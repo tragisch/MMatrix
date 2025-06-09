@@ -55,7 +55,6 @@ cc_library(
     deps = [
         ":matioConfig_h",
         ":matio_pubconf_h",
-        "@//lib/hdf5",
         "@zlib",
     ],
 )

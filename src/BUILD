@@ -147,6 +147,7 @@ default_deps = [
     "@matio",
     "@libomp",
     "@pcg",
+    "@//third_party/log.c:log",
 ]
 
 #############################

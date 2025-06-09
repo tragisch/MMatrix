@@ -81,7 +81,7 @@
 #define HAVE_FLOAT_H 1
 
 /* Have HDF5 */
-#define HAVE_HDF5 1
+#undef HAVE_HDF5
 
 /* Define to 1 if the system has the type `intmax_t'. */
 #define HAVE_INTMAX_T 1

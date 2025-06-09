@@ -7,6 +7,8 @@
  */
 
 #include "dm.h"
+
+#include <log.h>
 #include <omp.h>
 #include <pcg_variants.h>
 
@@ -75,7 +77,7 @@ void dm_inplace_gauss_elimination(DoubleMatrix *mat) {
 
     // Perform row operations to eliminate values below the pivot
     double pivot_val = dm_get(mat, pivot, pivot);
-    if (fabs(pivot_val) > EPSILON) { // Check if pivot is non-zero
+    if (fabs(pivot_val) > EPSILON) {  // Check if pivot is non-zero
       double *A = mat->values;
       size_t ld = mat->cols;
 
@@ -97,8 +99,8 @@ size_t dm_rank_euler(const DoubleMatrix *mat) {
   // Make a copy of the matrix to preserve the original data
   DoubleMatrix *copy = dm_create(mat->rows, mat->cols);
   if (copy == NULL) {
-    perror("Error: Memory allocation for matrix copy failed.\n");
-    return 0; // Return 0 or an appropriate error value
+    log_error("Error: Memory allocation for matrix copy failed.\n");
+    return 0;  // Return 0 or an appropriate error value
   }
   memcpy(copy->values, mat->values, mat->rows * mat->cols * sizeof(double));
 
@@ -127,7 +129,7 @@ size_t dm_rank_euler(const DoubleMatrix *mat) {
 // Convert DoubleMatrix to column-major double array
 double *dm_to_column_major(const DoubleMatrix *mat) {
   if (!mat || !mat->values) {
-    perror("Error: matrix is NULL.\n");
+    log_error("Error: matrix is NULL.\n");
     return NULL;
   }
 
@@ -135,7 +137,7 @@ double *dm_to_column_major(const DoubleMatrix *mat) {
   size_t cols = mat->cols;
   double *col_major = (double *)malloc(rows * cols * sizeof(double));
   if (!col_major) {
-    perror("Error: could not allocate column-major array.\n");
+    log_error("Error: could not allocate column-major array.\n");
     return NULL;
   }
 
@@ -176,7 +178,7 @@ DoubleMatrix *dm_create_with_values(size_t rows, size_t cols, double *values) {
 
 DoubleMatrix *dm_create(size_t rows, size_t cols) {
   if (rows < 1 || cols < 1) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
@@ -230,7 +232,6 @@ DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
 }
 
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
-
   DoubleMatrix *mat = dm_create(rows, cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
@@ -245,8 +246,7 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
 DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
                                       double array[rows][cols]) {
   DoubleMatrix *matrix = dm_create(rows, cols);
-  if (!matrix)
-    return NULL;
+  if (!matrix) return NULL;
 
   double *dst = matrix->values;
 
@@ -285,7 +285,7 @@ DoubleMatrix *dm_get_last_col(const DoubleMatrix *mat) {
 
 DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1->cols != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   DoubleMatrix *product = dm_create(mat1->rows, mat2->cols);
@@ -333,8 +333,7 @@ DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,
 }
 
 DoubleMatrix *dm_transpose(const DoubleMatrix *mat) {
-  if (mat == NULL || mat->values == NULL)
-    return NULL;
+  if (mat == NULL || mat->values == NULL) return NULL;
 
   size_t rows = mat->rows;
   size_t cols = mat->cols;
@@ -381,13 +380,12 @@ bool dm_is_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 
 DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
 
   DoubleMatrix *result = dm_create_clone(mat1);
-  if (!result)
-    return NULL;
+  if (!result) return NULL;
 
   double *a = result->values;
   const double *b = mat2->values;
@@ -411,20 +409,19 @@ DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 
 DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
 
   DoubleMatrix *result = dm_create_clone(mat1);
-  if (!result)
-    return NULL;
+  if (!result) return NULL;
 
   double *a = result->values;
   const double *b = mat2->values;
   size_t size = result->rows * result->cols;
 
 #if defined(USE_ACCELERATE)
-  vDSP_vsubD(b, 1, a, 1, a, 1, size); // result = a - b
+  vDSP_vsubD(b, 1, a, 1, a, 1, size);  // result = a - b
 #elif defined(USE_OPENBLAS)
   for (size_t i = 0; i < size; ++i) {
     a[i] -= b[i];
@@ -441,7 +438,7 @@ DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 
 double dm_determinant(const DoubleMatrix *mat) {
   if (mat->cols != mat->rows) {
-    perror("the Matrix has to be square!");
+    log_error("the Matrix has to be square!");
   }
   double det = 0;
   if (mat->cols == 1) {
@@ -456,7 +453,6 @@ double dm_determinant(const DoubleMatrix *mat) {
           a[2] * (a[3] * a[7] - a[4] * a[6]);
     return det;
   } else {
-
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
@@ -467,7 +463,7 @@ double dm_determinant(const DoubleMatrix *mat) {
 
     dgetrf_(&cols, &rows, lu->values, &cols, ipiv, &info);
     if (info != 0) {
-      perror("Error: dgetrf failed.\n");
+      log_error("Error: dgetrf failed.\n");
       free(ipiv);
       dm_destroy(lu);
       return 0;
@@ -525,7 +521,7 @@ double dm_determinant(const DoubleMatrix *mat) {
 
 DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   if (mat->cols != mat->rows || mat->rows == 0 || mat->cols == 0) {
-    perror("the Matrix has to be square!");
+    log_error("the Matrix has to be square!");
   }
   DoubleMatrix *inverse = dm_create_clone(mat);
 
@@ -535,7 +531,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   if (ipiv == NULL) {
     free(inverse->values);
     free(inverse);
-    perror("Error: Memory allocation for ipiv failed.\n");
+    log_error("Error: Memory allocation for ipiv failed.\n");
     return NULL;
   }
   BLASINT info = 0;
@@ -546,7 +542,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
-    perror("Error: dgetrf failed.\n");
+    log_error("Error: dgetrf failed.\n");
     return NULL;
   }
 
@@ -560,7 +556,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
     free(ipiv);
     free(inverse->values);
     free(inverse);
-    perror("Error: Memory allocation for work array failed.\n");
+    log_error("Error: Memory allocation for work array failed.\n");
     return NULL;
   }
 
@@ -570,14 +566,14 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   if (info != 0) {
     free(inverse->values);
     free(inverse);
-    perror("Error: dgetri failed.\n");
+    log_error("Error: dgetri failed.\n");
     return NULL;
   }
 #else
 
   double det = dm_determinant(mat);
   if (fabs(det) < EPSILON) {
-    perror("Error: Matrix is singular and cannot be inverted.\n");
+    log_error("Error: Matrix is singular and cannot be inverted.\n");
     dm_destroy(inverse);
     return NULL;
   }
@@ -587,7 +583,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
       DoubleMatrix *sub_mat = dm_create(mat->cols - 1, mat->cols - 1);
       if (sub_mat == NULL) {
         dm_destroy(inverse);
-        perror("Error: Memory allocation for sub-matrix failed.\n");
+        log_error("Error: Memory allocation for sub-matrix failed.\n");
         return NULL;
       }
 
@@ -639,7 +635,7 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   double *new_values = (double *)calloc(new_row * new_col, sizeof(double));
 
   if (new_values == NULL) {
-    perror("Error: could not reallocate memory for dense matrix.\n");
+    log_error("Error: could not reallocate memory for dense matrix.\n");
     exit(EXIT_FAILURE);
   }
 
@@ -720,7 +716,7 @@ double dm_norm(const DoubleMatrix *mat) {
 
 size_t dm_rank(const DoubleMatrix *mat) {
   if (mat == NULL || mat->values == NULL) {
-    return 0; // No matrix, no rank
+    return 0;  // No matrix, no rank
   }
   size_t rank = 0;
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
@@ -736,20 +732,20 @@ size_t dm_rank(const DoubleMatrix *mat) {
   lwork = (BLASINT)wkopt;
   work = (double *)malloc((size_t)lwork * sizeof(double));
   if (work == NULL) {
-    return 0; // Memory allocation failed
+    return 0;  // Memory allocation failed
   }
 
   double *tau = (double *)malloc((size_t)((m < n) ? m : n) * sizeof(double));
   if (tau == NULL) {
     free(work);
-    return 0; // Memory allocation failed
+    return 0;  // Memory allocation failed
   }
 
   dgeqrf_(&m, &n, mat->values, &lda, tau, work, &lwork, &info);
   free(work);
   free(tau);
   if (info != 0) {
-    return 0; // QR factorization failed
+    return 0;  // QR factorization failed
   }
 
   int k = (m < n) ? m : n;
@@ -798,7 +794,7 @@ bool dm_is_equal_size(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 // In-place operations
 void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return;
   }
 
@@ -823,7 +819,7 @@ void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 // In-place difference
 void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return;
   }
 
@@ -832,7 +828,7 @@ void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   size_t size = mat1->rows * mat1->cols;
 
 #if defined(USE_ACCELERATE)
-  vDSP_vsubD(b, 1, a, 1, a, 1, size); // result = a - b
+  vDSP_vsubD(b, 1, a, 1, a, 1, size);  // result = a - b
 #elif defined(USE_OPENBLAS)
   for (size_t i = 0; i < size; ++i) {
     a[i] -= b[i];
@@ -848,12 +844,12 @@ void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 // In-place transpose
 void dm_inplace_transpose(DoubleMatrix *mat) {
   if (mat == NULL || mat->values == NULL || mat->rows != mat->cols) {
-    perror("Error: In-place transposition requires a square matrix.");
+    log_error("Error: In-place transposition requires a square matrix.");
     return;
   }
 
   double *A = mat->values;
-  size_t n = mat->cols; // matrix is square
+  size_t n = mat->cols;  // matrix is square
 
   for (size_t i = 0; i < n; i++) {
 #pragma omp simd
@@ -884,13 +880,12 @@ void dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar) {
 DoubleMatrix *dm_elementwise_multiply(const DoubleMatrix *mat1,
                                       const DoubleMatrix *mat2) {
   if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    log_error("Error: invalid matrix dimensions for Hadamard product.\n");
     return NULL;
   }
 
   DoubleMatrix *result = dm_create_clone(mat1);
-  if (!result)
-    return NULL;
+  if (!result) return NULL;
 
   double *a = result->values;
   const double *b = mat2->values;
@@ -907,13 +902,12 @@ DoubleMatrix *dm_elementwise_multiply(const DoubleMatrix *mat1,
 // Elementwise division (SIMD-optimized)
 DoubleMatrix *dm_div(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    log_error("Error: invalid matrix dimensions for elementwise division.\n");
     return NULL;
   }
 
   DoubleMatrix *result = dm_create_clone(mat1);
-  if (!result)
-    return NULL;
+  if (!result) return NULL;
 
   double *a = result->values;
   const double *b = mat2->values;
@@ -938,7 +932,7 @@ DoubleMatrix *dm_div(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 void dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
                                      const DoubleMatrix *mat2) {
   if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for Hadamard product.\n");
+    log_error("Error: invalid matrix dimensions for Hadamard product.\n");
     return;
   }
 
@@ -962,7 +956,7 @@ void dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
 
 void dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
-    perror("Error: invalid matrix dimensions for elementwise division.\n");
+    log_error("Error: invalid matrix dimensions for elementwise division.\n");
     return;
   }
 

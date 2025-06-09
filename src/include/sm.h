@@ -119,4 +119,4 @@ void sm_print(const FloatMatrix *matrix);
 const char *sm_active_library(void);
 void sm_destroy(FloatMatrix *mat);
 
-#endif // sm_H
+#endif  // sm_H

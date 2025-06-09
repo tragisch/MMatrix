@@ -8,6 +8,8 @@
 
 #include "m_convert.h"
 
+#include <log.h>
+
 DoubleMatrix *dms_to_dm(const DoubleSparseMatrix *dms) {
   DoubleMatrix *dm = dm_create(dms->rows, dms->cols);
   for (size_t k = 0; k < dms->nnz; ++k) {

@@ -9,7 +9,7 @@
 #ifndef DMMa_SPARSE_H
 #define DMMa_SPARSE_H
 
-#include <cs.h> // SuiteSparse: a Common Sparse Matrix Package
+#include <cs.h>  // SuiteSparse: a Common Sparse Matrix Package
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -76,4 +76,4 @@ void dms_print(const DoubleSparseMatrix *mat);
 void dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity);
 void dms_destroy(DoubleSparseMatrix *mat);
 
-#endif // DMMa_SPARSE_H
+#endif  // DMMa_SPARSE_H

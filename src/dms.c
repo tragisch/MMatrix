@@ -8,6 +8,7 @@
 
 #include "dms.h"
 
+#include <log.h>
 #include <omp.h>
 #include <pcg_variants.h>
 #include <stdbool.h>
@@ -30,7 +31,7 @@ double dms_max_double(double a, double b) { return a > b ? a : b; }
 double dms_min_double(double a, double b) { return a < b ? a : b; }
 int dms_max_int(int a, int b) { return a > b ? a : b; }
 
-static size_t __dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
+static size_t dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
                                   size_t j) {
   size_t low = 0;
   size_t high = matrix->nnz;
@@ -39,20 +40,20 @@ static size_t __dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
     size_t mid = (low + high) / 2;
 
     if (matrix->row_indices[mid] == i && matrix->col_indices[mid] == j) {
-      return mid; // Element found at position (i, j)
+      return mid;  // Element found at position (i, j)
     }
     if (matrix->row_indices[mid] < i ||
         (matrix->row_indices[mid] == i && matrix->col_indices[mid] < j)) {
-      low = mid + 1; // Search in the upper half
+      low = mid + 1;  // Search in the upper half
     } else {
-      high = mid; // Search in the lower half
+      high = mid;  // Search in the lower half
     }
   }
 
-  return low; // Element not found, return the insertion position
+  return low;  // Element not found, return the insertion position
 }
 
-static void __dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
+static void dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
                                  double value, size_t position) {
   // Increase the capacity if needed
   if (matrix->nnz == matrix->capacity) {
@@ -96,7 +97,7 @@ DoubleSparseMatrix *dms_create_with_values(size_t rows, size_t cols, size_t nnz,
 DoubleSparseMatrix *dms_create_empty(void) {
   DoubleSparseMatrix *mat = malloc(sizeof(DoubleSparseMatrix));
   if (!mat) {
-    perror("Error allocating memory for matrix struct");
+    log_error("Error allocating memory for matrix struct");
     return NULL;
   }
 
@@ -113,13 +114,13 @@ DoubleSparseMatrix *dms_create_empty(void) {
 
 DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity) {
   if (rows < 1 || cols < 1) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
 
   DoubleSparseMatrix *mat = malloc(sizeof(DoubleSparseMatrix));
   if (!mat) {
-    perror("Error allocating memory for matrix struct");
+    log_error("Error allocating memory for matrix struct");
     return NULL;
   }
 
@@ -129,21 +130,21 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity) {
   mat->capacity = capacity;
 
   if (mat->capacity == 0) {
-    perror("Error: matrix capacity cannot be zero.");
+    log_error("Error: matrix capacity cannot be zero.");
     free(mat);
     return NULL;
   }
 
   mat->row_indices = calloc(mat->capacity, sizeof(size_t));
   if (!mat->row_indices) {
-    perror("Error allocating memory for row indices");
+    log_error("Error allocating memory for row indices");
     free(mat);
     return NULL;
   }
 
   mat->col_indices = calloc(mat->capacity, sizeof(size_t));
   if (!mat->col_indices) {
-    perror("Error allocating memory for column indices");
+    log_error("Error allocating memory for column indices");
     free(mat->row_indices);
     free(mat);
     return NULL;
@@ -151,7 +152,7 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity) {
 
   mat->values = calloc(mat->capacity, sizeof(double));
   if (!mat->values) {
-    perror("Error allocating memory for values");
+    log_error("Error allocating memory for values");
     free(mat->col_indices);
     free(mat->row_indices);
     free(mat);
@@ -181,7 +182,7 @@ DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m) {
 
 DoubleSparseMatrix *dms_create_identity(size_t n) {
   if (n < 1) {
-    perror("Error: invalid identity dimensions.\n");
+    log_error("Error: invalid identity dimensions.\n");
     return NULL;
   }
   DoubleSparseMatrix *mat = dms_create(n, n, n + 1);
@@ -201,17 +202,17 @@ cs *dms_to_cs(const DoubleSparseMatrix *coo) {
 
   // Allocate a CSparse matrix in COO format
   cs *T = cs_spalloc(m, n, nz, 1, 1);
-  if (!T)
-    return NULL;
+  if (!T) return NULL;
 
   // Fill the CSparse matrix with the data from the DoubleSparseMatrix
   for (size_t k = 0; k < (size_t)nz; k++) {
-    cs_entry(T, (int32_t)coo->row_indices[k], (int32_t)coo->col_indices[k], coo->values[k]);
+    cs_entry(T, (int32_t)coo->row_indices[k], (int32_t)coo->col_indices[k],
+             coo->values[k]);
   }
 
   // Convert the COO matrix to CSC format
   cs *A = cs_compress(T);
-  cs_spfree(T); // Free the temporary COO matrix
+  cs_spfree(T);  // Free the temporary COO matrix
 
   return A;
 }
@@ -220,8 +221,7 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
   // Allocate memory for the DoubleSparseMatrix structure
   DoubleSparseMatrix *coo =
       (DoubleSparseMatrix *)malloc(sizeof(DoubleSparseMatrix));
-  if (!coo)
-    return NULL;
+  if (!coo) return NULL;
 
   coo->rows = (size_t)A->m;
   coo->cols = (size_t)A->n;
@@ -229,12 +229,12 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
   coo->capacity = (size_t)(A->nzmax + INIT_CAPACITY);
 
   // Allocate memory for the COO arrays
-  coo->row_indices =
-      (size_t *)malloc((size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(size_t));
-  coo->col_indices =
-      (size_t *)malloc((size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(size_t));
-  coo->values =
-      (double *)malloc((size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(double));
+  coo->row_indices = (size_t *)malloc(
+      (size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(size_t));
+  coo->col_indices = (size_t *)malloc(
+      (size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(size_t));
+  coo->values = (double *)malloc(
+      (size_t)dms_max_int((int)coo->nnz, (int)coo->capacity) * sizeof(double));
 
   if (!coo->row_indices || !coo->col_indices || !coo->values) {
     free(coo->row_indices);
@@ -247,7 +247,7 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
   // Fill the COO arrays with the data from the CSC matrix
   size_t nnz_index = 0;
   for (int col = 0; col < A->n; col++) {
-    for (int p = A->p[col]; p < A->p[col + 1]; p++) {
+    for (size_t p = (size_t)A->p[col]; p < (size_t)A->p[col + 1]; p++) {
       coo->row_indices[nnz_index] = (size_t)A->i[p];
       coo->col_indices[nnz_index] = (size_t)col;
       coo->values[nnz_index] = A->x[p];
@@ -262,12 +262,10 @@ DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
                                       double density) {
   double nnz_d = (double)rows * (double)cols * density;
   size_t nnz = (size_t)nnz_d;
-  if (nnz == 0)
-    return dms_create(rows, cols, 0);
+  if (nnz == 0) return dms_create(rows, cols, 0);
 
   DoubleSparseMatrix *mat = dms_create(rows, cols, nnz);
-  if (!mat)
-    return NULL;
+  if (!mat) return NULL;
 
   unsigned int global_seed =
       (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
@@ -276,9 +274,10 @@ DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
   {
     pcg32_random_t rng;
     int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id, (unsigned int)thread_id);
+    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
+                    (unsigned int)thread_id);
 
-  #pragma omp for 
+#pragma omp for
     for (size_t k = 0; k < nnz; ++k) {
       mat->row_indices[k] = pcg32_random_r(&rng) % rows;
       mat->col_indices[k] = pcg32_random_r(&rng) % cols;
@@ -336,7 +335,7 @@ DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
 
 DoubleSparseMatrix *dms_get_row(const DoubleSparseMatrix *mat, size_t i) {
   if (i >= mat->rows) {
-    perror("Error: invalid row index.\n");
+    log_error("Error: invalid row index.\n");
     return NULL;
   }
   // nzz_row = number of non-zero elements in row i
@@ -387,7 +386,7 @@ DoubleSparseMatrix *dms_get_last_col(const DoubleSparseMatrix *mat) {
 DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
                                  const DoubleSparseMatrix *mat2) {
   if (mat1->cols != mat2->rows) {
-    perror("Error: invalid matrix dimensions.\n");
+    log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
   // use cs_multiply from csparse
@@ -415,7 +414,7 @@ DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
 DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
   if (mat->col_indices == NULL || mat->row_indices == NULL ||
       mat->values == NULL) {
-    perror("Error: matrix is empty.\n");
+    log_error("Error: matrix is empty.\n");
     return NULL;
   }
 
@@ -431,7 +430,7 @@ DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
 
 double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j) {
   if (i >= mat->rows || j >= mat->cols) {
-    perror("Error: matrix index out of bounds.\n");
+    log_error("Error: matrix index out of bounds.\n");
     return 0.0;
   }
   for (size_t k = 0; k < mat->nnz; k++) {
@@ -444,14 +443,14 @@ double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j) {
 
 void dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
   // Find the position of the element (i, j) in the matrix
-  size_t position = __dms_binary_search(matrix, i, j);
+  size_t position = dms_binary_search(matrix, i, j);
 
   if (position < matrix->nnz && matrix->row_indices[position] == i &&
       matrix->col_indices[position] == j) {
     // Element already exists at position (i, j), update the value
     matrix->values[position] = value;
   } else {
-    __dms_insert_element(matrix, i, j, value, position);
+    dms_insert_element(matrix, i, j, value, position);
   }
 }
 
@@ -537,7 +536,7 @@ void dms_destroy(DoubleSparseMatrix *mat) {
 double *dms_to_array(const DoubleSparseMatrix *mat) {
   double *array = (double *)malloc(mat->rows * mat->cols * sizeof(double));
   if (array == NULL) {
-    perror("Error: unable to allocate memory for array.\n");
+    log_error("Error: unable to allocate memory for array.\n");
     return NULL;
   }
 

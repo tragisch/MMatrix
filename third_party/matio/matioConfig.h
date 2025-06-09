@@ -205,7 +205,7 @@
 #define LT_OBJDIR ".libs/"
 
 /* MAT v7.3 file support */
-#define MAT73 1
+#undef MAT73
 
 /* Platform */
 #define MATIO_PLATFORM "arm-apple-darwin24.0.0"

@@ -6,11 +6,11 @@ cc_library(
         "log.c",
         "log.h",
     ],
-    includes = [
-        ".",
-    ],
     hdrs = [
         "log.h",
+    ],
+    includes = [
+        ".",
     ],
     visibility = ["//visibility:public"],
 )

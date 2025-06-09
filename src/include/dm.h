@@ -123,4 +123,4 @@ const char *dm_active_library(void);
 /**************************************/
 void dm_destroy(DoubleMatrix *mat);
 
-#endif // DM_H
+#endif  // DM_H
