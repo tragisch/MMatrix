@@ -83,10 +83,9 @@ void test_sm_write_to_file(void) {
 // // Test function for sm_read_from_file
 void test_sm_read_from_file(void) {
   const char *filename = "test_matrix.mat";
-  const char *varname = "matrix";
 
   // Read the matrix from the file
-  FloatMatrix *matrix = sm_read_MAT_file(filename, varname);
+  FloatMatrix *matrix = sm_read_MAT_file(filename);
   TEST_ASSERT_NOT_NULL(matrix);
 
   if (matrix) {
@@ -130,10 +129,9 @@ void test_dm_write_to_file(void) {
 // Test function for dm_read_from_file
 void test_dm_read_from_file(void) {
   const char *filename = "test_matrix.mat";
-  const char *varname = "matrix";
 
   // Read the matrix from the file
-  DoubleMatrix *matrix = dm_read_MAT_file(filename, varname);
+  DoubleMatrix *matrix = dm_read_MAT_file(filename);
   TEST_ASSERT_NOT_NULL(matrix);
 
   if (matrix) {
@@ -154,11 +152,32 @@ void test_dm_read_from_file(void) {
   }
 }
 
+// import Matlab MAT file and plot the matrix
+void test_import_and_plot_matrix(void) {
+  const char *filename = "tests/test_data/rand10.mat";
+
+  // Read the matrix from the file
+  DoubleMatrix *matrix = dm_read_MAT_file(filename);
+  TEST_ASSERT_NOT_NULL(matrix);
+
+  if (matrix) {
+    // Check the matrix dimensions
+    TEST_ASSERT_EQUAL(10, matrix->rows);
+    TEST_ASSERT_EQUAL(10, matrix->cols);
+
+    // Plot the matrix
+    dm_print(matrix);
+
+    // Clean up
+    dm_destroy(matrix);
+  }
+}
+
 extern char grid[HEIGHT][WIDTH];
 
 void test_dm_cplot_grid_output(void) {
   DoubleMatrix *matrix = dm_create(5, 5);
-  dm_set(matrix, 1, 2, 1.0); // einzelner Punkt
+  dm_set(matrix, 1, 2, 1.0);  // einzelner Punkt
   dm_cplot(matrix);
 
   // Prüfe ob das erwartete Zeichen im Grid gesetzt wurde

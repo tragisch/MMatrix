@@ -1116,7 +1116,7 @@ void sm_print(const FloatMatrix *matrix) {
     }
     printf("]\n");
   }
-  printf("Matrix (%zu x %zu)\n", matrix->rows, matrix->cols);
+  printf("Matrix[Float.2f] (%zu x %zu)\n", matrix->rows, matrix->cols);
 }
 
 void sm_destroy(FloatMatrix *mat) {

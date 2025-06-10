@@ -666,11 +666,11 @@ void dm_print(const DoubleMatrix *matrix) {
   for (size_t i = 0; i < rows; i++) {
     printf("[ ");
     for (size_t j = 0; j < cols; j++) {
-      printf("%.2lf ", values[i * cols + j]);
+      printf("%.3lf ", values[i * cols + j]);
     }
     printf("]\n");
   }
-  printf("Matrix (%zu x %zu)\n", rows, cols);
+  printf("Matrix[Double.3f] (%zu x %zu)\n", rows, cols);
 }
 
 void dm_destroy(DoubleMatrix *mat) {

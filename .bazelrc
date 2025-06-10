@@ -40,7 +40,7 @@ build:debug --noslim_profile
 
 build:debug --sandbox_debug
 build:debug --features=layering_check
-build:debug --experimental_generate_json_trace_profile
+build:debug --generate_json_trace_profile
 
 # bazel build //... --config=debug
 

@@ -191,7 +191,7 @@ cc_library(
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
-    deps = [
+    deps = default_deps + [
         ":dm",
         ":dms",
         ":sm",

@@ -40,7 +40,7 @@ static int plot(int x, int y, char c) {
 }
 
 // if file to read is very large, print a progress bar:
-static void __print_progress_bar(size_t progress, size_t total, int barWidth) {
+static void print_progress_bar(size_t progress, size_t total, int barWidth) {
   float percentage = (float)progress / (float)total;
   int filledWidth = (int)(percentage * (float)barWidth);
 
@@ -289,32 +289,61 @@ int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename) {
 
 typedef void *(*matrix_alloc_fn)(size_t rows, size_t cols);
 
-static matvar_t *read_MAT_variable(const char *filename, const char *varname) {
+static matvar_t *read_MAT_variable(const char *filename) {
   mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
+
   if (!matfp) {
     log_error("Error opening MAT file\n");
     exit(1);
   }
 
-  matvar_t *matvar = Mat_VarRead(matfp, varname);
-  Mat_Close(matfp);
+  // loop through all variables in the MAT file
 
+  matvar_t *matvar;
+  int var_count = 0;
+  char varname[256] = {0};
+
+  while ((matvar = Mat_VarReadNext(matfp)) != NULL) {
+    var_count++;
+    if (var_count == 1) {
+      // Name of the first variable
+      strncpy(varname, matvar->name, sizeof(varname) - 1);
+    }
+    Mat_VarFree(matvar);
+  }
+
+  if (var_count == 0) {
+    log_error("No variables found in MAT file.\n");
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  if (var_count > 1) {
+    log_error("More than one variable found (%d). Not suppoted yet.\n",
+              var_count);
+    Mat_Close(matfp);
+    return NULL;
+  }
+
+  matvar = Mat_VarRead(matfp, varname);
   if (!matvar) {
-    log_error("Variable %s not found in MAT-Datei %s", varname, filename);
+    log_error("Failed to read variable '%s'\n", varname);
+    Mat_Close(matfp);
     return NULL;
   }
 
   if (matvar->rank != 2) {
     log_error("Variable %s is not a 2D-Matrix", varname);
     Mat_VarFree(matvar);
+    Mat_Close(matfp);
     return NULL;
   }
 
   return matvar;
 }
 
-DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname) {
-  matvar_t *matvar = read_MAT_variable(filename, varname);
+DoubleMatrix *dm_read_MAT_file(const char *filename) {
+  matvar_t *matvar = read_MAT_variable(filename);
   if (!matvar) return NULL;
 
   size_t rows = matvar->dims[0];
@@ -325,14 +354,34 @@ DoubleMatrix *dm_read_MAT_file(const char *filename, const char *varname) {
     Mat_VarFree(matvar);
     exit(1);
   }
-  memcpy(matrix->values, matvar->data, rows * cols * sizeof(double));
+  if (matvar->data_type == MAT_T_SINGLE) {
+    float *data = (float *)matvar->data;
+    for (size_t col = 0; col < cols; ++col) {
+      for (size_t row = 0; row < rows; ++row) {
+        matrix->values[row * cols + col] = (double)data[col * rows + row];
+      }
+    }
+  } else if (matvar->data_type == MAT_T_DOUBLE) {
+    double *data = (double *)matvar->data;
+    for (size_t col = 0; col < cols; ++col) {
+      for (size_t row = 0; row < rows; ++row) {
+        matrix->values[row * cols + col] = data[col * rows + row];
+      }
+    }
+  } else {
+    log_error("Unsupported data type: %d\n", matvar->data_type);
+    Mat_VarFree(matvar);
+    return NULL;
+  }
   Mat_VarFree(matvar);
   return matrix;
 }
 
-FloatMatrix *sm_read_MAT_file(const char *filename, const char *varname) {
-  matvar_t *matvar = read_MAT_variable(filename, varname);
-  if (!matvar) return NULL;
+FloatMatrix *sm_read_MAT_file(const char *filename) {
+  matvar_t *matvar = read_MAT_variable(filename);
+  if (!matvar) {
+    return NULL;
+  }
 
   size_t rows = matvar->dims[0];
   size_t cols = matvar->dims[1];
@@ -342,7 +391,25 @@ FloatMatrix *sm_read_MAT_file(const char *filename, const char *varname) {
     Mat_VarFree(matvar);
     exit(1);
   }
-  memcpy(matrix->values, matvar->data, rows * cols * sizeof(float));
+  if (matvar->data_type == MAT_T_SINGLE) {
+    float *data = (float *)matvar->data;
+    for (size_t col = 0; col < cols; ++col) {
+      for (size_t row = 0; row < rows; ++row) {
+        matrix->values[row * cols + col] = data[col * rows + row];
+      }
+    }
+  } else if (matvar->data_type == MAT_T_DOUBLE) {
+    double *data = (double *)matvar->data;
+    for (size_t col = 0; col < cols; ++col) {
+      for (size_t row = 0; row < rows; ++row) {
+        matrix->values[row * cols + col] = (float)data[col * rows + row];
+      }
+    }
+  } else {
+    log_error("Unsupported data type: %d\n", matvar->data_type);
+    Mat_VarFree(matvar);
+    return NULL;
+  }
   Mat_VarFree(matvar);
   return matrix;
 }
@@ -411,7 +478,7 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
   // Read non-zero values
   for (size_t i = 0; i < nnz; i++) {
     if (nnz > 500) {
-      __print_progress_bar(i, nnz, 50);
+      print_progress_bar(i, nnz, 50);
     }
     size_t row_idx = 0;
     size_t col_idx = 0;
