@@ -20,10 +20,12 @@
 #define EPSILON 1e-9
 #endif
 
-/* Array of grey shades */
-const int grey_shades[] = {254, 251, 249, 245, 243, 239, 237, 236,
-                           235, 234, 233, 232, 231, 230, 229, 228,
-                           227, 226, 225, 224, 223, 222, 221};
+/* Array of heatmap-inspired ANSI 256-color codes */
+const int grey_shades[] = {
+    21,  27,  33,  39,  45,  51, 50, 49, 48, 47,  // blue to cyan to green
+    46,  82,  118, 154, 190,                      // green to yellow
+    226, 220, 214, 208, 202, 196                  // yellow to red
+};
 char grid[HEIGHT][WIDTH];  // Actual definition (only once)
 
 /*******************************/
@@ -63,13 +65,13 @@ static void print_progress_bar(size_t progress, size_t total, int barWidth) {
 
 static int get_cols_coord(size_t x, size_t rows) {
   // int ret = 1 + (int)round((double)x / (double)rows * (double)(WIDTH - 2));
-  double ret = (double)(x + 1) * ((double)WIDTH / (double)(rows + 1)) - 1;
+  double ret = (double)(x + 1) * ((double)WIDTH / (double)(rows + 1)) + 1;
   return (int)ret;
 }
 
 static int get_rows_coord(size_t y, size_t cols) {
   // int ret = 1 + (int)round((double)y / (double)cols * (double)(HEIGHT - 3));
-  double ret = (double)(y) * ((double)HEIGHT / (double)(cols + 1)) + 1;
+  double ret = 1 + (double)(y) * ((double)HEIGHT / (double)(cols + 1)) - 1;
   return (int)ret;
 }
 
@@ -79,13 +81,25 @@ static int get_rows_coord(size_t y, size_t cols) {
 // from: https://c-for-dummies.com/blog/?p=761
 
 static void show_grid(FloatMatrix *count) {
+  int n_shades = sizeof(grey_shades) / sizeof(grey_shades[0]);
+  float max_count = 0.0f;
+  for (size_t y = 0; y < count->rows; y++) {
+    for (size_t x = 0; x < count->cols; x++) {
+      float val = sm_get(count, x, y);
+      if (val > max_count) {
+        max_count = val;
+      }
+    }
+  }
   for (int y = 0; y < HEIGHT; y++) {
     for (int x = 0; x < WIDTH; x++) {
       // Check if the character has a color escape code
       int color = (int)sm_get(count, (size_t)x, (size_t)y);
-      if (color > 1) {
-        // get color escape code
-        int grey_color = grey_shades[color];
+      if (color >= 1) {
+        int shade_index = shade_index =
+            (int)((log1p(color) / log1p(max_count)) * (n_shades - 1));
+        if (shade_index >= n_shades) shade_index = n_shades - 1;
+        int grey_color = grey_shades[shade_index];
         char escape_code[20];
         sprintf(escape_code, ANSI_COLOR_GREY_BASE, grey_color);
 
@@ -135,10 +149,22 @@ static void init_grid(void) {
 /*        STRUCTURE PLOT       */
 /*******************************/
 
-static void print_element(FloatMatrix *count, size_t x, size_t y) {
+static void print_element(FloatMatrix *count, size_t x, size_t y,
+                          double density) {
+  // use different character for density
+  char c;
+  if (density < 0.02) {
+    c = '*';
+  } else if (density < 0.05 && density >= 0.02) {
+    c = '.';
+  } else if (density >= 0.05) {
+    c = ' ';
+  } else {
+    c = '#';
+  }
   if (x < count->cols && y < count->rows) {
     count->values[y * count->cols + x]++;
-    plot((int)y, (int)x, '*');
+    plot((int)y, (int)x, c);
   }
 }
 
@@ -155,7 +181,7 @@ static void print_structure_coo(DoubleSparseMatrix *mat, FloatMatrix *count,
     if (rand_number < density) {
       int x = get_cols_coord(mat->col_indices[i], mat->cols);
       int y = get_rows_coord(mat->row_indices[i], mat->rows);
-      print_element(count, (size_t)y, (size_t)x);
+      print_element(count, (size_t)y, (size_t)x, density);
     }
   }
 }
@@ -186,7 +212,7 @@ void dm_cplot(DoubleMatrix *mat) {
       if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
         int x = (int)get_cols_coord(i, mat->rows);
         int y = (int)get_rows_coord(j, mat->cols);
-        print_element(count, (size_t)y, (size_t)x);
+        print_element(count, (size_t)y, (size_t)x, 1.0);
       }
     }
   }
@@ -203,9 +229,9 @@ void sm_cplot(FloatMatrix *mat) {
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
       if (fabsf(mat->values[i * mat->cols + j]) > EPSILON) {
-        int x = (int)get_cols_coord(i, mat->rows);
-        int y = (int)get_rows_coord(j, mat->cols);
-        print_element(count, (size_t)y, (size_t)x);
+        int x = (int)get_cols_coord(j, mat->rows);
+        int y = (int)get_rows_coord(i, mat->cols);
+        print_element(count, (size_t)y, (size_t)x, 1.0);
       }
     }
   }
@@ -328,6 +354,13 @@ DoubleMatrix *dm_read_MAT_file(const char *filename) {
   matvar_t *matvar = read_MAT_variable(filename);
   if (!matvar) return NULL;
 
+  if (Mat_VarIsSparse(matvar)) {
+    log_error("Expected dense matrix, but sparse matrix found in file %s",
+              filename);
+    Mat_VarFree(matvar);
+    return NULL;
+  }
+
   size_t rows = matvar->dims[0];
   size_t cols = matvar->dims[1];
   DoubleMatrix *matrix = dm_create(rows, cols);
@@ -365,6 +398,13 @@ FloatMatrix *sm_read_MAT_file(const char *filename) {
     return NULL;
   }
 
+  if (Mat_VarIsSparse(matvar)) {
+    log_error("Expected dense matrix, but sparse matrix found in file %s",
+              filename);
+    Mat_VarFree(matvar);
+    return NULL;
+  }
+
   size_t rows = matvar->dims[0];
   size_t cols = matvar->dims[1];
   FloatMatrix *matrix = sm_create(rows, cols);
@@ -394,6 +434,54 @@ FloatMatrix *sm_read_MAT_file(const char *filename) {
   }
   Mat_VarFree(matvar);
   return matrix;
+}
+
+DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
+  matvar_t *matvar = read_MAT_variable(filename);
+  if (!matvar) {
+    return NULL;
+  }
+
+  if (!Mat_VarIsSparse(matvar)) {
+    log_error("Expected sparse matrix, but dense matrix found in file %s",
+              filename);
+    Mat_VarFree(matvar);
+    return NULL;
+  }
+
+  mat_sparse_t *s = (mat_sparse_t *)matvar->data;
+  size_t rows = matvar->dims[0];
+  size_t cols = matvar->dims[1];
+  size_t nnz = s->nzmax;
+
+  DoubleSparseMatrix *mat = dms_create(rows, cols, nnz);
+  if (!mat) {
+    log_error("Failed to allocate sparse matrix structure");
+    Mat_VarFree(matvar);
+    return NULL;
+  }
+
+  size_t count = 0;
+  for (size_t col = 0; col < cols; ++col) {
+    for (int k = s->jc[col]; k < s->jc[col + 1]; ++k) {
+      if (count >= mat->capacity) {
+        mat->capacity *= 2;
+        mat->row_indices =
+            realloc(mat->row_indices, mat->capacity * sizeof(size_t));
+        mat->col_indices =
+            realloc(mat->col_indices, mat->capacity * sizeof(size_t));
+        mat->values = realloc(mat->values, mat->capacity * sizeof(double));
+      }
+      mat->row_indices[count] = (size_t)s->ir[k];
+      mat->col_indices[count] = col;
+      mat->values[count] = ((double *)s->data)[k];
+      count++;
+    }
+  }
+
+  mat->nnz = count;
+  Mat_VarFree(matvar);
+  return mat;
 }
 
 /*******************************/

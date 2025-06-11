@@ -34,7 +34,7 @@
 #define ANSI_COLOR_RESET "\x1b[0m"
 #define ANSI_COLOR_GREY_BASE "\x1b[48;5;%dm"
 
-extern char grid[HEIGHT][WIDTH];
+// extern char grid[HEIGHT][WIDTH];
 
 /*******************************/
 /*          I/O Functions      */
@@ -66,6 +66,7 @@ int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename);
 int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename);
 DoubleMatrix *dm_read_MAT_file(const char *filename);
 FloatMatrix *sm_read_MAT_file(const char *filename);
+DoubleSparseMatrix *dms_read_MAT_file(const char *filename);
 
 DoubleSparseMatrix *dms_read_matrix_market(const char *filename);
 void dms_write_matrix_market(const DoubleSparseMatrix *mat,

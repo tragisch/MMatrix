@@ -181,9 +181,9 @@ void test_dm_cplot_grid_output(void) {
   dm_cplot(matrix);
 
   // Prüfe ob das erwartete Zeichen im Grid gesetzt wurde
-  // int x = get_x_coord(1, 5);
-  // int y = get_y_coord(2, 5);
-  // TEST_ASSERT_EQUAL_CHAR('*', grid[y][x]);
+  int x = get_cols_coord(1, 5);
+  int y = get_rows_coord(2, 5);
+  TEST_ASSERT_EQUAL_CHAR('*', grid[y][x]);
 
   dm_destroy(matrix);
 }
