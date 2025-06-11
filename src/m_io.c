@@ -9,6 +9,7 @@
 #include "m_io.h"
 
 #include <log.h>
+#include <math.h>
 
 #include "sm.h"
 
@@ -60,13 +61,13 @@ static void print_progress_bar(size_t progress, size_t total, int barWidth) {
 /*     Normalize to Grid       */
 /*******************************/
 
-static int get_x_coord(size_t x, size_t rows) {
+static int get_cols_coord(size_t x, size_t rows) {
   // int ret = 1 + (int)round((double)x / (double)rows * (double)(WIDTH - 2));
   double ret = (double)(x + 1) * ((double)WIDTH / (double)(rows + 1)) - 1;
   return (int)ret;
 }
 
-static int get_y_coord(size_t y, size_t cols) {
+static int get_rows_coord(size_t y, size_t cols) {
   // int ret = 1 + (int)round((double)y / (double)cols * (double)(HEIGHT - 3));
   double ret = (double)(y) * ((double)HEIGHT / (double)(cols + 1)) + 1;
   return (int)ret;
@@ -134,39 +135,12 @@ static void init_grid(void) {
 /*        STRUCTURE PLOT       */
 /*******************************/
 
-static void __print_element(FloatMatrix *count, size_t x, size_t y) {
+static void print_element(FloatMatrix *count, size_t x, size_t y) {
   if (x < count->cols && y < count->rows) {
     count->values[y * count->cols + x]++;
-    plot((int)x, (int)y, '*');
+    plot((int)y, (int)x, '*');
   }
 }
-
-static void print_structure_dense(DoubleMatrix *mat, FloatMatrix *count) {
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
-        int x = (int)get_x_coord(i, mat->rows);
-        int y = (int)get_y_coord(j, mat->cols);
-        __print_element(count, (size_t)x, (size_t)y);
-      }
-    }
-  }
-}
-
-/* Removed unsafe version
-static void print_structure_dense(float *values, size_t rows, size_t cols,
-                                  FloatMatrix *count) {
-  for (size_t i = 0; i < rows; i++) {
-    for (size_t j = 0; j < cols; j++) {
-      if (fabs(values[i * cols + j]) > EPSILON) {
-        int x = (int)get_x_coord(i, rows);
-        int y = (int)get_y_coord(j, cols);
-        __print_element(count, x, y);
-      }
-    }
-  }
-}
-*/
 
 static void print_structure_coo(DoubleSparseMatrix *mat, FloatMatrix *count,
                                 double density) {
@@ -179,9 +153,9 @@ static void print_structure_coo(DoubleSparseMatrix *mat, FloatMatrix *count,
     double rand_number = (double)random_uint32 / (double)UINT32_MAX;
 
     if (rand_number < density) {
-      int x = get_x_coord(mat->row_indices[i], mat->rows);
-      int y = get_y_coord(mat->col_indices[i], mat->cols);
-      __print_element(count, (size_t)x, (size_t)y);
+      int x = get_cols_coord(mat->col_indices[i], mat->cols);
+      int y = get_rows_coord(mat->row_indices[i], mat->rows);
+      print_element(count, (size_t)y, (size_t)x);
     }
   }
 }
@@ -207,7 +181,15 @@ void dm_cplot(DoubleMatrix *mat) {
   printf("Matrix (%zu x %zu), density: %lf\n", mat->rows, mat->cols, density);
   FloatMatrix *count = sm_create(WIDTH, HEIGHT);
 
-  print_structure_dense(mat, count);
+  for (size_t i = 0; i < mat->rows; i++) {
+    for (size_t j = 0; j < mat->cols; j++) {
+      if (fabs(mat->values[i * mat->cols + j]) > EPSILON) {
+        int x = (int)get_cols_coord(i, mat->rows);
+        int y = (int)get_rows_coord(j, mat->cols);
+        print_element(count, (size_t)y, (size_t)x);
+      }
+    }
+  }
 
   show_grid(count);
 }
@@ -217,17 +199,17 @@ void sm_cplot(FloatMatrix *mat) {
   float density = sm_density(mat);
   printf("Matrix (%zu x %zu), density: %f\n", mat->rows, mat->cols, density);
   FloatMatrix *count = sm_create(WIDTH, HEIGHT);
+
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
       if (fabsf(mat->values[i * mat->cols + j]) > EPSILON) {
-        int x = (int)get_x_coord(i, mat->rows);
-        int y = (int)get_y_coord(j, mat->cols);
-        sm_set(count, (size_t)x, (size_t)y,
-               sm_get(count, (size_t)x, (size_t)y) + 1);
-        plot(x, y, '*');
+        int x = (int)get_cols_coord(i, mat->rows);
+        int y = (int)get_rows_coord(j, mat->cols);
+        print_element(count, (size_t)y, (size_t)x);
       }
     }
   }
+
   show_grid(count);
 }
 
