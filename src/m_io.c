@@ -43,8 +43,10 @@ static int plot(int x, int y, char c) {
 }
 
 // if file to read is very large, print a progress bar:
-static void print_progress_bar(size_t progress, size_t total, int barWidth) {
-  float percentage = (float)progress / (float)total;
+static void print_progress_bar(size_t progress, size_t totalSteps,
+                               int barWidth) {
+  if (totalSteps == 0) return;
+  float percentage = (float)progress / (float)totalSteps;
   int filledWidth = (int)(percentage * (float)barWidth);
 
   printf("[");
@@ -55,7 +57,7 @@ static void print_progress_bar(size_t progress, size_t total, int barWidth) {
       printf(" ");
     }
   }
-  printf("] %d%%\r", (int)(percentage * 100));
+  printf("] %3d%%\r", (int)(percentage * 100));
   fflush(stdout);
 }
 
@@ -65,7 +67,7 @@ static void print_progress_bar(size_t progress, size_t total, int barWidth) {
 
 static int get_cols_coord(size_t x, size_t rows) {
   // int ret = 1 + (int)round((double)x / (double)rows * (double)(WIDTH - 2));
-  double ret = (double)(x + 1) * ((double)WIDTH / (double)(rows + 1)) + 1;
+  double ret = (double)(x + 1) * ((double)WIDTH / (double)(rows + 1));
   return (int)ret;
 }
 
@@ -96,8 +98,9 @@ static void show_grid(FloatMatrix *count) {
       // Check if the character has a color escape code
       int color = (int)sm_get(count, (size_t)x, (size_t)y);
       if (color >= 1) {
-        int shade_index = shade_index =
-            (int)((log1p(color) / log1p(max_count)) * (n_shades - 1));
+        int shade_index =
+            (int)((log1pf((float)color) / log1pf((float)max_count)) *
+                  (int)(n_shades - 1));
         if (shade_index >= n_shades) shade_index = n_shades - 1;
         int grey_color = grey_shades[shade_index];
         char escape_code[20];
@@ -354,7 +357,7 @@ DoubleMatrix *dm_read_MAT_file(const char *filename) {
   matvar_t *matvar = read_MAT_variable(filename);
   if (!matvar) return NULL;
 
-  if (Mat_VarIsSparse(matvar)) {
+  if (matvar->class_type == MAT_C_SPARSE) {
     log_error("Expected dense matrix, but sparse matrix found in file %s",
               filename);
     Mat_VarFree(matvar);
@@ -398,7 +401,7 @@ FloatMatrix *sm_read_MAT_file(const char *filename) {
     return NULL;
   }
 
-  if (Mat_VarIsSparse(matvar)) {
+  if (matvar->class_type == MAT_C_SPARSE) {
     log_error("Expected dense matrix, but sparse matrix found in file %s",
               filename);
     Mat_VarFree(matvar);
@@ -442,7 +445,7 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
     return NULL;
   }
 
-  if (!Mat_VarIsSparse(matvar)) {
+  if (!(matvar->class_type == MAT_C_SPARSE)) {
     log_error("Expected sparse matrix, but dense matrix found in file %s",
               filename);
     Mat_VarFree(matvar);
@@ -463,14 +466,31 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
 
   size_t count = 0;
   for (size_t col = 0; col < cols; ++col) {
-    for (int k = s->jc[col]; k < s->jc[col + 1]; ++k) {
+    for (mat_uint32_t k = s->jc[col]; k < s->jc[col + 1]; ++k) {
       if (count >= mat->capacity) {
-        mat->capacity *= 2;
-        mat->row_indices =
-            realloc(mat->row_indices, mat->capacity * sizeof(size_t));
-        mat->col_indices =
-            realloc(mat->col_indices, mat->capacity * sizeof(size_t));
-        mat->values = realloc(mat->values, mat->capacity * sizeof(double));
+        if (mat->capacity == 0) {
+          mat->capacity = 1;
+        } else {
+          mat->capacity *= 2;
+        }
+        void *tmp = realloc(mat->row_indices, mat->capacity * sizeof(size_t));
+        if (!tmp) {
+          log_error("Realloc failed");
+          break;
+        }
+        mat->row_indices = tmp;
+        tmp = realloc(mat->col_indices, mat->capacity * sizeof(size_t));
+        if (!tmp) {
+          log_error("Realloc failed");
+          break;
+        }
+        mat->col_indices = tmp;
+        tmp = realloc(mat->values, mat->capacity * sizeof(double));
+        if (!tmp) {
+          log_error("Realloc failed");
+          break;
+        }
+        mat->values = tmp;
       }
       mat->row_indices[count] = (size_t)s->ir[k];
       mat->col_indices[count] = col;
@@ -493,16 +513,17 @@ void dms_write_matrix_market(const DoubleSparseMatrix *mat,
   FILE *fp = NULL;
   fp = fopen(filename, "w");
   if (fp == NULL) {
-    printf("Error: Unable to open file.\n");
+    log_error("Error: Unable to open file.\n");
     exit(1);
   }
 
   fprintf(fp, "%%%%MatrixMarket matrix coordinate real general\n");
-  fprintf(fp, "%zu %zu %zu\n", mat->rows, mat->cols, mat->rows * mat->cols);
+  fprintf(fp, "%zu %zu %zu\n", mat->rows, mat->cols,
+          mat->rows > SIZE_MAX / mat->cols ? 0 : mat->rows * mat->cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
-      fprintf(fp, "%zu %zu %lf\n", i + 1, j + 1, dms_get(mat, i, j));
+      fprintf(fp, "%zu %zu %.6lf\n", i + 1, j + 1, dms_get(mat, i, j));
     }
   }
 
@@ -536,7 +557,11 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
   }
 
   // Read dimensions and number of non-zero values
-  sscanf(line, "%zu %zu %zu", &nrows, &ncols, &nnz);
+  if (sscanf(line, "%zu %zu %zu", &nrows, &ncols, &nnz) != 3) {
+    log_error("Failed to read matrix dimensions.");
+    fclose(fp);
+    return NULL;
+  }
 
   // Create DoubleMatrix
   DoubleSparseMatrix *mat = dms_create(nrows, ncols, nnz);
@@ -548,13 +573,17 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
   // Read non-zero values
   for (size_t i = 0; i < nnz; i++) {
     if (nnz > 500) {
-      print_progress_bar(i, nnz, 50);
+      print_progress_bar(/*total_steps=*/nnz, /*current_step=*/i,
+                         /*bar_width=*/50);
     }
     size_t row_idx = 0;
     size_t col_idx = 0;
     double val = 0.0;
 
-    fscanf(fp, "%zu %zu %lf", &row_idx, &col_idx, &val);
+    if (fscanf(fp, "%zu %zu %lf", &row_idx, &col_idx, &val) != 3) {
+      log_error("Failed to read matrix element at line %zu", i);
+      break;
+    }
 
     if (val != 0.0) {
       mat->row_indices[i] = (size_t)(row_idx - 1);

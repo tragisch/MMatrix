@@ -468,7 +468,7 @@ double dm_determinant(const DoubleMatrix *mat) {
       dm_destroy(lu);
       return 0;
     }
-    det = 1.0;
+    // det = 1.0;
     double local_det = 1.0;
 #pragma omp parallel
     {

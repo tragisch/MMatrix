@@ -146,4 +146,4 @@ All dependencies are pulled via [Bazel](https://bazel.build) modules or expected
 
 ## License
 This project is primarily licensed under the MIT License (see LICENSE).
-It includes files from the Bazel project, licensed under the Apache License 2.0 (see tools/bazel/install/*, ).
+It includes files from the Bazel project, licensed under the Apache License 2.0 (see tools/install/*, ).

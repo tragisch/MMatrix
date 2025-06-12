@@ -91,7 +91,7 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   size_t n = dummy->rows;
   for (size_t pivot = 0; pivot < n; pivot++) {
     float pivot_val = dummy->values[pivot * dummy->cols + pivot];
-    if (fabs(pivot_val) < EPSILON) continue;
+    if (fabsf(pivot_val) < EPSILON) continue;
     for (size_t row = pivot + 1; row < n; row++) {
       float factor = dummy->values[row * dummy->cols + pivot] / pivot_val;
       dummy->values[row * dummy->cols + pivot] = 0.0f;
@@ -107,7 +107,7 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   for (size_t i = 0; i < rows; i++) {
     size_t found = 0;
     for (size_t j = 0; j < cols; j++) {
-      if (fabs(copy->values[i * cols + j]) > EPSILON) {
+      if (fabsf(copy->values[i * cols + j]) > EPSILON) {
         found = 1;
       }
     }
@@ -616,7 +616,7 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   sm_destroy(a_copy);
 
   if (info != 0) {
-    fprintf(stderr, "Error: sgesv_ failed with info = %d\n", info);
+    log_error("Error: sgesv_ failed with info = %d\n", info);
     sm_destroy(b_copy);
     free(b_col);
     return NULL;
@@ -790,10 +790,10 @@ bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order) {
   if (mat->cols != n) return false;
 
   for (size_t pivot = 0; pivot < n; pivot++) {
-    float max_val = (float)fabs(mat->values[pivot * n + pivot]);
+    float max_val = (float)fabsf(mat->values[pivot * n + pivot]);
     size_t max_row = pivot;
     for (size_t row = pivot + 1; row < n; row++) {
-      float val = (float)fabs(mat->values[row * n + pivot]);
+      float val = (float)fabsf(mat->values[row * n + pivot]);
       if (val > max_val) {
         max_val = val;
         max_row = row;
@@ -1205,7 +1205,7 @@ size_t sm_rank(const FloatMatrix *mat) {
 
   int k = (m < n) ? m : n;
   for (int i = 0; i < k; ++i) {
-    if (fabs(mat->values[i * lda + i]) > EPSILON) {
+    if (fabsf(mat->values[i * lda + i]) > EPSILON) {
       rank++;
     }
   }
