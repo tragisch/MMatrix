@@ -117,6 +117,7 @@ MODULE.bazel.lock
 /third_party/mesch12b/*
 /third_party/mm_offloading/*
 /third_party/spmatrix/*
+/third_party/spblas/*
 
 #-------------------------------------------------------------------------------
 *.in
