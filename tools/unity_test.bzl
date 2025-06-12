@@ -38,7 +38,7 @@ def generate_test_runner(file_name, my_config, name=None):
     if my_config != None:
         my_config_path = "$(location " + str(my_config[0]) + ")"
         cmd = "ruby $(location @Unity//:TestRunnerGenerator) $(SRCS) $(OUTS) " +  my_config_path
-        srcs = [file_name, Label("//tests:my_config.yml")]
+        srcs = [file_name] + my_config
     else:
         cmd = "ruby $(location @Unity//:TestRunnerGenerator)  $(SRCS) $(OUTS)"
     out_name = runner_file_name(file_name)

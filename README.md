@@ -39,12 +39,12 @@ brew install openblas libomp suitesparse matio llvm
 Then build using Bazel on macOS:
 
 ```bash
-bazel build //src:matrix
+bazel build //app/matrix
 ```
 On Linux use '--config=linux_llvm' to use the LLVM toolchain installed by Homebrew:
 
 ```bash
-bazel build //src:matrix --config=linux_llvm
+bazel build //app/matrix --config=linux_llvm
 ```
 
 ### Options
@@ -53,17 +53,17 @@ You can enable optional BLAS backends via Bazel defines:
 
 - **Linux** and **macOS**:
   ```bash
-  bazel build //src:matrix --config=linux_llvm --define=USE_OPENBLAS=1
+  bazel build //app/matrix --define=USE_OPENBLAS=1
   ```
 
 - **macOS**:
   - Use Accelerate framework:
     ```bash
-    bazel build //src:matrix --define=USE_ACCELERATE=1
+    bazel build //app/matrix --define=USE_ACCELERATE=1
     ```
   - Use Accelerate + Metal (MPS):
     ```bash
-    bazel build //src:matrix --define=USE_ACCELERATE_MPS=1
+    bazel build //app/matrix --define=USE_ACCELERATE_MPS=1
     ```
 
 ---
@@ -74,15 +74,19 @@ You can install the compiled library and headers into a custom directory using t
 ```bash
 bazel run //:matrix_installer -- /your/installation/path
 ```
+i.e. 
 
+```bash
+bazel run //:matrix_installer -- $(PWD)/lib/matrix
+```
 To also create symbolic links into system-wide directories (e.g., `/usr/local/include`, `/usr/local/lib`), you can enable system integration in BUILD - File:
 
 ```bash
 installer(
     name = "matrix_installer",
     data = [
-        "//src:matrix",        # the target to be installed
-        "//src:matrix_header", # collected in a Bazel filegroup with all public headers
+        "//app/matrix",        # the target to be installed
+        "//app/matrix:matrix_header", # collected in a Bazel filegroup with all public headers
         "//:LICENSE.txt",      # if available
         ],
     system_integration = False, # set "True" symlinks into /usr/local/lib and /usr/local/include
@@ -103,10 +107,10 @@ This will:
 Unit tests are written using [Unity](https://www.throwtheswitch.org/unity):
 
 ```bash
-bazel test //tests:all
+bazel test //...
 ```
 
-Tests are located in the `tests/` folder. You can add new test files and they will be discovered automatically by Bazel.
+Tests are located in the `app/matrix/tests/` folder. You can add new test files and they will be discovered automatically by Bazel.
 
 ---
 

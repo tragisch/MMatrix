@@ -83,22 +83,6 @@ http_archive(
     ],
 )
 
-# csparse is a C library for sparse matrices.
-git_repository(
-    name = "csparse",
-    remote = "https://github.com/ibayer/CSparse.git",
-    commit = "c8d48ca8b1064ad38b220ea57e95249cf9f44e57",
-    build_file = "@//:third_party/csparse.BUILD",
-)
-
-# dbg-macro: A simple debug macro for C.
-git_repository(
-    name = "dbg-macro",
-    commit = "b949858d9dff4886e68f1049270aad1b3fa7ab81",
-    remote = "https://github.com/eerimoq/dbg-macro.git",
-    build_file = "@//:third_party/dbg-macro.BUILD",
-)
-
 git_repository(
     name = "pcg",
     commit = "83252d9c23df9c82ecb42210afed61a7b42402d7",
@@ -117,61 +101,60 @@ git_repository(
 # Hombrew Local Libraries (MacOS)
 #############################
 
-# # define new_local_repository rule for local installed non-Bazel libraries:
-# new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
-
-# # due to license issues in private lib folder.
-# new_local_repository(
-#     name = "hdf5",
-#     path = "lib/hdf5",
-# )
-
-# # libomp is a library that supports multi-platform shared memory multiprocessing programming in C, C++, and Fortran.
-# new_local_repository(
-#     name = "libomp",
-#     build_file = "@//:third_party/libomp.BUILD",
-#     path = "/opt/homebrew/opt/libomp",
-# )
-
-# # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
-# # new_local_repository(
-# #     name = "openblas",
-# #     build_file = "@//:third_party/openblas.BUILD",
-# #     path = "/opt/homebrew/opt/openblas/",
-# # )
-
-# # suite-sparse is a collection of sparse matrix libraries
-# new_local_repository(
-#     name = "suitesparse",
-#     build_file = "@//:third_party/suitesparse.BUILD",
-#     path = "/opt/homebrew/opt/suite-sparse/",
-# )
-
-#############################
-# Hombrew Local Libraries (Linux) - activate on Linux only
-#############################
-
 # define new_local_repository rule for local installed non-Bazel libraries:
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
 
+# due to license issues in private lib folder.
+new_local_repository(
+    name = "hdf5",
+    path = "third_party/hdf5",
+)
 
 # libomp is a library that supports multi-platform shared memory multiprocessing programming in C, C++, and Fortran.
 new_local_repository(
     name = "libomp",
     build_file = "@//:third_party/libomp.BUILD",
-    path = "/home/linuxbrew/.linuxbrew/opt/libomp",
+    path = "/opt/homebrew/opt/libomp",
 )
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
 # new_local_repository(
 #     name = "openblas",
 #     build_file = "@//:third_party/openblas.BUILD",
-#     path = "/home/linuxbrew/.linuxbrew/opt/openblas/",
+#     path = "/opt/homebrew/opt/openblas/",
 # )
 
 # suite-sparse is a collection of sparse matrix libraries
 new_local_repository(
     name = "suitesparse",
     build_file = "@//:third_party/suitesparse.BUILD",
-    path = "/home/linuxbrew/.linuxbrew/opt/suite-sparse/",
+    path = "/opt/homebrew/opt/suite-sparse/",
 )
+
+#############################
+# Hombrew Local Libraries (Linux) - activate on Linux only
+#############################
+
+# # define new_local_repository rule for local installed non-Bazel libraries:
+# new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
+
+# # libomp is a library that supports multi-platform shared memory multiprocessing programming in C, C++, and Fortran.
+# new_local_repository(
+#     name = "libomp",
+#     build_file = "@//:third_party/libomp.BUILD",
+#     path = "/home/linuxbrew/.linuxbrew/opt/libomp",
+# )
+
+# # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
+# # new_local_repository(
+# #     name = "openblas",
+# #     build_file = "@//:third_party/openblas.BUILD",
+# #     path = "/home/linuxbrew/.linuxbrew/opt/openblas/",
+# # )
+
+# # suite-sparse is a collection of sparse matrix libraries
+# new_local_repository(
+#     name = "suitesparse",
+#     build_file = "@//:third_party/suitesparse.BUILD",
+#     path = "/home/linuxbrew/.linuxbrew/opt/suite-sparse/",
+# )

@@ -80,6 +80,7 @@ Temporary Items
 /bazel.iml
 /output/
 .bazelversion
+.bazelignore
 user.bazelrc
 MODULE.bazel.lock
 
@@ -97,15 +98,25 @@ MODULE.bazel.lock
 # Project-specific files and folders
 #-------------------------------------------------------------------------------
 /examples/*
-/coverage/*
+/benchmarks/*
 /data/*
 /share/*
 /lib/*
+/_archive/*
+/archive/*
+/.cache
+/.cache/*
+
+# legal reason to ignore:
+/third_party/hdf5/*
+
+#-------------------------------------------------------------------------------
 *.in
 *.clang-tidy
 compile_commands.json
 *.png
 StyleGuide.md
-_archive/*
+
 MODULE.bazel.lock
+profile.gz
 
