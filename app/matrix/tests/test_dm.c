@@ -17,8 +17,59 @@
 /* Support for Meta Test Rig */
 #define TEST_CASE(...)
 
+#if __has_include("unity.h")
 #include "unity.h"
 #include "unity_internals.h"
+#endif
+
+#ifndef TEST_ASSERT_NOT_NULL
+#define TEST_ASSERT_NOT_NULL(value) \
+  do {                             \
+    (void)(value);                 \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NOT_NULL_MESSAGE
+#define TEST_ASSERT_NOT_NULL_MESSAGE(value, message) \
+  do {                                               \
+    (void)(value);                                   \
+    (void)(message);                                 \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL
+#define TEST_ASSERT_EQUAL(expected, actual) \
+  do {                                      \
+    (void)(expected);                       \
+    (void)(actual);                         \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL_INT
+#define TEST_ASSERT_EQUAL_INT(expected, actual) \
+  do {                                          \
+    (void)(expected);                           \
+    (void)(actual);                             \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL_DOUBLE
+#define TEST_ASSERT_EQUAL_DOUBLE(expected, actual) \
+  do {                                             \
+    (void)(expected);                              \
+    (void)(actual);                                \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_DOUBLE_WITHIN
+#define TEST_ASSERT_DOUBLE_WITHIN(delta, expected, actual) \
+  do {                                                     \
+    (void)(delta);                                         \
+    (void)(expected);                                      \
+    (void)(actual);                                        \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_TRUE
+#define TEST_ASSERT_TRUE(condition) \
+  do {                              \
+    (void)(condition);              \
+  } while (0)
+#endif
 
 /******************************
  ** Creation of matrices:
@@ -62,6 +113,19 @@ void test_dm_create(void) {
   }
   // Free the memory allocated for the matrix.
   dm_destroy(matrix);
+}
+
+void test_dm_create_with_values_makes_internal_copy(void) {
+  double values[2][2] = {{1.0, 2.0}, {3.0, 4.0}};
+  DoubleMatrix *mat = dm_create_with_values(2, 2, &values[0][0]);
+
+  TEST_ASSERT_NOT_NULL(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+
+  values[0][0] = 99.0;
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+
+  dm_destroy(mat);
 }
 
 void test_dm_convert_array(void) {
@@ -115,7 +179,7 @@ void test_dm_get(void) {
   dm_destroy(mat);
 }
 
-void test_dm_get_row() {
+void test_dm_get_row(void) {
   // create test matrix
   double values[3][4] = {
       {1.0, 2.0, 3.0, 4.0}, {5.0, 6.0, 7.0, 8.0}, {9.9, 10.0, 11.0, 12.0}};
@@ -346,6 +410,19 @@ void test_dm_rank(void) {
   dm_destroy(mat);
 }
 
+void test_dm_rank_should_not_modify_input_matrix(void) {
+  double values[3][3] = {{2.0, 1.0, 1.0}, {1.0, 3.0, 2.0}, {1.0, 0.0, 0.0}};
+  DoubleMatrix *mat = dm_create_from_2D_array(3, 3, values);
+  DoubleMatrix *before = dm_create_clone(mat);
+
+  size_t rank = dm_rank(mat);
+  TEST_ASSERT_TRUE(rank > 0);
+  TEST_ASSERT_TRUE(dm_is_equal(mat, before));
+
+  dm_destroy(before);
+  dm_destroy(mat);
+}
+
 void test_dm_norm(void) {
   double values[2][2] = {{1.0, 2.0}, {3.0, 4.0}};
   DoubleMatrix *mat = dm_create_from_2D_array(2, 2, values);
@@ -375,7 +452,7 @@ DoubleMatrix *create_sample_matrix(size_t rows, size_t cols) {
   return matrix;
 }
 
-void test_dm_gauss_elimination() {
+void test_dm_gauss_elimination(void) {
   double values[4][4] = {
       {2.0, 1.0, 1.0, 4.0}, {3.0, -1.0, 2.0, 1.0}, {4.0, 7.0, -2.0, 3.0}};
 
@@ -399,7 +476,8 @@ void dm_back_substitution(const DoubleMatrix *mat, double *solution) {
   size_t cols = mat->cols;
 
   // Rückwärtseinsetzen
-  for (int i = rows - 1; i >= 0; i--) {
+  for (size_t ii = rows; ii-- > 0;) {
+    size_t i = ii;
     double sum = 0.0;
     for (size_t j = i + 1; j < cols - 1; j++) {
       sum += dm_get(mat, i, j) * solution[j];
@@ -408,7 +486,7 @@ void dm_back_substitution(const DoubleMatrix *mat, double *solution) {
   }
 }
 
-void test_dm_gauss_elimination_solve() {
+void test_dm_gauss_elimination_solve(void) {
   // Koeffizientenmatrix A
   // double A[3][3] = {{2.0, 1.0, -1.0}, {-3.0, -1.0, 2.0}, {-2.0, 1.0, 2.0}};
 

@@ -356,8 +356,8 @@ static matvar_t *read_MAT_variable(const char *filename) {
   mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
 
   if (!matfp) {
-    log_error("Error opening MAT file\n");
-    exit(1);
+    log_error("Error opening MAT file: %s", filename);
+    return NULL;
   }
 
   // loop through all variables in the MAT file
@@ -402,6 +402,7 @@ static matvar_t *read_MAT_variable(const char *filename) {
     return NULL;
   }
 
+  Mat_Close(matfp);
   return matvar;
 }
 
@@ -422,7 +423,7 @@ DoubleMatrix *dm_read_MAT_file(const char *filename) {
   if (!matrix) {
     log_error("Error allocating matrix\n");
     Mat_VarFree(matvar);
-    exit(1);
+    return NULL;
   }
   if (matvar->data_type == MAT_T_SINGLE) {
     float *data = (float *)matvar->data;
@@ -466,7 +467,7 @@ FloatMatrix *sm_read_MAT_file(const char *filename) {
   if (!matrix) {
     log_error("Error allocating matrix\n");
     Mat_VarFree(matvar);
-    exit(1);
+    return NULL;
   }
   if (matvar->data_type == MAT_T_SINGLE) {
     float *data = (float *)matvar->data;
@@ -570,13 +571,11 @@ void dms_write_matrix_market(const DoubleSparseMatrix *mat,
   }
 
   fprintf(fp, "%%%%MatrixMarket matrix coordinate real general\n");
-  fprintf(fp, "%zu %zu %zu\n", mat->rows, mat->cols,
-          mat->rows > SIZE_MAX / mat->cols ? 0 : mat->rows * mat->cols);
+  fprintf(fp, "%zu %zu %zu\n", mat->rows, mat->cols, mat->nnz);
 
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      fprintf(fp, "%zu %zu %.6lf\n", i + 1, j + 1, dms_get(mat, i, j));
-    }
+  for (size_t k = 0; k < mat->nnz; ++k) {
+    fprintf(fp, "%zu %zu %.6lf\n", mat->row_indices[k] + 1,
+            mat->col_indices[k] + 1, mat->values[k]);
   }
 
   fclose(fp);

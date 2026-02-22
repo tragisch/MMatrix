@@ -170,10 +170,14 @@ DoubleMatrix *dm_create_empty(void) {
 
 DoubleMatrix *dm_create_with_values(size_t rows, size_t cols, double *values) {
   DoubleMatrix *matrix = dm_create(rows, cols);
-  matrix->cols = cols;
-  matrix->rows = rows;
-  matrix->capacity = rows * cols;
-  matrix->values = values;
+  if (matrix == NULL) {
+    return NULL;
+  }
+
+  if (values != NULL) {
+    memcpy(matrix->values, values, rows * cols * sizeof(double));
+  }
+
   return matrix;
 }
 
@@ -632,6 +636,8 @@ void dm_reshape(DoubleMatrix *matrix, size_t new_rows, size_t new_cols) {
 }
 
 void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
+  double *old_values = mat->values;
+
   // allocate new memory for dense matrix:
   double *new_values = (double *)calloc(new_row * new_col, sizeof(double));
 
@@ -657,6 +663,8 @@ void dm_resize(DoubleMatrix *mat, size_t new_row, size_t new_col) {
   mat->rows = new_row;
   mat->cols = new_col;
   mat->capacity = new_row * new_col;
+
+  free(old_values);
 }
 
 void dm_print(const DoubleMatrix *matrix) {
@@ -721,6 +729,11 @@ size_t dm_rank(const DoubleMatrix *mat) {
   }
   size_t rank = 0;
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+  DoubleMatrix *tmp = dm_create_clone(mat);
+  if (tmp == NULL) {
+    return 0;
+  }
+
   BLASINT m = (BLASINT)mat->rows;
   BLASINT n = (BLASINT)mat->cols;
   BLASINT lda = n;
@@ -729,32 +742,37 @@ size_t dm_rank(const DoubleMatrix *mat) {
   double *work;
   BLASINT info;
 
-  dgeqrf_(&m, &n, mat->values, &lda, NULL, &wkopt, &lwork, &info);
+  dgeqrf_(&m, &n, tmp->values, &lda, NULL, &wkopt, &lwork, &info);
   lwork = (BLASINT)wkopt;
   work = (double *)malloc((size_t)lwork * sizeof(double));
   if (work == NULL) {
+    dm_destroy(tmp);
     return 0;  // Memory allocation failed
   }
 
   double *tau = (double *)malloc((size_t)((m < n) ? m : n) * sizeof(double));
   if (tau == NULL) {
     free(work);
+    dm_destroy(tmp);
     return 0;  // Memory allocation failed
   }
 
-  dgeqrf_(&m, &n, mat->values, &lda, tau, work, &lwork, &info);
+  dgeqrf_(&m, &n, tmp->values, &lda, tau, work, &lwork, &info);
   free(work);
   free(tau);
   if (info != 0) {
+    dm_destroy(tmp);
     return 0;  // QR factorization failed
   }
 
   int k = (m < n) ? m : n;
   for (int i = 0; i < k; ++i) {
-    if (fabs(mat->values[i * lda + i]) > EPSILON) {
+    if (fabs(tmp->values[i * lda + i]) > EPSILON) {
       rank++;
     }
   }
+
+  dm_destroy(tmp);
 #else
   rank = dm_rank_euler(mat);
 #endif

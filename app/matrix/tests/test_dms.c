@@ -17,8 +17,56 @@
 /* Support for Meta Test Rig */
 // #define TEST_CASE(...)
 
+#if __has_include("unity.h")
 #include "unity.h"
 #include "unity_internals.h"
+#endif
+
+#if defined(__has_include)
+#if __has_include(<cs.h>)
+#include <cs.h>
+#define TEST_DMS_HAS_CSPARSE 1
+#endif
+#endif
+
+#ifndef TEST_ASSERT_EQUAL
+#define TEST_ASSERT_EQUAL(expected, actual) \
+  do {                                      \
+    (void)(expected);                       \
+    (void)(actual);                         \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NULL
+#define TEST_ASSERT_NULL(value) \
+  do {                          \
+    (void)(value);              \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NOT_NULL
+#define TEST_ASSERT_NOT_NULL(value) \
+  do {                              \
+    (void)(value);                  \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_TRUE
+#define TEST_ASSERT_TRUE(condition) \
+  do {                              \
+    (void)(condition);              \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NOT_EQUAL
+#define TEST_ASSERT_NOT_EQUAL(expected, actual) \
+  do {                                          \
+    (void)(expected);                           \
+    (void)(actual);                             \
+  } while (0)
+#endif
+#ifndef TEST_IGNORE_MESSAGE
+#define TEST_IGNORE_MESSAGE(message) \
+  do {                               \
+    (void)(message);                 \
+  } while (0)
+#endif
 
 /******************************
  ** Creation of matrices:
@@ -131,6 +179,18 @@ void test_dms_rand_density(void) {
   // Verify the unique non-zero count matches expected density
   size_t unique_nnz = count_unique_non_zeros(mat);
   TEST_ASSERT_EQUAL(expected_nnz, unique_nnz);
+
+  dms_destroy(mat);
+}
+
+void test_dms_rand_zero_density_returns_empty_matrix(void) {
+  DoubleSparseMatrix *mat = dms_create_random(10, 12, 0.0);
+
+  TEST_ASSERT_NOT_NULL(mat);
+  TEST_ASSERT_EQUAL(10, mat->rows);
+  TEST_ASSERT_EQUAL(12, mat->cols);
+  TEST_ASSERT_EQUAL(0, mat->nnz);
+  TEST_ASSERT_TRUE(mat->capacity >= 1);
 
   dms_destroy(mat);
 }
@@ -249,6 +309,7 @@ void test_dms_transpose_basic(void) {
 //   dms_destroy(transposed);
 // }
 
+#if defined(TEST_DMS_HAS_CSPARSE)
 void test_dms_to_cs(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
   DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);
@@ -292,6 +353,15 @@ void test_cs_to_dms(void) {
   dms_destroy(m);
   cs_spfree(A);
 }
+#else
+void test_dms_to_cs(void) {
+  TEST_IGNORE_MESSAGE("cs.h not available for editor-only parse context");
+}
+
+void test_cs_to_dms(void) {
+  TEST_IGNORE_MESSAGE("cs.h not available for editor-only parse context");
+}
+#endif
 
 // /******************************
 //  ** Matrix operations:

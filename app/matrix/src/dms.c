@@ -272,7 +272,14 @@ DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
                                       double density) {
   double nnz_d = (double)rows * (double)cols * density;
   size_t nnz = (size_t)nnz_d;
-  if (nnz == 0) return dms_create(rows, cols, 0);
+  if (nnz == 0) {
+    DoubleSparseMatrix *empty = dms_create(rows, cols, 1);
+    if (!empty) {
+      return NULL;
+    }
+    empty->nnz = 0;
+    return empty;
+  }
 
   DoubleSparseMatrix *mat = dms_create(rows, cols, nnz);
   if (!mat) return NULL;

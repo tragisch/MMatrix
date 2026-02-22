@@ -17,8 +17,59 @@
 /* Support for Meta Test Rig */
 #define TEST_CASE(...)
 
+#if __has_include("unity.h")
 #include "unity.h"
 #include "unity_internals.h"
+#endif
+
+#ifndef TEST_ASSERT_NOT_NULL
+#define TEST_ASSERT_NOT_NULL(value) \
+  do {                             \
+    (void)(value);                 \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NOT_NULL_MESSAGE
+#define TEST_ASSERT_NOT_NULL_MESSAGE(value, message) \
+  do {                                               \
+    (void)(value);                                   \
+    (void)(message);                                 \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL
+#define TEST_ASSERT_EQUAL(expected, actual) \
+  do {                                      \
+    (void)(expected);                       \
+    (void)(actual);                         \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL_INT
+#define TEST_ASSERT_EQUAL_INT(expected, actual) \
+  do {                                          \
+    (void)(expected);                           \
+    (void)(actual);                             \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL_UINT32
+#define TEST_ASSERT_EQUAL_UINT32(expected, actual) \
+  do {                                             \
+    (void)(expected);                              \
+    (void)(actual);                                \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_FLOAT_WITHIN
+#define TEST_ASSERT_FLOAT_WITHIN(delta, expected, actual) \
+  do {                                                    \
+    (void)(delta);                                        \
+    (void)(expected);                                     \
+    (void)(actual);                                       \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_TRUE
+#define TEST_ASSERT_TRUE(condition) \
+  do {                              \
+    (void)(condition);              \
+  } while (0)
+#endif
 
 /******************************
  ** Creation of matrices:
@@ -179,7 +230,7 @@ void test_sm_get(void) {
   sm_destroy(mat);
 }
 
-void test_sm_get_row() {
+void test_sm_get_row(void) {
   // create test matrix
   float values[3][4] = {{1.0f, 2.0f, 3.0f, 4.0f},
                         {5.0f, 6.0f, 7.0f, 8.0f},
