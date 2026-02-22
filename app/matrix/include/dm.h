@@ -9,7 +9,6 @@
 #ifndef DM_H
 #define DM_H
 
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>

@@ -19,7 +19,7 @@
 
 #if __has_include("unity.h")
 #include "unity.h"
-#include "unity_internals.h"
+// #include "unity_internals.h"
 #endif
 
 #ifndef TEST_ASSERT_NOT_NULL
