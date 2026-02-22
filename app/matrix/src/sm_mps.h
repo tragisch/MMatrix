@@ -20,10 +20,17 @@
 extern "C" {
 #endif
 #include <stddef.h>
+#include <stdbool.h>
 
 void mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
                          const float *mat2, size_t rows2, size_t cols2,
                          float *result);
+
+bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
+                            bool transpose_left, const float *mat2,
+                            size_t rows2, size_t cols2, bool transpose_right,
+                            float alpha, float beta, float *result,
+                            size_t result_rows, size_t result_cols);
 
 #ifdef __cplusplus
 }

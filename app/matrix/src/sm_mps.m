@@ -8,25 +8,55 @@
 
 #import "sm_mps.h"
 
-void mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
-                         const float *mat2, size_t rows2, size_t cols2,
-                         float *result) {
-  if (cols1 != rows2) {
-    NSLog(@"Matrix dimensions do not match for multiplication.");
-    return;
+static id<MTLDevice> mps_shared_device(void) {
+  static id<MTLDevice> device = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    device = MTLCreateSystemDefaultDevice();
+  });
+  return device;
+}
+
+static id<MTLCommandQueue> mps_shared_command_queue(id<MTLDevice> device) {
+  static id<MTLCommandQueue> queue = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    queue = [device newCommandQueue];
+  });
+  return queue;
+}
+
+bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
+                            bool transpose_left, const float *mat2,
+                            size_t rows2, size_t cols2, bool transpose_right,
+                            float alpha, float beta, float *result,
+                            size_t result_rows, size_t result_cols) {
+  if (!mat1 || !mat2 || !result) {
+    return false;
   }
 
-  // Metal device
-  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+  size_t left_rows = transpose_left ? cols1 : rows1;
+  size_t left_cols = transpose_left ? rows1 : cols1;
+  size_t right_rows = transpose_right ? cols2 : rows2;
+  size_t right_cols = transpose_right ? rows2 : cols2;
+
+  if (left_cols != right_rows) {
+    return false;
+  }
+  if (result_rows != left_rows || result_cols != right_cols) {
+    return false;
+  }
+
+  id<MTLDevice> device = mps_shared_device();
   if (!device) {
-    NSLog(@"Metal is not supported on this device.");
-    return;
+    return false;
   }
 
-  // Command queue
-  id<MTLCommandQueue> commandQueue = [device newCommandQueue];
+  id<MTLCommandQueue> commandQueue = mps_shared_command_queue(device);
+  if (!commandQueue) {
+    return false;
+  }
 
-  // Create MPSMatrixDescriptors
   MPSMatrixDescriptor *descA =
       [MPSMatrixDescriptor matrixDescriptorWithRows:rows1
                                             columns:cols1
@@ -38,48 +68,66 @@ void mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
                                            rowBytes:cols2 * sizeof(float)
                                            dataType:MPSDataTypeFloat32];
   MPSMatrixDescriptor *descC =
-      [MPSMatrixDescriptor matrixDescriptorWithRows:rows1
-                                            columns:cols2
-                                           rowBytes:cols2 * sizeof(float)
+      [MPSMatrixDescriptor matrixDescriptorWithRows:result_rows
+                                            columns:result_cols
+                                           rowBytes:result_cols * sizeof(float)
                                            dataType:MPSDataTypeFloat32];
 
-  // Create MPSMatrices
-  MPSMatrix *matrixA = [[MPSMatrix alloc]
-      initWithBuffer:[device newBufferWithBytes:mat1
-                                         length:rows1 * cols1 * sizeof(float)
-                                        options:MTLResourceStorageModeShared]
-          descriptor:descA];
-  MPSMatrix *matrixB = [[MPSMatrix alloc]
-      initWithBuffer:[device newBufferWithBytes:mat2
-                                         length:rows2 * cols2 * sizeof(float)
-                                        options:MTLResourceStorageModeShared]
-          descriptor:descB];
-  MPSMatrix *matrixC = [[MPSMatrix alloc]
-      initWithBuffer:[device newBufferWithLength:rows1 * cols2 * sizeof(float)
-                                         options:MTLResourceStorageModeShared]
-          descriptor:descC];
+  id<MTLBuffer> bufferA = [device newBufferWithBytes:mat1
+                                               length:rows1 * cols1 * sizeof(float)
+                                              options:MTLResourceStorageModeShared];
+  id<MTLBuffer> bufferB = [device newBufferWithBytes:mat2
+                                               length:rows2 * cols2 * sizeof(float)
+                                              options:MTLResourceStorageModeShared];
+  id<MTLBuffer> bufferC = nil;
+  size_t c_bytes = result_rows * result_cols * sizeof(float);
+  if (beta != 0.0f) {
+    bufferC = [device newBufferWithBytes:result
+                                  length:c_bytes
+                                 options:MTLResourceStorageModeShared];
+  } else {
+    bufferC = [device newBufferWithLength:c_bytes
+                                  options:MTLResourceStorageModeShared];
+  }
 
-  // Create MPSMatrixMultiplication
-  MPSMatrixMultiplication *matrixMultiplication =
+  if (!bufferA || !bufferB || !bufferC) {
+    return false;
+  }
+
+  MPSMatrix *matrixA = [[MPSMatrix alloc] initWithBuffer:bufferA descriptor:descA];
+  MPSMatrix *matrixB = [[MPSMatrix alloc] initWithBuffer:bufferB descriptor:descB];
+  MPSMatrix *matrixC = [[MPSMatrix alloc] initWithBuffer:bufferC descriptor:descC];
+
+  MPSMatrixMultiplication *mm =
       [[MPSMatrixMultiplication alloc] initWithDevice:device
-                                        transposeLeft:NO
-                                       transposeRight:NO
-                                           resultRows:rows1
-                                        resultColumns:cols2
-                                      interiorColumns:cols1
-                                                alpha:1.0
-                                                 beta:0.0];
+                                        transposeLeft:(BOOL)transpose_left
+                                       transposeRight:(BOOL)transpose_right
+                                           resultRows:result_rows
+                                        resultColumns:result_cols
+                                      interiorColumns:left_cols
+                                                alpha:alpha
+                                                 beta:beta];
 
-  // Encode command
   id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-  [matrixMultiplication encodeToCommandBuffer:commandBuffer
-                                   leftMatrix:matrixA
-                                  rightMatrix:matrixB
-                                 resultMatrix:matrixC];
+  if (!commandBuffer) {
+    return false;
+  }
+
+  [mm encodeToCommandBuffer:commandBuffer
+                 leftMatrix:matrixA
+                rightMatrix:matrixB
+               resultMatrix:matrixC];
   [commandBuffer commit];
   [commandBuffer waitUntilCompleted];
 
-  // Copy result back to CPU
-  memcpy(result, matrixC.data.contents, rows1 * cols2 * sizeof(float));
+  memcpy(result, matrixC.data.contents, c_bytes);
+  return true;
+}
+
+void mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
+                         const float *mat2, size_t rows2, size_t cols2,
+                         float *result) {
+  (void)mps_matrix_multiply_ex(mat1, rows1, cols1, false, mat2, rows2, cols2,
+                               false, 1.0f, 0.0f, result, rows1, cols2);
 }
 //

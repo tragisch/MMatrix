@@ -237,9 +237,9 @@ cc_library(
 objc_library(
     name = "sm_mps_objc",
     srcs = ["src/sm_mps.m"],
-    hdrs = ["include/sm_mps.h"],
+    hdrs = ["src/sm_mps.h"],
     copts = ["-ObjC"],
-    includes = ["."],
+    includes = ["src"],
     target_compatible_with = select({
         ":use_accelerate_mps": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
@@ -301,8 +301,8 @@ unity_test(
 unity_test(
     name = "test_io",
     srcs = ["tests/test_io.c"],
-    my_config = ["tests/my_config.yml"],
     data = ["tests/test_data/rand10.mat"],
+    my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix"],
 )

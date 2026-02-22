@@ -449,7 +449,21 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
     return false;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE_MPS)
+  if (!mps_matrix_multiply_ex(A->values, A->rows, A->cols,
+                trans_a == SM_TRANSPOSE, B->values, B->rows,
+                B->cols, trans_b == SM_TRANSPOSE, alpha, beta,
+                C->values, C->rows, C->cols)) {
+  enum CBLAS_TRANSPOSE op_a =
+    (trans_a == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
+  enum CBLAS_TRANSPOSE op_b =
+    (trans_b == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
+
+  cblas_sgemm(CblasRowMajor, op_a, op_b, (BLASINT)m, (BLASINT)n,
+        (BLASINT)k_a, alpha, A->values, (BLASINT)A->cols, B->values,
+        (BLASINT)B->cols, beta, C->values, (BLASINT)C->cols);
+  }
+#elif defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   enum CBLAS_TRANSPOSE op_a =
       (trans_a == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
   enum CBLAS_TRANSPOSE op_b =
