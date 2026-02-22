@@ -450,9 +450,9 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
   }
 
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || defined(USE_ACCELERATE_MPS)
-  CBLAS_TRANSPOSE op_a =
+  enum CBLAS_TRANSPOSE op_a =
       (trans_a == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
-  CBLAS_TRANSPOSE op_b =
+  enum CBLAS_TRANSPOSE op_b =
       (trans_b == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
 
   cblas_sgemm(CblasRowMajor, op_a, op_b, (BLASINT)m, (BLASINT)n, (BLASINT)k_a,
