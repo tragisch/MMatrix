@@ -7,6 +7,12 @@ sh_binary(
     visibility = ["//visibility:public"],
 )
 
+sh_binary(
+    name = "refresh_compile_commands",
+    srcs = ["refresh_compile_commands.sh"],
+    visibility = ["//visibility:public"],
+)
+
 config_setting(
     name = "coverage",
     values = {"collect_code_coverage": "true"},

@@ -298,6 +298,7 @@ unity_test(
     name = "test_io",
     srcs = ["tests/test_io.c"],
     my_config = ["tests/my_config.yml"],
+    data = ["tests/test_data/rand10.mat"],
     tags = ["smoke"],
     deps = ["@//app/matrix"],
 )

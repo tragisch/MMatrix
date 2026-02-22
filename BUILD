@@ -1,4 +1,3 @@
-load("@hedron_compile_commands//:refresh_compile_commands.bzl", "refresh_compile_commands")
 load("@phst_license_test//:def.bzl", "license_test")
 load("//tools/install:def.bzl", "installer")
 
@@ -20,9 +19,12 @@ installer(
     system_integration = False,  # set "True" symlink to /usr/local/lib and /usr/local/include
 )
 
-refresh_compile_commands(
+alias(
     name = "refresh_compile_commands",
-    targets = {
-        "//app/matrix": "--define=USE_ACCELERATE_MPS=1",
-    },
+    actual = "//tools:refresh_compile_commands",
+)
+
+alias(
+    name = "refresh_compile_commands_raw",
+    actual = "@wolfd_bazel_compile_commands//:generate_compile_commands",
 )

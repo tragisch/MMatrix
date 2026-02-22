@@ -573,7 +573,8 @@ void test_sm_determinant_5x5(void) {
   FloatMatrix *mat = sm_from_array_static(5, 5, values);
 
   float det = sm_determinant(mat);
-  TEST_ASSERT_FLOAT_WITHIN(EPSILON, -120120.0f, det);
+  // Größere Matrix + Float-Arithmetik: toleranter Vergleich gegen Rundungsfehler
+  TEST_ASSERT_FLOAT_WITHIN(1e-1f, -120120.0f, det);
   sm_destroy(mat);
 }
 

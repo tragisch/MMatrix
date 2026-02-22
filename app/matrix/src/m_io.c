@@ -257,23 +257,75 @@ static int write_MAT_file_generic(const char *filename, size_t rows,
                                   enum matio_classes cls, enum matio_types type,
                                   enum mat_ft version,
                                   enum matio_compression compression) {
+  if (cols != 0 && rows > SIZE_MAX / cols) {
+    log_error("Invalid matrix dimensions for MAT write (%zu x %zu)", rows,
+              cols);
+    return -1;
+  }
+
+  size_t elements = rows * cols;
+  void *column_major_data = NULL;
+
+  if (type == MAT_T_DOUBLE) {
+    double *src = (double *)data;
+    double *dst = (double *)malloc(elements * sizeof(double));
+    if (!dst) {
+      log_error("Failed to allocate conversion buffer for MAT write");
+      return -1;
+    }
+
+    for (size_t row = 0; row < rows; ++row) {
+      for (size_t col = 0; col < cols; ++col) {
+        dst[col * rows + row] = src[row * cols + col];
+      }
+    }
+    column_major_data = dst;
+  } else if (type == MAT_T_SINGLE) {
+    float *src = (float *)data;
+    float *dst = (float *)malloc(elements * sizeof(float));
+    if (!dst) {
+      log_error("Failed to allocate conversion buffer for MAT write");
+      return -1;
+    }
+
+    for (size_t row = 0; row < rows; ++row) {
+      for (size_t col = 0; col < cols; ++col) {
+        dst[col * rows + row] = src[row * cols + col];
+      }
+    }
+    column_major_data = dst;
+  } else {
+    column_major_data = data;
+  }
+
   mat_t *matfp = Mat_CreateVer(filename, NULL, version);
   if (!matfp) {
     log_error("Fehler beim Erstellen der MAT-Datei %s", filename);
+    if (column_major_data != data) {
+      free(column_major_data);
+    }
     return -1;
   }
 
   size_t dims[2] = {rows, cols};
-  matvar_t *matvar = Mat_VarCreate("matrix", cls, type, 2, dims, data, 0);
+  matvar_t *matvar =
+      Mat_VarCreate("matrix", cls, type, 2, dims, column_major_data, 0);
   if (!matvar) {
     log_error("Fehler beim Erstellen der Matrix-Variable");
     Mat_Close(matfp);
+    if (column_major_data != data) {
+      free(column_major_data);
+    }
     return -1;
   }
 
   Mat_VarWrite(matfp, matvar, compression);
   Mat_VarFree(matvar);
   Mat_Close(matfp);
+
+  if (column_major_data != data) {
+    free(column_major_data);
+  }
 
   return 0;
 }

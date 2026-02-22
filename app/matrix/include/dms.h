@@ -9,10 +9,21 @@
 #ifndef DMMa_SPARSE_H
 #define DMMa_SPARSE_H
 
-#include <cs.h>  // SuiteSparse: a Common Sparse Matrix Package
-#include <math.h>
+#if defined(__has_include)
+#if __has_include(<cs.h>)
+#include <cs.h>  // SuiteSparse: Common Sparse Matrix Package
+#define DMS_HAS_CSPARSE 1
+#endif
+#endif
+
 #include <stdbool.h>
 #include <stdio.h>
+
+// Forward declaration for SuiteSparse type to avoid hard header dependency
+// in public API headers (helps IDE/clangd when external include paths differ).
+#ifndef DMS_HAS_CSPARSE
+typedef struct cs_di_sparse cs;
+#endif
 
 // struct of DoubleMatrix
 typedef struct DoubleSparseMatrix {

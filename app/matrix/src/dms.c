@@ -6,8 +6,18 @@
  * See the LICENSE file in the root directory for details.
  */
 
-#include "dms.h"
+#include "../include/dms.h"
 
+#if defined(__has_include)
+#if __has_include(<cs.h>) && __has_include(<omp.h>) && \
+  __has_include(<pcg_variants.h>)
+#define DMS_HAS_FULL_DEPS 1
+#endif
+#endif
+
+#if defined(DMS_HAS_FULL_DEPS)
+
+#include <cs.h>
 #include <log.h>
 #include <omp.h>
 #include <pcg_variants.h>
@@ -552,3 +562,5 @@ double *dms_to_array(const DoubleSparseMatrix *mat) {
 double dms_density(const DoubleSparseMatrix *mat) {
   return (double)mat->nnz / (double)(mat->rows * mat->cols);
 }
+
+#endif  // DMS_HAS_FULL_DEPS
