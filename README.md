@@ -25,6 +25,11 @@ All modules support:
 - [macOS] Optional use of Metal Performance Shaders (MPS)
 - SIMD acceleration with OpenMP and [macOS] ARM NEON intrinsics
 - PCG-based random number generation for reproducibility and parallelism
+
+**MPS break-even (measured):** On Apple Silicon, MPS begins to outperform
+Accelerate for GEMM only around roughly $3072\times3072$ square matrices
+(real-time). Below that, Accelerate is typically faster due to GPU dispatch
+overhead.
   
 ---
 
