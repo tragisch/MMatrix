@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    # matio Include paths
+    - "-Ithird_party/matio"
+    - "-Ibazel-out/darwin_arm64-fastbuild/bin/external/+http_archive+matio"
+    - "-Ibazel-out/darwin_arm64-fastbuild/bin/external/+http_archive+matio/src"
+    - "-Iexternal/+http_archive+matio"
+    - "-Iexternal/+http_archive+matio/src"
