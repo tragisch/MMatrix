@@ -1,3 +1,5 @@
+"""Root build file for MMatrix C project."""
+
 load("@phst_license_test//:def.bzl", "license_test")
 load("//tools/install:def.bzl", "installer")
 
@@ -20,8 +22,13 @@ installer(
 )
 
 alias(
+    name = "coverage_html",
+    actual = "//tools:coverage_lcov_wrapper",
+)
+
+alias(
     name = "refresh_compile_commands",
-    actual = "//tools:refresh_compile_commands",
+    actual = "@wolfd_bazel_compile_commands//:generate_compile_commands",
 )
 
 alias(
