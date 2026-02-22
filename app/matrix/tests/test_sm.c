@@ -330,6 +330,29 @@ void test_sm_rand(void) {
   sm_destroy(mat);
 }
 
+void test_sm_rand_seeded_should_be_deterministic(void) {
+  FloatMatrix *a = sm_create_random_seeded(4, 5, 987654321ull);
+  FloatMatrix *b = sm_create_random_seeded(4, 5, 987654321ull);
+
+  TEST_ASSERT_NOT_NULL(a);
+  TEST_ASSERT_NOT_NULL(b);
+  TEST_ASSERT_TRUE(sm_is_equal(a, b));
+
+  sm_destroy(a);
+  sm_destroy(b);
+}
+
+void test_sm_rand_global_seed_should_be_reproducible(void) {
+  sm_set_random_seed(99ull);
+  FloatMatrix *a = sm_create_random(3, 3);
+  FloatMatrix *b = sm_create_random(3, 3);
+  TEST_ASSERT_TRUE(sm_is_equal(a, b));
+  TEST_ASSERT_EQUAL_UINT32(99u, (uint32_t)sm_get_random_seed());
+
+  sm_destroy(a);
+  sm_destroy(b);
+}
+
 void test_sm_random_xavier_distribution(void) {
   size_t rows = 100;
   size_t cols = 100;

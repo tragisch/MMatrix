@@ -13,6 +13,7 @@
 
 #include "dm.h"
 #include "dms.h"
+#include "m_status.h"
 #include "sm.h"
 
 /*******************************/
@@ -64,9 +65,15 @@ MIOCompression mio_get_compression(void);
 
 int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename);
 int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename);
+MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename);
+MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename);
 DoubleMatrix *dm_read_MAT_file(const char *filename);
 FloatMatrix *sm_read_MAT_file(const char *filename);
 DoubleSparseMatrix *dms_read_MAT_file(const char *filename);
+MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix);
+MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix);
+MStatus dms_read_MAT_file_ex(const char *filename,
+                             DoubleSparseMatrix **out_matrix);
 
 DoubleSparseMatrix *dms_read_matrix_market(const char *filename);
 void dms_write_matrix_market(const DoubleSparseMatrix *mat,

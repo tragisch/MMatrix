@@ -195,6 +195,40 @@ void test_dms_rand_zero_density_returns_empty_matrix(void) {
   dms_destroy(mat);
 }
 
+void test_dms_rand_seeded_should_be_deterministic(void) {
+  DoubleSparseMatrix *a = dms_create_random_seeded(10, 10, 0.15, 1234ull);
+  DoubleSparseMatrix *b = dms_create_random_seeded(10, 10, 0.15, 1234ull);
+
+  TEST_ASSERT_NOT_NULL(a);
+  TEST_ASSERT_NOT_NULL(b);
+  TEST_ASSERT_EQUAL(a->nnz, b->nnz);
+
+  for (size_t i = 0; i < a->nnz; ++i) {
+    TEST_ASSERT_EQUAL(a->row_indices[i], b->row_indices[i]);
+    TEST_ASSERT_EQUAL(a->col_indices[i], b->col_indices[i]);
+    TEST_ASSERT_EQUAL(a->values[i], b->values[i]);
+  }
+
+  dms_destroy(a);
+  dms_destroy(b);
+}
+
+void test_dms_rand_global_seed_should_be_reproducible(void) {
+  dms_set_random_seed(777ull);
+  DoubleSparseMatrix *a = dms_create_random(9, 9, 0.2);
+  DoubleSparseMatrix *b = dms_create_random(9, 9, 0.2);
+
+  TEST_ASSERT_EQUAL(a->nnz, b->nnz);
+  for (size_t i = 0; i < a->nnz; ++i) {
+    TEST_ASSERT_EQUAL(a->row_indices[i], b->row_indices[i]);
+    TEST_ASSERT_EQUAL(a->col_indices[i], b->col_indices[i]);
+    TEST_ASSERT_EQUAL(a->values[i], b->values[i]);
+  }
+
+  dms_destroy(a);
+  dms_destroy(b);
+}
+
 void test_dms_convert_array(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
   DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);

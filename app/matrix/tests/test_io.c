@@ -7,12 +7,8 @@
  */
 
 #include "../include/dm.h"
+#include "../include/m_io.h"
 #include "../include/sm.h"
-
-int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename);
-int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename);
-DoubleMatrix *dm_read_MAT_file(const char *filename);
-FloatMatrix *sm_read_MAT_file(const char *filename);
 
 /******************************
  ** Test preconditions:
@@ -218,6 +214,13 @@ void test_import_and_plot_matrix(void) {
     // Clean up
     dm_destroy(matrix);
   }
+}
+
+void test_dm_read_mat_file_ex_should_return_io_error_for_missing_file(void) {
+  DoubleMatrix *mat = NULL;
+  MStatus st = dm_read_MAT_file_ex("definitely_missing_file_123456.mat", &mat);
+  TEST_ASSERT_EQUAL(MSTATUS_IO_ERROR, st);
+  TEST_ASSERT_EQUAL((void *)NULL, (void *)mat);
 }
 
 // void test_dm_cplot_grid_output(void) {

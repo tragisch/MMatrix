@@ -277,6 +277,29 @@ void test_dm_rand(void) {
   dm_destroy(mat);
 }
 
+void test_dm_rand_seeded_should_be_deterministic(void) {
+  DoubleMatrix *a = dm_create_random_seeded(4, 5, 123456789ull);
+  DoubleMatrix *b = dm_create_random_seeded(4, 5, 123456789ull);
+
+  TEST_ASSERT_NOT_NULL(a);
+  TEST_ASSERT_NOT_NULL(b);
+  TEST_ASSERT_TRUE(dm_is_equal(a, b));
+
+  dm_destroy(a);
+  dm_destroy(b);
+}
+
+void test_dm_rand_global_seed_should_be_reproducible(void) {
+  dm_set_random_seed(42ull);
+  DoubleMatrix *a = dm_create_random(3, 3);
+  DoubleMatrix *b = dm_create_random(3, 3);
+  TEST_ASSERT_TRUE(dm_is_equal(a, b));
+  TEST_ASSERT_EQUAL((size_t)42, (size_t)dm_get_random_seed());
+
+  dm_destroy(a);
+  dm_destroy(b);
+}
+
 void test_dm_multiply(void) {
   double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   double values2[3][2] = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};

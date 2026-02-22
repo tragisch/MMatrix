@@ -17,6 +17,7 @@
 #endif
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 // Forward declaration for SuiteSparse type to avoid hard header dependency
@@ -45,6 +46,10 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity);
 DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m);
 DoubleSparseMatrix *dms_create_identity(size_t n);
 DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols, double density);
+DoubleSparseMatrix *dms_create_random_seeded(size_t rows, size_t cols,
+                                              double density, uint64_t seed);
+void dms_set_random_seed(uint64_t seed);
+uint64_t dms_get_random_seed(void);
 
 // Converting to cs-sparse format or array
 cs *dms_to_cs(const DoubleSparseMatrix *coo);

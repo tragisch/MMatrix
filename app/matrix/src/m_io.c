@@ -42,6 +42,27 @@ static int plot(int x, int y, char c) {
   return 1;
 }
 
+const char *m_status_to_string(MStatus status) {
+  switch (status) {
+    case MSTATUS_OK:
+      return "OK";
+    case MSTATUS_INVALID_ARGUMENT:
+      return "INVALID_ARGUMENT";
+    case MSTATUS_IO_ERROR:
+      return "IO_ERROR";
+    case MSTATUS_ALLOC_FAILED:
+      return "ALLOC_FAILED";
+    case MSTATUS_FORMAT_ERROR:
+      return "FORMAT_ERROR";
+    case MSTATUS_UNSUPPORTED_TYPE:
+      return "UNSUPPORTED_TYPE";
+    case MSTATUS_INTERNAL_ERROR:
+      return "INTERNAL_ERROR";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 // if file to read is very large, print a progress bar:
 static void print_progress_bar(size_t progress, size_t totalSteps,
                                int barWidth) {
@@ -252,15 +273,19 @@ MIOFormat mio_get_format(void) { return g_mio_format; }
 void mio_set_compression(MIOCompression comp) { g_mio_compression = comp; }
 MIOCompression mio_get_compression(void) { return g_mio_compression; }
 
-static int write_MAT_file_generic(const char *filename, size_t rows,
-                                  size_t cols, void *data,
-                                  enum matio_classes cls, enum matio_types type,
-                                  enum mat_ft version,
-                                  enum matio_compression compression) {
+static MStatus write_MAT_file_generic(const char *filename, size_t rows,
+                                      size_t cols, void *data,
+                                      enum matio_classes cls,
+                                      enum matio_types type,
+                                      enum mat_ft version,
+                                      enum matio_compression compression) {
+  if (!filename || !data) {
+    return MSTATUS_INVALID_ARGUMENT;
+  }
   if (cols != 0 && rows > SIZE_MAX / cols) {
     log_error("Invalid matrix dimensions for MAT write (%zu x %zu)", rows,
               cols);
-    return -1;
+    return MSTATUS_INVALID_ARGUMENT;
   }
 
   size_t elements = rows * cols;
@@ -271,7 +296,7 @@ static int write_MAT_file_generic(const char *filename, size_t rows,
     double *dst = (double *)malloc(elements * sizeof(double));
     if (!dst) {
       log_error("Failed to allocate conversion buffer for MAT write");
-      return -1;
+      return MSTATUS_ALLOC_FAILED;
     }
 
     for (size_t row = 0; row < rows; ++row) {
@@ -285,7 +310,7 @@ static int write_MAT_file_generic(const char *filename, size_t rows,
     float *dst = (float *)malloc(elements * sizeof(float));
     if (!dst) {
       log_error("Failed to allocate conversion buffer for MAT write");
-      return -1;
+      return MSTATUS_ALLOC_FAILED;
     }
 
     for (size_t row = 0; row < rows; ++row) {
@@ -304,7 +329,7 @@ static int write_MAT_file_generic(const char *filename, size_t rows,
     if (column_major_data != data) {
       free(column_major_data);
     }
-    return -1;
+    return MSTATUS_IO_ERROR;
   }
 
   size_t dims[2] = {rows, cols};
@@ -316,7 +341,7 @@ static int write_MAT_file_generic(const char *filename, size_t rows,
     if (column_major_data != data) {
       free(column_major_data);
     }
-    return -1;
+    return MSTATUS_ALLOC_FAILED;
   }
 
   Mat_VarWrite(matfp, matvar, compression);
@@ -327,10 +352,13 @@ static int write_MAT_file_generic(const char *filename, size_t rows,
     free(column_major_data);
   }
 
-  return 0;
+  return MSTATUS_OK;
 }
 
-int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
+MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename) {
+  if (!matrix || !matrix->values) {
+    return MSTATUS_INVALID_ARGUMENT;
+  }
   enum matio_compression comp = (g_mio_compression == MIO_COMPRESS_ZLIB)
                                     ? MAT_COMPRESSION_ZLIB
                                     : MAT_COMPRESSION_NONE;
@@ -340,7 +368,10 @@ int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
                                 MAT_FT_MAT5, comp);
 }
 
-int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename) {
+MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename) {
+  if (!matrix || !matrix->values) {
+    return MSTATUS_INVALID_ARGUMENT;
+  }
   enum matio_compression comp = (g_mio_compression == MIO_COMPRESS_ZLIB)
                                     ? MAT_COMPRESSION_ZLIB
                                     : MAT_COMPRESSION_NONE;
@@ -350,14 +381,27 @@ int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename) {
                                 MAT_FT_MAT5, comp);
 }
 
+int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
+  return dm_write_MAT_file_ex(matrix, filename) == MSTATUS_OK ? 0 : -1;
+}
+
+int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename) {
+  return sm_write_MAT_file_ex(matrix, filename) == MSTATUS_OK ? 0 : -1;
+}
+
 typedef void *(*matrix_alloc_fn)(size_t rows, size_t cols);
 
-static matvar_t *read_MAT_variable(const char *filename) {
+static MStatus read_MAT_variable(const char *filename, matvar_t **out_matvar) {
+  if (!filename || !out_matvar) {
+    return MSTATUS_INVALID_ARGUMENT;
+  }
+
+  *out_matvar = NULL;
   mat_t *matfp = Mat_Open(filename, MAT_ACC_RDONLY);
 
   if (!matfp) {
     log_error("Error opening MAT file: %s", filename);
-    return NULL;
+    return MSTATUS_IO_ERROR;
   }
 
   // loop through all variables in the MAT file
@@ -378,43 +422,50 @@ static matvar_t *read_MAT_variable(const char *filename) {
   if (var_count == 0) {
     log_error("No variables found in MAT file.\n");
     Mat_Close(matfp);
-    return NULL;
+    return MSTATUS_FORMAT_ERROR;
   }
 
   if (var_count > 1) {
     log_error("More than one variable found (%d). Not suppoted yet.\n",
               var_count);
     Mat_Close(matfp);
-    return NULL;
+    return MSTATUS_FORMAT_ERROR;
   }
 
   matvar = Mat_VarRead(matfp, varname);
   if (!matvar) {
     log_error("Failed to read variable '%s'\n", varname);
     Mat_Close(matfp);
-    return NULL;
+    return MSTATUS_IO_ERROR;
   }
 
   if (matvar->rank != 2) {
     log_error("Variable %s is not a 2D-Matrix", varname);
     Mat_VarFree(matvar);
     Mat_Close(matfp);
-    return NULL;
+    return MSTATUS_FORMAT_ERROR;
   }
 
   Mat_Close(matfp);
-  return matvar;
+  *out_matvar = matvar;
+  return MSTATUS_OK;
 }
 
-DoubleMatrix *dm_read_MAT_file(const char *filename) {
-  matvar_t *matvar = read_MAT_variable(filename);
-  if (!matvar) return NULL;
+MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix) {
+  if (!out_matrix) {
+    return MSTATUS_INVALID_ARGUMENT;
+  }
+  *out_matrix = NULL;
+
+  matvar_t *matvar = NULL;
+  MStatus st = read_MAT_variable(filename, &matvar);
+  if (st != MSTATUS_OK) return st;
 
   if (matvar->class_type == MAT_C_SPARSE) {
     log_error("Expected dense matrix, but sparse matrix found in file %s",
               filename);
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_FORMAT_ERROR;
   }
 
   size_t rows = matvar->dims[0];
@@ -423,7 +474,7 @@ DoubleMatrix *dm_read_MAT_file(const char *filename) {
   if (!matrix) {
     log_error("Error allocating matrix\n");
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_ALLOC_FAILED;
   }
   if (matvar->data_type == MAT_T_SINGLE) {
     float *data = (float *)matvar->data;
@@ -441,24 +492,32 @@ DoubleMatrix *dm_read_MAT_file(const char *filename) {
     }
   } else {
     log_error("Unsupported data type: %d\n", matvar->data_type);
+    dm_destroy(matrix);
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_UNSUPPORTED_TYPE;
   }
   Mat_VarFree(matvar);
-  return matrix;
+  *out_matrix = matrix;
+  return MSTATUS_OK;
 }
 
-FloatMatrix *sm_read_MAT_file(const char *filename) {
-  matvar_t *matvar = read_MAT_variable(filename);
-  if (!matvar) {
-    return NULL;
+MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix) {
+  if (!out_matrix) {
+    return MSTATUS_INVALID_ARGUMENT;
+  }
+  *out_matrix = NULL;
+
+  matvar_t *matvar = NULL;
+  MStatus st = read_MAT_variable(filename, &matvar);
+  if (st != MSTATUS_OK) {
+    return st;
   }
 
   if (matvar->class_type == MAT_C_SPARSE) {
     log_error("Expected dense matrix, but sparse matrix found in file %s",
               filename);
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_FORMAT_ERROR;
   }
 
   size_t rows = matvar->dims[0];
@@ -467,7 +526,7 @@ FloatMatrix *sm_read_MAT_file(const char *filename) {
   if (!matrix) {
     log_error("Error allocating matrix\n");
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_ALLOC_FAILED;
   }
   if (matvar->data_type == MAT_T_SINGLE) {
     float *data = (float *)matvar->data;
@@ -485,24 +544,33 @@ FloatMatrix *sm_read_MAT_file(const char *filename) {
     }
   } else {
     log_error("Unsupported data type: %d\n", matvar->data_type);
+    sm_destroy(matrix);
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_UNSUPPORTED_TYPE;
   }
   Mat_VarFree(matvar);
-  return matrix;
+  *out_matrix = matrix;
+  return MSTATUS_OK;
 }
 
-DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
-  matvar_t *matvar = read_MAT_variable(filename);
-  if (!matvar) {
-    return NULL;
+MStatus dms_read_MAT_file_ex(const char *filename,
+                             DoubleSparseMatrix **out_matrix) {
+  if (!out_matrix) {
+    return MSTATUS_INVALID_ARGUMENT;
+  }
+  *out_matrix = NULL;
+
+  matvar_t *matvar = NULL;
+  MStatus st = read_MAT_variable(filename, &matvar);
+  if (st != MSTATUS_OK) {
+    return st;
   }
 
   if (!(matvar->class_type == MAT_C_SPARSE)) {
     log_error("Expected sparse matrix, but dense matrix found in file %s",
               filename);
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_FORMAT_ERROR;
   }
 
   mat_sparse_t *s = (mat_sparse_t *)matvar->data;
@@ -514,12 +582,12 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
   if (!mat) {
     log_error("Failed to allocate sparse matrix structure");
     Mat_VarFree(matvar);
-    return NULL;
+    return MSTATUS_ALLOC_FAILED;
   }
 
   size_t count = 0;
   for (size_t col = 0; col < cols; ++col) {
-    for (mat_uint32_t k = s->jc[col]; k < s->jc[col + 1]; ++k) {
+    for (size_t k = (size_t)s->jc[col]; k < (size_t)s->jc[col + 1]; ++k) {
       if (count >= mat->capacity) {
         if (mat->capacity == 0) {
           mat->capacity = 1;
@@ -529,19 +597,25 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
         void *tmp = realloc(mat->row_indices, mat->capacity * sizeof(size_t));
         if (!tmp) {
           log_error("Realloc failed");
-          break;
+          dms_destroy(mat);
+          Mat_VarFree(matvar);
+          return MSTATUS_ALLOC_FAILED;
         }
         mat->row_indices = tmp;
         tmp = realloc(mat->col_indices, mat->capacity * sizeof(size_t));
         if (!tmp) {
           log_error("Realloc failed");
-          break;
+          dms_destroy(mat);
+          Mat_VarFree(matvar);
+          return MSTATUS_ALLOC_FAILED;
         }
         mat->col_indices = tmp;
         tmp = realloc(mat->values, mat->capacity * sizeof(double));
         if (!tmp) {
           log_error("Realloc failed");
-          break;
+          dms_destroy(mat);
+          Mat_VarFree(matvar);
+          return MSTATUS_ALLOC_FAILED;
         }
         mat->values = tmp;
       }
@@ -554,7 +628,32 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
 
   mat->nnz = count;
   Mat_VarFree(matvar);
-  return mat;
+  *out_matrix = mat;
+  return MSTATUS_OK;
+}
+
+DoubleMatrix *dm_read_MAT_file(const char *filename) {
+  DoubleMatrix *matrix = NULL;
+  if (dm_read_MAT_file_ex(filename, &matrix) != MSTATUS_OK) {
+    return NULL;
+  }
+  return matrix;
+}
+
+FloatMatrix *sm_read_MAT_file(const char *filename) {
+  FloatMatrix *matrix = NULL;
+  if (sm_read_MAT_file_ex(filename, &matrix) != MSTATUS_OK) {
+    return NULL;
+  }
+  return matrix;
+}
+
+DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
+  DoubleSparseMatrix *matrix = NULL;
+  if (dms_read_MAT_file_ex(filename, &matrix) != MSTATUS_OK) {
+    return NULL;
+  }
+  return matrix;
 }
 
 /*******************************/

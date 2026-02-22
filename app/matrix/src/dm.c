@@ -11,9 +11,12 @@
 #include <log.h>
 #include <omp.h>
 #include <pcg_variants.h>
+#include <stdint.h>
 
 #define INIT_CAPACITY 100
 static const double EPSILON = 1e-9;
+static uint64_t dm_global_seed = 0;
+static bool dm_seed_initialized = false;
 
 /*******************************/
 /*      Define Environment     */
@@ -152,6 +155,35 @@ double *dm_to_column_major(const DoubleMatrix *mat) {
   return col_major;
 }
 
+static uint64_t dm_mix64(uint64_t x) {
+  x += 0x9E3779B97F4A7C15ull;
+  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+  return x ^ (x >> 31);
+}
+
+static uint64_t dm_resolve_seed(uint64_t seed) {
+  if (seed != 0) {
+    return seed;
+  }
+  if (dm_seed_initialized) {
+    return dm_global_seed;
+  }
+  return ((uint64_t)time(NULL) ^ (uint64_t)(uintptr_t)&dm_global_seed);
+}
+
+void dm_set_random_seed(uint64_t seed) {
+  dm_global_seed = seed;
+  dm_seed_initialized = true;
+}
+
+uint64_t dm_get_random_seed(void) {
+  if (!dm_seed_initialized) {
+    return 0;
+  }
+  return dm_global_seed;
+}
+
 /*******************************/
 /*      Public Functions      */
 /*******************************/
@@ -212,28 +244,26 @@ DoubleMatrix *dm_create_identity(size_t n) {
   return identity;
 }
 
-DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
+DoubleMatrix *dm_create_random_seeded(size_t rows, size_t cols, uint64_t seed) {
   DoubleMatrix *mat = dm_create(rows, cols);
+  if (!mat) {
+    return NULL;
+  }
   size_t total = rows * cols;
+  uint64_t base_seed = dm_resolve_seed(seed);
 
-  unsigned int global_seed =
-      (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
-#pragma omp parallel
-  {
-    pcg32_random_t rng;
-    int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
-                    (unsigned int)thread_id);
-    // Note: We use static scheduling here to improve predictability,
-    // and we avoid SIMD because pcg32_random_r is stateful and not safe for
-    // vectorization.
-#pragma omp parallel
-    for (size_t i = 0; i < total; ++i) {
-      mat->values[i] = (double)pcg32_random_r(&rng) / UINT32_MAX;
-    }
+  const double inv_u53 = 1.0 / 9007199254740992.0;  // 2^53
+#pragma omp parallel for
+  for (size_t i = 0; i < total; ++i) {
+    uint64_t mixed = dm_mix64(base_seed ^ ((uint64_t)i * 0x9E3779B97F4A7C15ull));
+    mat->values[i] = (double)(mixed >> 11) * inv_u53;
   }
 
   return mat;
+}
+
+DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
+  return dm_create_random_seeded(rows, cols, 0);
 }
 
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {

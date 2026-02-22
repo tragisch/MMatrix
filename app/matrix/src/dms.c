@@ -20,7 +20,6 @@
 #include <cs.h>
 #include <log.h>
 #include <omp.h>
-#include <pcg_variants.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -32,6 +31,9 @@
 #ifndef EPSILON
 #define EPSILON 1e-9
 #endif
+
+static uint64_t dms_global_seed = 0;
+static bool dms_seed_initialized = false;
 
 /*******************************/
 /*       Private Functions     */
@@ -84,6 +86,35 @@ static void dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
 
   // Increment the count of non-zero elements
   matrix->nnz++;
+}
+
+static uint64_t dms_mix64(uint64_t x) {
+  x += 0x9E3779B97F4A7C15ull;
+  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+  return x ^ (x >> 31);
+}
+
+static uint64_t dms_resolve_seed(uint64_t seed) {
+  if (seed != 0) {
+    return seed;
+  }
+  if (dms_seed_initialized) {
+    return dms_global_seed;
+  }
+  return ((uint64_t)time(NULL) ^ (uint64_t)(uintptr_t)&dms_global_seed);
+}
+
+void dms_set_random_seed(uint64_t seed) {
+  dms_global_seed = seed;
+  dms_seed_initialized = true;
+}
+
+uint64_t dms_get_random_seed(void) {
+  if (!dms_seed_initialized) {
+    return 0;
+  }
+  return dms_global_seed;
 }
 
 /*******************************/
@@ -268,8 +299,8 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
   return coo;
 }
 
-DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
-                                      double density) {
+DoubleSparseMatrix *dms_create_random_seeded(size_t rows, size_t cols,
+                                              double density, uint64_t seed) {
   double nnz_d = (double)rows * (double)cols * density;
   size_t nnz = (size_t)nnz_d;
   if (nnz == 0) {
@@ -284,26 +315,26 @@ DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
   DoubleSparseMatrix *mat = dms_create(rows, cols, nnz);
   if (!mat) return NULL;
 
-  unsigned int global_seed =
-      (unsigned int)((uintptr_t)mat ^ (uintptr_t)time(NULL));
+  uint64_t base_seed = dms_resolve_seed(seed);
 
-#pragma omp parallel
-  {
-    pcg32_random_t rng;
-    int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
-                    (unsigned int)thread_id);
+#pragma omp parallel for
+  for (size_t k = 0; k < nnz; ++k) {
+    uint64_t row_mix = dms_mix64(base_seed ^ ((uint64_t)k * 0x9E3779B97F4A7C15ull));
+    uint64_t col_mix = dms_mix64(base_seed ^ ((uint64_t)k * 0xD2B74407B1CE6E93ull));
+    uint64_t val_mix = dms_mix64(base_seed ^ ((uint64_t)k * 0x94D049BB133111EBull));
 
-#pragma omp for
-    for (size_t k = 0; k < nnz; ++k) {
-      mat->row_indices[k] = pcg32_random_r(&rng) % rows;
-      mat->col_indices[k] = pcg32_random_r(&rng) % cols;
-      mat->values[k] = (double)pcg32_random_r(&rng) / UINT32_MAX;
-    }
+    mat->row_indices[k] = (size_t)(row_mix % rows);
+    mat->col_indices[k] = (size_t)(col_mix % cols);
+    mat->values[k] = (double)(val_mix >> 11) / 9007199254740992.0;
   }
 
   mat->nnz = nnz;
   return mat;
+}
+
+DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols,
+                                      double density) {
+  return dms_create_random_seeded(rows, cols, density, 0);
 }
 
 DoubleSparseMatrix *dms_create_from_array(size_t rows, size_t cols,

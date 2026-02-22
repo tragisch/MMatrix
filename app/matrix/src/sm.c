@@ -9,8 +9,9 @@
 #include "sm.h"
 
 #include <log.h>
+#include <math.h>
 #include <omp.h>
-#include <pcg_variants.h>
+#include <stdint.h>
 #include <time.h>
 
 #ifndef CLOCK_REALTIME
@@ -30,6 +31,8 @@
 
 #define INIT_CAPACITY 100
 static const float EPSILON = 1e-5f;
+static uint64_t sm_global_seed = 0;
+static bool sm_seed_initialized = false;
 
 #ifndef M_PI  // on Linux not defined in math.h
 #define M_PI 3.14159265358979323846264338327950288f
@@ -118,10 +121,42 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   return rank;
 }
 
-static unsigned int sm_random_seed(void) {
+static uint64_t sm_mix64(uint64_t x) {
+  x += 0x9E3779B97F4A7C15ull;
+  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+  return x ^ (x >> 31);
+}
+
+static uint64_t sm_resolve_seed(uint64_t seed) {
+  if (seed != 0) {
+    return seed;
+  }
+  if (sm_seed_initialized) {
+    return sm_global_seed;
+  }
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  return (unsigned int)(ts.tv_nsec ^ ts.tv_sec);
+  return (uint64_t)ts.tv_nsec ^ (uint64_t)ts.tv_sec ^
+         (uint64_t)(uintptr_t)&sm_global_seed;
+}
+
+static float sm_uniform01(uint64_t seed, uint64_t stream, uint64_t idx) {
+  uint64_t x = sm_mix64(seed ^ (stream * 0xD2B74407B1CE6E93ull) ^
+                        (idx * 0x9E3779B97F4A7C15ull));
+  return (float)((double)(x >> 11) / 9007199254740992.0);
+}
+
+void sm_set_random_seed(uint64_t seed) {
+  sm_global_seed = seed;
+  sm_seed_initialized = true;
+}
+
+uint64_t sm_get_random_seed(void) {
+  if (!sm_seed_initialized) {
+    return 0;
+  }
+  return sm_global_seed;
 }
 
 float *sm_to_column_major(const FloatMatrix *mat) {
@@ -226,30 +261,29 @@ FloatMatrix *sm_create_identity(size_t n) {
   return identity;
 }
 
-FloatMatrix *sm_create_random(size_t rows, size_t cols) {
+FloatMatrix *sm_create_random_seeded(size_t rows, size_t cols, uint64_t seed) {
   if (cols != 0 && rows > SIZE_MAX / cols) {
     log_error("Overflow detected in matrix allocation.");
     return NULL;
   }
 
   FloatMatrix *mat = sm_create(rows, cols);
+  if (!mat) {
+    return NULL;
+  }
   size_t size = rows * cols;
+  uint64_t base_seed = sm_resolve_seed(seed);
 
-  unsigned int global_seed =
-      sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
-#pragma omp parallel
-  {
-    pcg32_random_t rng;
-    int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
-                    (unsigned int)thread_id);
-#pragma omp for
-    for (size_t i = 0; i < size; ++i) {
-      mat->values[i] = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
-    }
+#pragma omp parallel for
+  for (size_t i = 0; i < size; ++i) {
+    mat->values[i] = sm_uniform01(base_seed, 1, (uint64_t)i);
   }
 
   return mat;
+}
+
+FloatMatrix *sm_create_random(size_t rows, size_t cols) {
+  return sm_create_random_seeded(rows, cols, 0);
 }
 
 // He initialization (He-et-al.) random matrix creation
@@ -264,23 +298,17 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
 
   float stddev = sqrtf(2.0f / (float)fan_in);
   size_t size = rows * cols;
+  uint64_t base_seed = sm_resolve_seed(0);
 
-  unsigned int global_seed =
-      sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
-#pragma omp parallel
-  {
-    pcg32_random_t rng;
-    int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
-                    (unsigned int)thread_id);
-#pragma omp for
-    for (size_t i = 0; i < size; ++i) {
-      // Box-Muller Transform (approximate standard normal)
-      float u1 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
-      float u2 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
-      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
-      mat->values[i] = z * stddev;
+#pragma omp parallel for
+  for (size_t i = 0; i < size; ++i) {
+    float u1 = sm_uniform01(base_seed, 2, (uint64_t)i);
+    if (u1 < 1e-12f) {
+      u1 = 1e-12f;
     }
+    float u2 = sm_uniform01(base_seed, 3, (uint64_t)i);
+    float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
+    mat->values[i] = z * stddev;
   }
 
   return mat;
@@ -299,23 +327,17 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
 
   float stddev = sqrtf(2.0f / (float)(fan_in + fan_out));
   size_t size = rows * cols;
+  uint64_t base_seed = sm_resolve_seed(0);
 
-  unsigned int global_seed =
-      sm_random_seed() ^ (unsigned int)((uintptr_t)mat & 0xFFFFFFFFu);
-#pragma omp parallel
-  {
-    pcg32_random_t rng;
-    int thread_id = omp_get_thread_num();
-    pcg32_srandom_r(&rng, global_seed ^ (unsigned int)thread_id,
-                    (unsigned int)thread_id);
-#pragma omp for
-    for (size_t i = 0; i < size; ++i) {
-      // Box-Muller Transform: generate standard normal distributed value
-      float u1 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
-      float u2 = (float)pcg32_random_r(&rng) / (float)UINT32_MAX;
-      float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
-      mat->values[i] = z * stddev;
+#pragma omp parallel for
+  for (size_t i = 0; i < size; ++i) {
+    float u1 = sm_uniform01(base_seed, 4, (uint64_t)i);
+    if (u1 < 1e-12f) {
+      u1 = 1e-12f;
     }
+    float u2 = sm_uniform01(base_seed, 5, (uint64_t)i);
+    float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
+    mat->values[i] = z * stddev;
   }
 
   return mat;

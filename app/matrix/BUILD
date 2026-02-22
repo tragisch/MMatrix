@@ -192,6 +192,7 @@ cc_library(
     hdrs = [
         "include/m_convert.h",
         "include/m_io.h",
+        "include/m_status.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],

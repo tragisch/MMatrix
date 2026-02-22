@@ -9,8 +9,8 @@
 #ifndef SM_H
 #define SM_H
 
-#include <math.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +36,9 @@ FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values);
 FloatMatrix *sm_clone(const FloatMatrix *m);
 FloatMatrix *sm_create_identity(size_t n);
 FloatMatrix *sm_create_random(size_t rows, size_t cols);
+FloatMatrix *sm_create_random_seeded(size_t rows, size_t cols, uint64_t seed);
+void sm_set_random_seed(uint64_t seed);
+uint64_t sm_get_random_seed(void);
 FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in);
 FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
                                      size_t fan_out);

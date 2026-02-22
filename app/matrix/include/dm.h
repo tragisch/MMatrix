@@ -11,6 +11,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,6 +36,9 @@ DoubleMatrix *dm_create(size_t rows, size_t cols);
 DoubleMatrix *dm_create_clone(const DoubleMatrix *m);
 DoubleMatrix *dm_create_identity(size_t n);
 DoubleMatrix *dm_create_random(size_t rows, size_t cols);
+DoubleMatrix *dm_create_random_seeded(size_t rows, size_t cols, uint64_t seed);
+void dm_set_random_seed(uint64_t seed);
+uint64_t dm_get_random_seed(void);
 
 /**************************************/
 /*         Matrix Import              */
