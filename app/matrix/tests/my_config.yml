@@ -3,3 +3,4 @@
     - stdio.h
   :cexception: 0
   :use_param_tests: 1
+  :cmdline_args: 1

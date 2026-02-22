@@ -158,6 +158,7 @@ double *dm_to_column_major(const DoubleMatrix *mat) {
 
 const char *dm_active_library(void) { return ACTIVE_LIB; }
 
+
 DoubleMatrix *dm_create_empty(void) {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
   matrix->rows = 0;

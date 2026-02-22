@@ -4,7 +4,6 @@ cc_library(
     name = "log",
     srcs = [
         "log.c",
-        "log.h",
     ],
     hdrs = [
         "log.h",

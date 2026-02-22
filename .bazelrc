@@ -63,16 +63,6 @@ build:debug_clang_report --copt=-O2
 # bazel build //... --config=debug_clang_report
 
 ###############################
-# cache                        #
-###############################
-
-# Enable remote caching
-# build --remote_cache=https://your-remote-cache-url
-
-# Enable local caching
-build --disk_cache=.cache/bazel_cache
-
-###############################
 # Report OpenMP              #
 ###############################
 
@@ -118,20 +108,12 @@ test --test_output=all
 # Coverage                  #
 ###############################
 
-coverage --collect_code_coverage
-coverage --copt=-fprofile-instr-generate
-coverage --copt=-fcoverage-mapping
-coverage --linkopt=-fprofile-instr-generate
-coverage --linkopt=-fcoverage-mapping
-coverage --coverage_output_generator=@bazel_tools//tools/coverage:coverage_report_generator
-coverage --instrumentation_filter=//src/...  
-
-coverage --compilation_mode=dbg
-coverage --instrument_test_targets=false
 coverage --combined_report=lcov
-coverage --test_output=all
-coverage --instrumentation_filter="//..."
-coverage --instrumentation_filter="-//external/..."
+coverage --instrumentation_filter="^//app[:/]"
+coverage --experimental_use_llvm_covmap
+coverage --experimental_generate_llvm_lcov
+coverage --copt=-fcoverage-compilation-dir=.
+
 
 ###############################
 # Linux Toolchain (LLVM)      #

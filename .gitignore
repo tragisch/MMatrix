@@ -110,14 +110,15 @@ MODULE.bazel.lock
 # legal reason to ignore:
 /third_party/hdf5/*
 
-# not build dependend:
-/third_party/csparse/*
-/third_party/jburhardt/*
-/third_party/matmul/*
-/third_party/mesch12b/*
-/third_party/mm_offloading/*
-/third_party/spmatrix/*
-/third_party/spblas/*
+# not build dependend, unclear License:
+/third_party/csparse
+/third_party/jburkardt
+/third_party/matmul
+/third_party/mesch12b
+/third_party/mm_offloading
+/third_party/spmatrix
+/third_party/spblas
+/third_party/cblas
 
 #-------------------------------------------------------------------------------
 *.in

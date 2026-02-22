@@ -1,7 +1,8 @@
 """Module docstring describing the purpose of the file."""
+
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
 
-def unity_test(name,  srcs, my_config=None, deps=None,  **kwargs):
+def unity_test(name, srcs, my_config = None, deps = None, **kwargs):
     """ Create a unity test.
 
     Args:
@@ -11,22 +12,40 @@ def unity_test(name,  srcs, my_config=None, deps=None,  **kwargs):
         deps (optional): The dependencies of the test.
         **kwargs: Additional arguments to pass to the cc_test rule.
     """
-    deps =(deps or []) + [Label("@Unity//:Unity")]
+    deps = (deps or []) + [Label("@Unity//:Unity")]
     file_name = str(srcs[0])
     generate_test_runner(file_name, my_config, name)
 
+    coverage_copts = select({
+        "//tools:coverage": [
+            "-fprofile-instr-generate",
+            "-fcoverage-mapping",
+            "-fcoverage-mcdc",
+        ],
+        "//conditions:default": [],
+    })
+
+    coverage_linkopts = select({
+        "//tools:coverage": [
+            "-fprofile-instr-generate",
+        ],
+        "//conditions:default": [],
+    })
+
+    # Use native.cc_test so Bazel's built-in coverage instrumentation works.
     cc_test(
         name = name,
         deps = deps,
         srcs = [runner_file_name(file_name)] + srcs,
         size = "small",
+        copts = ["-DUNITY_USE_COMMAND_LINE_ARGS"] + coverage_copts,
+        linkopts = coverage_linkopts,
         visibility = ["//visibility:public"],
         linkstatic = True,
         **kwargs
     )
 
-
-def generate_test_runner(file_name, my_config, name=None):
+def generate_test_runner(file_name, my_config, name = None):
     """ Generate a test runner for a given test file.
 
     Args:
@@ -37,7 +56,7 @@ def generate_test_runner(file_name, my_config, name=None):
     srcs = [file_name]
     if my_config != None:
         my_config_path = "$(location " + str(my_config[0]) + ")"
-        cmd = "ruby $(location @Unity//:TestRunnerGenerator) $(SRCS) $(OUTS) " +  my_config_path
+        cmd = "ruby $(location @Unity//:TestRunnerGenerator) $(SRCS) $(OUTS) " + my_config_path
         srcs = [file_name] + my_config
     else:
         cmd = "ruby $(location @Unity//:TestRunnerGenerator)  $(SRCS) $(OUTS)"
@@ -46,7 +65,7 @@ def generate_test_runner(file_name, my_config, name=None):
         name = runner_base_name(file_name)
     native.genrule(
         name = name + "_gen",
-        srcs = srcs,    
+        srcs = srcs,
         outs = [out_name],
         cmd = cmd,
         tools = [
@@ -54,7 +73,6 @@ def generate_test_runner(file_name, my_config, name=None):
             "@Unity//:HelperScripts",
         ],
         visibility = ["//visibility:public"],
-       
     )
 
 def strip_extension(file_name):

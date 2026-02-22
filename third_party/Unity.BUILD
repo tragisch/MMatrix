@@ -3,7 +3,6 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 filegroup(
     name = "TestRunnerGenerator",
     srcs = ["auto/generate_test_runner.rb"],
-    
     visibility = ["//visibility:public"],
 )
 
@@ -24,6 +23,7 @@ cc_library(
     ],
     copts = [
         "-DUNITY_INCLUDE_DOUBLE",
+        "-DUNITY_USE_COMMAND_LINE_ARGS",
     ],
     defines = ["UNITY_SUPPORT_64"],
     includes = ["src"],

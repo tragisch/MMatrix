@@ -1,7 +1,12 @@
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
-load("//:tools/unity_test.bzl", "unity_test")
+load("//tools:unity_test.bzl", "unity_test")
+
+config_setting(
+    name = "coverage",
+    values = {"collect_code_coverage": "true"},
+)
 
 #############################
 # Define platforms
@@ -148,7 +153,7 @@ default_deps = [
     "@matio",
     "@libomp",
     "@pcg",
-    "@//third_party/log.c:log",
+    "@log",
 ]
 
 #############################
@@ -259,6 +264,7 @@ cc_library(
 unity_test(
     name = "test_dm",
     srcs = ["tests/test_dm.c"],
+    features = ["coverage"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix:dm"],

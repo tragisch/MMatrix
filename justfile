@@ -1,16 +1,19 @@
-# Setzt voraus, dass compile_commands.json vorhanden ist
-clang-tidy file:
-    clang-tidy {{ file }}
+# Standard-Build
+default:
+    bazel build //app/matrix:matrix
 
-# Alle *.c Dateien im src/ Verzeichnis prüfen
-clang-tidy-all:
-    find src -name '*.c' | xargs -n 1 clang-tidy --quiet -p=.
+# Build mit OpenBLAS
+openblas:
+    bazel build //app/matrix:matrix --define=USE_OPENBLAS=1
 
-# Beispiel: Nur bestimmte Checks aktivieren
-clang-tidy-strict file:
-    clang-tidy {{ file }} --quiet -p=. \
-      -checks='clang-analyzer-*,cppcoreguidelines-*,bugprone-*,performance-*,readability-*'
+# Build mit Accelerate
+accelerate:
+    bazel build //app/matrix:matrix --define:USE_ACCELERATE=1
 
-# Nur dry-run (zeigt an, was geprüft werden würde)
-dry-run:
-    echo "Würde prüfen: $(find src -name '*.c')"
+# Build mit Accelerate + MPS
+mps:
+    bazel build //app/matrix:matrix --define=USE_ACCELERATE_MPS=1
+
+# Optional: Clean
+clean:
+    bazel clean
