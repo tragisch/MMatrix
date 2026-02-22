@@ -398,6 +398,12 @@ typedef enum SmTranspose {
 bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
              SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b,
              float beta);
+
+// GEMM + Bias + ReLU (fused helper)
+// Bias can be either 1 x C->cols or C->rows x C->cols (row-wise broadcast).
+bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a,
+                       const FloatMatrix *B, SmTranspose trans_b,
+                       const FloatMatrix *bias);
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2);

@@ -427,6 +427,7 @@ FloatMatrix *sm_get_last_col(const FloatMatrix *mat) {
   return sm_get_col(mat, mat->cols - 1);
 }
 
+// Performance & usage guidance: see .github/skills/sm-gemm-optimization/SKILL.md
 bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
              SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b,
              float beta) {
@@ -502,6 +503,57 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
     }
   }
 #endif
+
+  return true;
+}
+
+bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a,
+                       const FloatMatrix *B, SmTranspose trans_b,
+                       const FloatMatrix *bias) {
+  if (!sm_gemm(C, 1.0f, A, trans_a, B, trans_b, 0.0f)) {
+    return false;
+  }
+
+  if (!C || !C->values) {
+    log_error("Error: sm_gemm_bias_relu received NULL output.");
+    return false;
+  }
+
+  const size_t rows = C->rows;
+  const size_t cols = C->cols;
+  float *c = C->values;
+
+  if (bias) {
+    if (!bias->values || bias->cols != cols ||
+        !(bias->rows == 1 || bias->rows == rows)) {
+      log_error("Error: sm_gemm_bias_relu bias shape mismatch.");
+      return false;
+    }
+
+    const float *b = bias->values;
+    if (bias->rows == 1) {
+      for (size_t i = 0; i < rows; ++i) {
+        size_t row_offset = i * cols;
+        for (size_t j = 0; j < cols; ++j) {
+          float v = c[row_offset + j] + b[j];
+          c[row_offset + j] = (v > 0.0f) ? v : 0.0f;
+        }
+      }
+    } else {
+      for (size_t i = 0; i < rows; ++i) {
+        size_t row_offset = i * cols;
+        size_t bias_offset = i * cols;
+        for (size_t j = 0; j < cols; ++j) {
+          float v = c[row_offset + j] + b[bias_offset + j];
+          c[row_offset + j] = (v > 0.0f) ? v : 0.0f;
+        }
+      }
+    }
+  } else {
+    for (size_t i = 0; i < rows * cols; ++i) {
+      if (c[i] < 0.0f) c[i] = 0.0f;
+    }
+  }
 
   return true;
 }
