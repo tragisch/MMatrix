@@ -1,1 +1,13 @@
 site_name: Matrix Documentation
+repo_url: https://github.com/tragisch/MMatrix
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Documentation:
+    - Tensor Semantics: TENSOR_SEMANTICS.md
+    - Architecture: architecture.md
+  - API Reference:
+    - Dense Matrices: api/dm.md
+    - Sparse Matrices: api/dms.md
+  - Contributing: contributing.md
