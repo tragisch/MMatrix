@@ -390,6 +390,14 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat);
 /**************************************/
 /*       Matrix Arithmetic            */
 /**************************************/
+typedef enum SmTranspose {
+  SM_NO_TRANSPOSE = 0,
+  SM_TRANSPOSE = 1,
+} SmTranspose;
+
+bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
+             SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b,
+             float beta);
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2);

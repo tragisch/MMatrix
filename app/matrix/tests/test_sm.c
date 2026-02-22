@@ -70,6 +70,12 @@
     (void)(condition);              \
   } while (0)
 #endif
+#ifndef TEST_ASSERT_FALSE
+#define TEST_ASSERT_FALSE(condition) \
+  do {                               \
+    (void)(condition);               \
+  } while (0)
+#endif
 
 /******************************
  ** Creation of matrices:
@@ -427,6 +433,138 @@ void test_sm_multiply(void) {
   sm_destroy(mat2);
   sm_destroy(result);
   sm_destroy(expected_mat);
+}
+
+static void reference_gemm(float *dst, size_t m, size_t n, size_t k,
+                           const float *A, size_t a_cols, bool trans_a,
+                           const float *B, size_t b_cols, bool trans_b,
+                           float alpha, const float *C_in, float beta) {
+  for (size_t i = 0; i < m; ++i) {
+    for (size_t j = 0; j < n; ++j) {
+      float sum = 0.0f;
+      for (size_t p = 0; p < k; ++p) {
+        float a = trans_a ? A[p * a_cols + i] : A[i * a_cols + p];
+        float b = trans_b ? B[j * b_cols + p] : B[p * b_cols + j];
+        sum += a * b;
+      }
+      dst[i * n + j] = alpha * sum + beta * C_in[i * n + j];
+    }
+  }
+}
+
+void test_sm_gemm_should_fail_on_dimension_mismatch(void) {
+  FloatMatrix *A = sm_create_random_seeded(2, 3, 1ull);
+  FloatMatrix *B = sm_create_random_seeded(4, 2, 2ull);
+  FloatMatrix *C = sm_create_zeros(2, 2);
+
+  bool ok =
+      sm_gemm(C, 1.0f, A, SM_NO_TRANSPOSE, B, SM_NO_TRANSPOSE, 0.0f);
+  TEST_ASSERT_FALSE(ok);
+
+  sm_destroy(A);
+  sm_destroy(B);
+  sm_destroy(C);
+}
+
+void test_sm_gemm_should_fail_on_output_shape_mismatch(void) {
+  FloatMatrix *A = sm_create_random_seeded(3, 4, 3ull);
+  FloatMatrix *B = sm_create_random_seeded(4, 2, 4ull);
+  FloatMatrix *C_bad = sm_create_zeros(2, 2);
+
+  bool ok =
+      sm_gemm(C_bad, 1.0f, A, SM_NO_TRANSPOSE, B, SM_NO_TRANSPOSE, 0.0f);
+  TEST_ASSERT_FALSE(ok);
+
+  sm_destroy(A);
+  sm_destroy(B);
+  sm_destroy(C_bad);
+}
+
+void test_sm_gemm_numeric_against_reference_all_transpose_modes(void) {
+  FloatMatrix *A = sm_create_random_seeded(3, 4, 10ull);
+  FloatMatrix *B = sm_create_random_seeded(4, 5, 11ull);
+  FloatMatrix *AT = sm_transpose(A);
+  FloatMatrix *BT = sm_transpose(B);
+
+  struct Case {
+    const FloatMatrix *lhs;
+    const FloatMatrix *rhs;
+    SmTranspose ta;
+    SmTranspose tb;
+    size_t m;
+    size_t n;
+    size_t k;
+  } cases[] = {
+      {A, B, SM_NO_TRANSPOSE, SM_NO_TRANSPOSE, 3, 5, 4},
+      {A, BT, SM_NO_TRANSPOSE, SM_TRANSPOSE, 3, 5, 4},
+      {AT, B, SM_TRANSPOSE, SM_NO_TRANSPOSE, 3, 5, 4},
+      {AT, BT, SM_TRANSPOSE, SM_TRANSPOSE, 3, 5, 4},
+  };
+
+  float alpha = 1.25f;
+  float beta = -0.35f;
+
+  for (size_t c = 0; c < sizeof(cases) / sizeof(cases[0]); ++c) {
+    const struct Case *tc = &cases[c];
+    FloatMatrix *C = sm_create_random_seeded(tc->m, tc->n, 50ull + (uint64_t)c);
+    float *expected = (float *)malloc(tc->m * tc->n * sizeof(float));
+
+    reference_gemm(expected, tc->m, tc->n, tc->k, tc->lhs->values,
+                   tc->lhs->cols, tc->ta == SM_TRANSPOSE, tc->rhs->values,
+                   tc->rhs->cols, tc->tb == SM_TRANSPOSE, alpha, C->values,
+                   beta);
+
+    bool ok = sm_gemm(C, alpha, tc->lhs, tc->ta, tc->rhs, tc->tb, beta);
+    TEST_ASSERT_TRUE(ok);
+
+    for (size_t i = 0; i < tc->m * tc->n; ++i) {
+      TEST_ASSERT_FLOAT_WITHIN(2e-4f, expected[i], C->values[i]);
+    }
+
+    free(expected);
+    sm_destroy(C);
+  }
+
+  sm_destroy(A);
+  sm_destroy(B);
+  sm_destroy(AT);
+  sm_destroy(BT);
+}
+
+void test_sm_gemm_backprop_patterns_without_transpose_allocations(void) {
+  // X: batch x in_features, dY: batch x out_features, W: in_features x out_features
+  FloatMatrix *X = sm_create_random_seeded(5, 3, 101ull);
+  FloatMatrix *dY = sm_create_random_seeded(5, 4, 102ull);
+  FloatMatrix *W = sm_create_random_seeded(3, 4, 103ull);
+
+  FloatMatrix *dW = sm_create_zeros(3, 4);
+  FloatMatrix *dX = sm_create_zeros(5, 3);
+
+  bool ok_dw =
+      sm_gemm(dW, 1.0f, X, SM_TRANSPOSE, dY, SM_NO_TRANSPOSE, 0.0f);  // dW = X^T * dY
+  bool ok_dx =
+      sm_gemm(dX, 1.0f, dY, SM_NO_TRANSPOSE, W, SM_TRANSPOSE, 0.0f);  // dX = dY * W^T
+
+  TEST_ASSERT_TRUE(ok_dw);
+  TEST_ASSERT_TRUE(ok_dx);
+
+  FloatMatrix *X_T = sm_transpose(X);
+  FloatMatrix *W_T = sm_transpose(W);
+  FloatMatrix *dW_ref = sm_multiply(X_T, dY);
+  FloatMatrix *dX_ref = sm_multiply(dY, W_T);
+
+  TEST_ASSERT_TRUE(sm_is_equal(dW, dW_ref));
+  TEST_ASSERT_TRUE(sm_is_equal(dX, dX_ref));
+
+  sm_destroy(X);
+  sm_destroy(dY);
+  sm_destroy(W);
+  sm_destroy(dW);
+  sm_destroy(dX);
+  sm_destroy(X_T);
+  sm_destroy(W_T);
+  sm_destroy(dW_ref);
+  sm_destroy(dX_ref);
 }
 
 void test_sm_multiply_5x5(void) {

@@ -427,52 +427,80 @@ FloatMatrix *sm_get_last_col(const FloatMatrix *mat) {
   return sm_get_col(mat, mat->cols - 1);
 }
 
+bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
+             SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b,
+             float beta) {
+  if (!A || !B || !C || !A->values || !B->values || !C->values) {
+    log_error("Error: sm_gemm received NULL input.");
+    return false;
+  }
+
+  size_t m = (trans_a == SM_TRANSPOSE) ? A->cols : A->rows;
+  size_t k_a = (trans_a == SM_TRANSPOSE) ? A->rows : A->cols;
+  size_t k_b = (trans_b == SM_TRANSPOSE) ? B->cols : B->rows;
+  size_t n = (trans_b == SM_TRANSPOSE) ? B->rows : B->cols;
+
+  if (k_a != k_b) {
+    log_error("Error: sm_gemm inner dimensions mismatch.");
+    return false;
+  }
+  if (C->rows != m || C->cols != n) {
+    log_error("Error: sm_gemm output dimensions mismatch.");
+    return false;
+  }
+
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || defined(USE_ACCELERATE_MPS)
+  CBLAS_TRANSPOSE op_a =
+      (trans_a == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
+  CBLAS_TRANSPOSE op_b =
+      (trans_b == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
+
+  cblas_sgemm(CblasRowMajor, op_a, op_b, (BLASINT)m, (BLASINT)n, (BLASINT)k_a,
+              alpha, A->values, (BLASINT)A->cols, B->values, (BLASINT)B->cols,
+              beta, C->values, (BLASINT)C->cols);
+#else
+  size_t k = k_a;
+  float *c = C->values;
+  const float *a = A->values;
+  const float *b = B->values;
+
+#pragma omp parallel for collapse(2)
+  for (size_t i = 0; i < m; i++) {
+    for (size_t j = 0; j < n; j++) {
+      float sum = 0.0f;
+#pragma omp simd reduction(+ : sum)
+      for (size_t p = 0; p < k; p++) {
+        float a_ip = (trans_a == SM_TRANSPOSE) ? a[p * A->cols + i]
+                                                : a[i * A->cols + p];
+        float b_pj = (trans_b == SM_TRANSPOSE) ? b[j * B->cols + p]
+                                                : b[p * B->cols + j];
+        sum += a_ip * b_pj;
+      }
+      c[i * n + j] = alpha * sum + beta * c[i * n + j];
+    }
+  }
+#endif
+
+  return true;
+}
+
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
-  if (mat1->cols != mat2->rows) {
+  if (!mat1 || !mat2 || mat1->cols != mat2->rows) {
     log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
+
   FloatMatrix *product = sm_create(mat1->rows, mat2->cols);
-
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
-  cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, (BLASINT)mat1->rows,
-              (BLASINT)mat2->cols, (BLASINT)mat1->cols, 1.0, mat1->values,
-              (BLASINT)mat1->cols, mat2->values, (BLASINT)mat2->cols, 0.0,
-              product->values, (BLASINT)product->cols);
-
-#elif defined(USE_ACCELERATE_MPS)
-  if (mat1->cols < 2000) {
-    vDSP_mmul(mat1->values, 1, mat2->values, 1, product->values, 1, mat1->rows,
-              mat2->cols, mat1->cols);
-  } else {
-    mps_matrix_multiply(mat1->values, mat1->rows, mat1->cols, mat2->values,
-                        mat2->rows, mat2->cols, product->values);
+  if (!product) {
+    return NULL;
   }
 
-#else
-  FloatMatrix *mat2_transposed = sm_transpose(mat2);
-
-  size_t rows = mat1->rows;
-  size_t cols = mat2->cols;
-  size_t inner = mat1->cols;
-  float *a = mat1->values;
-  float *bT = mat2_transposed->values;
-  float *c = product->values;
-
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < rows; i++) {
-    for (size_t j = 0; j < cols; j++) {
-      float sum = 0.0f;
-#pragma omp simd reduction(+ : sum)
-      for (size_t k = 0; k < inner; k++) {
-        sum += a[i * inner + k] * bT[j * inner + k];
-      }
-      c[i * cols + j] = sum;
-    }
+  if (!sm_gemm(product, 1.0f, mat1, SM_NO_TRANSPOSE, mat2, SM_NO_TRANSPOSE,
+               0.0f)) {
+    sm_destroy(product);
+    return NULL;
   }
-  sm_destroy(mat2_transposed);
 
-#endif
   return product;
 }
 
