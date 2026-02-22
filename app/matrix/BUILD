@@ -239,7 +239,10 @@ objc_library(
     hdrs = ["include/sm_mps.h"],
     copts = ["-ObjC"],
     includes = ["."],
-    target_compatible_with = ["@platforms//os:macos"],
+    target_compatible_with = select({
+        ":use_accelerate_mps": ["@platforms//os:macos"],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
 )
 
 cc_library(

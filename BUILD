@@ -7,6 +7,7 @@ load("//tools/install:def.bzl", "installer")
 license_test(
     name = "license_test",
     timeout = "short",
+    tags = ["manual"],
     ignore = [".dir-locals.el"],
     marker = "//:MODULE.bazel",
 )

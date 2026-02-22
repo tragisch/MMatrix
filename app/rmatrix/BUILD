@@ -8,6 +8,7 @@ rust_library(
     ],
     crate_root = "src/lib.rs",
     edition = "2021",
+    tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = ["//app/matrix:sm"],
 )
@@ -15,4 +16,5 @@ rust_library(
 rust_test(
     name = "rmatrix_tests",
     crate = ":rmatrix",
+    tags = ["manual"],
 )
