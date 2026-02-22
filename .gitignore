@@ -129,4 +129,6 @@ StyleGuide.md
 
 MODULE.bazel.lock
 profile.gz
+docs/*
+docs/
 
