@@ -12,10 +12,13 @@
 #include "dm.h"
 #include "dms.h"
 #include "sm.h"
+#include "st.h"
 
 DoubleMatrix *dms_to_dm(const DoubleSparseMatrix *src);
 DoubleSparseMatrix *dm_to_dms(const DoubleMatrix *src);
 DoubleMatrix *sm_to_dm(const FloatMatrix *sm);
 FloatMatrix *dm_to_sm(const DoubleMatrix *src);
+FloatTensor *st_from_sm(const FloatMatrix *src);
+FloatMatrix *sm_from_st(const FloatTensor *src);
 
 #endif // DM_CONVERT_H

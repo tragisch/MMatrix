@@ -202,6 +202,7 @@ cc_library(
         ":dm",
         ":dms",
         ":sm",
+        ":st",
     ],
 )
 
@@ -232,6 +233,17 @@ cc_library(
         ":use_openblas": ["@openblas"],
         "//conditions:default": [],
     }),
+)
+
+cc_library(
+    name = "st",
+    srcs = ["src/st.c"],
+    hdrs = ["include/st.h"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    includes = ["include"],
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    visibility = ["//visibility:public"],
+    deps = default_deps + [":sm"],
 )
 
 objc_library(
@@ -280,6 +292,14 @@ unity_test(
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix:sm"],
+)
+
+unity_test(
+    name = "test_st",
+    srcs = ["tests/test_st.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
 )
 
 unity_test(
