@@ -130,7 +130,7 @@ void test_dm_create_with_values_makes_internal_copy(void) {
 
 void test_dm_convert_array(void) {
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 2, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
   TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
   TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 1));
   TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 1, 0));
@@ -169,7 +169,7 @@ void test_dm_set(void) {
 
 void test_dm_get(void) {
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 2, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
   TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
   TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 1));
   TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 1, 0));
@@ -183,7 +183,7 @@ void test_dm_get_row(void) {
   // create test matrix
   double values[3][4] = {
       {1.0, 2.0, 3.0, 4.0}, {5.0, 6.0, 7.0, 8.0}, {9.9, 10.0, 11.0, 12.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 4, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 4, values);
 
   // get row vector
   DoubleMatrix *vec = dm_get_row(mat, 1);
@@ -204,7 +204,7 @@ void test_dm_get_row(void) {
 
 void test_dm_get_col(void) {
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 2, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
   DoubleMatrix *vec = dm_get_col(mat, 1);
   TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(vec, 0, 0));
   TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(vec, 1, 0));
@@ -217,7 +217,7 @@ void test_dm_get_col(void) {
 void test_dm_get_last_row(void) {
   double values[3][4] = {
       {1.0, 2.0, 3.0, 4.0}, {5.0, 6.0, 7.0, 8.0}, {9.9, 10.0, 11.0, 12.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 4, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 4, values);
   DoubleMatrix *vec = dm_get_last_row(mat);
   TEST_ASSERT_EQUAL_DOUBLE(9.9, dm_get(vec, 0, 0));
   TEST_ASSERT_EQUAL_DOUBLE(10.0, dm_get(vec, 0, 1));
@@ -230,7 +230,7 @@ void test_dm_get_last_row(void) {
 
 void test_dm_get_last_col(void) {
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 2, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
   DoubleMatrix *vec = dm_get_last_col(mat);
   TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(vec, 0, 0));
   TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(vec, 1, 0));
@@ -242,8 +242,8 @@ void test_dm_get_last_col(void) {
 
 void test_dm_clone(void) {
   double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 2, values);
-  DoubleMatrix *clone = dm_create_clone(mat);
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
+  DoubleMatrix *clone = dm_clone(mat);
   TEST_ASSERT_TRUE(dm_is_equal(mat, clone));
   dm_destroy(mat);
   dm_destroy(clone);
@@ -304,10 +304,10 @@ void test_dm_multiply(void) {
   double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   double values2[3][2] = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
   double expected[2][2] = {{58.0, 64.0}, {139.0, 154.0}};
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 3, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(3, 2, values2);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(3, 2, values2);
   DoubleMatrix *result = dm_multiply(mat1, mat2);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 2, expected);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
   TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
   dm_destroy(mat1);
   dm_destroy(mat2);
@@ -318,9 +318,9 @@ void test_dm_multiply(void) {
 void test_dm_multiply_by_number(void) {
   double values[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   double expected[2][3] = {{2.0, 4.0, 6.0}, {8.0, 10.0, 12.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(2, 3, values);
+  DoubleMatrix *mat = dm_from_array_static(2, 3, values);
   DoubleMatrix *result = dm_multiply_by_number(mat, 2.0);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 3, expected);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 3, expected);
   TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
   dm_destroy(mat);
   dm_destroy(result);
@@ -355,10 +355,10 @@ void test_dm_add(void) {
   double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   double values2[2][3] = {{7.0, 8.0, 9.0}, {10.0, 11.0, 12.0}};
   double expected[2][3] = {{8.0, 10.0, 12.0}, {14.0, 16.0, 18.0}};
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 3, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(2, 3, values2);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 3, values2);
   DoubleMatrix *result = dm_add(mat1, mat2);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 3, expected);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 3, expected);
   TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
   dm_destroy(mat1);
   dm_destroy(mat2);
@@ -370,10 +370,10 @@ void test_dm_diff(void) {
   double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   double values2[2][3] = {{7.0, 8.0, 9.0}, {10.0, 11.0, 12.0}};
   double expected[2][3] = {{-6.0, -6.0, -6.0}, {-6.0, -6.0, -6.0}};
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 3, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(2, 3, values2);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 3, values2);
   DoubleMatrix *result = dm_diff(mat1, mat2);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 3, expected);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 3, expected);
   TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
   dm_destroy(mat1);
   dm_destroy(mat2);
@@ -392,10 +392,10 @@ void test_dm_inverse_4x4(void) {
                                    {0.11, 0.06, 0.33, -0.50},
                                    {-0.67, 0.17, -0.00, 0.50}};
 
-  DoubleMatrix *expected = dm_create_from_2D_array(4, 4, expected_inverse);
+  DoubleMatrix *expected = dm_from_array_static(4, 4, expected_inverse);
   dm_inplace_transpose(expected);
 
-  DoubleMatrix *mat = dm_create_from_2D_array(4, 4, values);
+  DoubleMatrix *mat = dm_from_array_static(4, 4, values);
   DoubleMatrix *inverse = dm_inverse(mat);
 
   for (size_t i = 0; i < 4; i++) {
@@ -411,7 +411,7 @@ void test_dm_inverse_4x4(void) {
 
 void test_dm_determinant(void) {
   double values[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 3, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
   double det = dm_determinant(mat);
   TEST_ASSERT_EQUAL_DOUBLE(0.0, det);
   dm_destroy(mat);
@@ -419,7 +419,7 @@ void test_dm_determinant(void) {
 
 void test_dm_trace(void) {
   double values[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 3, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
   double trace = dm_trace(mat);
   TEST_ASSERT_EQUAL_DOUBLE(15.0, trace);
   dm_destroy(mat);
@@ -427,7 +427,7 @@ void test_dm_trace(void) {
 
 void test_dm_rank(void) {
   double values[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 3, values);
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
   size_t rank = dm_rank(mat);
   TEST_ASSERT_EQUAL(2, rank);
   dm_destroy(mat);
@@ -435,8 +435,8 @@ void test_dm_rank(void) {
 
 void test_dm_rank_should_not_modify_input_matrix(void) {
   double values[3][3] = {{2.0, 1.0, 1.0}, {1.0, 3.0, 2.0}, {1.0, 0.0, 0.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 3, values);
-  DoubleMatrix *before = dm_create_clone(mat);
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
+  DoubleMatrix *before = dm_clone(mat);
 
   size_t rank = dm_rank(mat);
   TEST_ASSERT_TRUE(rank > 0);
@@ -448,7 +448,7 @@ void test_dm_rank_should_not_modify_input_matrix(void) {
 
 void test_dm_norm(void) {
   double values[2][2] = {{1.0, 2.0}, {3.0, 4.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(2, 2, values);
+  DoubleMatrix *mat = dm_from_array_static(2, 2, values);
   double norm = dm_norm(mat);
   TEST_ASSERT_EQUAL_DOUBLE(5.477225575051661, norm);
   dm_destroy(mat);
@@ -457,8 +457,8 @@ void test_dm_norm(void) {
 void test_dm_equal(void) {
   double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
   double values2[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 3, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(2, 3, values2);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 3, values2);
   TEST_ASSERT_TRUE(dm_is_equal(mat1, mat2));
   dm_destroy(mat1);
   dm_destroy(mat2);
@@ -482,7 +482,7 @@ void test_dm_gauss_elimination(void) {
   double expected[4][4] = {
       {4.0, 7.0, -2.0, 3.0}, {0.0, -6.25, 3.50, -1.25}, {0.0, 0.0, 0.60, 3.0}};
 
-  DoubleMatrix *mat = dm_create_from_2D_array(4, 4, values);
+  DoubleMatrix *mat = dm_from_array_static(4, 4, values);
   dm_inplace_gauss_elimination(mat);
 
   for (size_t i = 0; i < 4; i++) {
@@ -524,7 +524,7 @@ void test_dm_gauss_elimination_solve(void) {
       {2.0, 1.0, -1.0, 8.0}, {-3.0, -1.0, 2.0, -11.0}, {-2.0, 1.0, 2.0, -3.0}};
 
   // Matrix erstellen
-  DoubleMatrix *mat = dm_create_from_2D_array(3, 4, augmented);
+  DoubleMatrix *mat = dm_from_array_static(3, 4, augmented);
 
   // Gaußsche Elimination anwenden
   dm_inplace_gauss_elimination(mat);
@@ -545,7 +545,7 @@ void test_dm_gauss_elimination_solve(void) {
 
 void test_dm_to_column_major(void) {
   double values[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
-  DoubleMatrix *mat = dm_create_from_2D_array(2, 3, values);
+  DoubleMatrix *mat = dm_from_array_static(2, 3, values);
   double *col_major = dm_to_column_major(mat);
 
   // Erwartete Anordnung im Spaltenformat: [1, 4, 2, 5, 3, 6]
@@ -563,10 +563,10 @@ void test_dm_elementwise_multiply(void) {
   double values2[2][2] = {{5.0, 6.0}, {7.0, 8.0}};
   double expected[2][2] = {{5.0, 12.0}, {21.0, 32.0}};
 
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 2, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(2, 2, values2);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
   DoubleMatrix *result = dm_elementwise_multiply(mat1, mat2);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 2, expected);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
 
   TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
 
@@ -581,9 +581,9 @@ void test_dm_inplace_elementwise_multiply(void) {
   double values2[2][2] = {{5.0, 6.0}, {7.0, 8.0}};
   double expected[2][2] = {{5.0, 12.0}, {21.0, 32.0}};
 
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 2, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(2, 2, values2);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 2, expected);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
 
   dm_inplace_elementwise_multiply(mat1, mat2);
 
@@ -599,10 +599,10 @@ void test_dm_div(void) {
   double values2[2][2] = {{2.0, 4.0}, {5.0, 8.0}};
   double expected[2][2] = {{5.0, 5.0}, {6.0, 5.0}};
 
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 2, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(2, 2, values2);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
   DoubleMatrix *result = dm_div(mat1, mat2);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 2, expected);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
 
   TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
 
@@ -617,9 +617,9 @@ void test_dm_inplace_div(void) {
   double values2[2][2] = {{2.0, 4.0}, {5.0, 8.0}};
   double expected[2][2] = {{5.0, 5.0}, {6.0, 5.0}};
 
-  DoubleMatrix *mat1 = dm_create_from_2D_array(2, 2, values1);
-  DoubleMatrix *mat2 = dm_create_from_2D_array(2, 2, values2);
-  DoubleMatrix *expected_mat = dm_create_from_2D_array(2, 2, expected);
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
 
   dm_inplace_div(mat1, mat2);
 

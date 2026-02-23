@@ -20,6 +20,14 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifndef MMATRIX_DEPRECATED
+#if defined(__GNUC__) || defined(__clang__)
+#define MMATRIX_DEPRECATED(msg) __attribute__((deprecated(msg)))
+#else
+#define MMATRIX_DEPRECATED(msg)
+#endif
+#endif
+
 // Forward declaration for SuiteSparse type to avoid hard header dependency
 // in public API headers (helps IDE/clangd when external include paths differ).
 #ifndef DMS_HAS_CSPARSE
@@ -138,6 +146,8 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity);
  *
  * @see dms_destroy
  */
+DoubleSparseMatrix *dms_clone(const DoubleSparseMatrix *m);
+MMATRIX_DEPRECATED("Use dms_clone instead")
 DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m);
 
 /**
@@ -223,12 +233,17 @@ uint64_t dms_get_random_seed(void);
 
 // Converting to cs-sparse format or array
 cs *dms_to_cs(const DoubleSparseMatrix *coo);
+DoubleSparseMatrix *dms_from_cs(const cs *A);
+MMATRIX_DEPRECATED("Use dms_from_cs instead")
 DoubleSparseMatrix *cs_to_dms(const cs *A);
 double *dms_to_array(const DoubleSparseMatrix *mat);
 
 // Importing from array
 DoubleSparseMatrix *dms_create_from_array(size_t rows, size_t cols,
                                           double *array);
+DoubleSparseMatrix *dms_from_array_static(size_t rows, size_t cols,
+                                          double array[rows][cols]);
+MMATRIX_DEPRECATED("Use dms_from_array_static instead")
 DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
                                              double array[rows][cols]);
 

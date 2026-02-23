@@ -16,6 +16,14 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef MMATRIX_DEPRECATED
+#if defined(__GNUC__) || defined(__clang__)
+#define MMATRIX_DEPRECATED(msg) __attribute__((deprecated(msg)))
+#else
+#define MMATRIX_DEPRECATED(msg)
+#endif
+#endif
+
 /**************************************/
 /*         Float Matrix Struct.       */
 /**************************************/
@@ -338,6 +346,8 @@ FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
  *
  * @see sm_create_with_values
  */
+float *sm_to_array(FloatMatrix *matrix);
+MMATRIX_DEPRECATED("Use sm_to_array instead")
 float *sm_create_array_from_matrix(FloatMatrix *matrix);
 
 /**************************************/

@@ -83,7 +83,7 @@ void test_dms_create(void) {
 
 void test_dms_clone(void) {
   DoubleSparseMatrix *m = dms_create(3, 3, 3);
-  DoubleSparseMatrix *m2 = dms_create_clone(m);
+  DoubleSparseMatrix *m2 = dms_clone(m);
   TEST_ASSERT_EQUAL(3, m2->rows);
   TEST_ASSERT_EQUAL(3, m2->cols);
   TEST_ASSERT_EQUAL(0, m2->nnz);
@@ -231,7 +231,7 @@ void test_dms_rand_global_seed_should_be_reproducible(void) {
 
 void test_dms_convert_array(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
   TEST_ASSERT_EQUAL(3, m->rows);
   TEST_ASSERT_EQUAL(3, m->cols);
   TEST_ASSERT_EQUAL(9, m->nnz);
@@ -241,7 +241,7 @@ void test_dms_convert_array(void) {
 
 void test_dms_get_row(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
   DoubleSparseMatrix *m2 = dms_get_row(m, 1);
   TEST_ASSERT_EQUAL(1, m2->rows);
   TEST_ASSERT_EQUAL(3, m2->cols);
@@ -253,7 +253,7 @@ void test_dms_get_row(void) {
 
 void test_dms_get_last_row(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
   DoubleSparseMatrix *m2 = dms_get_last_row(m);
   TEST_ASSERT_EQUAL(1, m2->rows);
   TEST_ASSERT_EQUAL(3, m2->cols);
@@ -265,7 +265,7 @@ void test_dms_get_last_row(void) {
 
 void test_dms_get_col(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
   DoubleSparseMatrix *m2 = dms_get_col(m, 1);
   TEST_ASSERT_EQUAL(3, m2->rows);
   TEST_ASSERT_EQUAL(1, m2->cols);
@@ -277,7 +277,7 @@ void test_dms_get_col(void) {
 
 void test_dms_get_last_col(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
   DoubleSparseMatrix *m2 = dms_get_last_col(m);
   TEST_ASSERT_EQUAL(3, m2->rows);
   TEST_ASSERT_EQUAL(1, m2->cols);
@@ -346,7 +346,7 @@ void test_dms_transpose_basic(void) {
 #if defined(TEST_DMS_HAS_CSPARSE)
 void test_dms_to_cs(void) {
   double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  DoubleSparseMatrix *m = dms_create_from_2D_array(3, 3, array);
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
   cs *A = dms_to_cs(m);
   TEST_ASSERT_EQUAL(3, A->m);
   TEST_ASSERT_EQUAL(3, A->n);
@@ -355,7 +355,7 @@ void test_dms_to_cs(void) {
   cs_spfree(A);
 }
 
-void test_cs_to_dms(void) {
+void test_dms_from_cs(void) {
   cs *A = cs_spalloc(3, 3, 9, 1, 1);
   A->p[0] = 0;
   A->p[1] = 3;
@@ -379,7 +379,7 @@ void test_cs_to_dms(void) {
   A->x[6] = 7;
   A->x[7] = 8;
   A->x[8] = 9;
-  DoubleSparseMatrix *m = cs_to_dms(A);
+  DoubleSparseMatrix *m = dms_from_cs(A);
   TEST_ASSERT_EQUAL(3, m->rows);
   TEST_ASSERT_EQUAL(3, m->cols);
   TEST_ASSERT_EQUAL(9, m->nnz);
@@ -392,7 +392,7 @@ void test_dms_to_cs(void) {
   TEST_IGNORE_MESSAGE("cs.h not available for editor-only parse context");
 }
 
-void test_cs_to_dms(void) {
+void test_dms_from_cs(void) {
   TEST_IGNORE_MESSAGE("cs.h not available for editor-only parse context");
 }
 #endif
@@ -404,16 +404,16 @@ void test_cs_to_dms(void) {
 // Test to check if multiplication of two matrices is correct
 void test_dms_multiply_basic(void) {
   double array_A[2][3] = {{3.0, 2.0, 1.0}, {1.0, 0.0, 2.0}};
-  DoubleSparseMatrix *m_A = dms_create_from_2D_array(2, 3, array_A);
+  DoubleSparseMatrix *m_A = dms_from_array_static(2, 3, array_A);
 
   double array_B[3][2] = {{1.0, 2.0}, {0.0, 1.0}, {4.0, 0.0}};
-  DoubleSparseMatrix *m_B = dms_create_from_2D_array(3, 2, array_B);
+  DoubleSparseMatrix *m_B = dms_from_array_static(3, 2, array_B);
 
   DoubleSparseMatrix *result = dms_multiply(m_A, m_B);
   // Expected result matrix
   double expected_array[2][2] = {{7.0, 8.0}, {9.0, 2.0}};
   DoubleSparseMatrix *expected_result =
-      dms_create_from_2D_array(2, 2, expected_array);
+      dms_from_array_static(2, 2, expected_array);
 
   // test if result is expected_result
   TEST_ASSERT_EQUAL(expected_result->rows, result->rows);

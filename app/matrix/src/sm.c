@@ -382,7 +382,7 @@ FloatMatrix *sm_from_array_static(size_t rows, size_t cols,
   return matrix;
 }
 
-float *sm_create_array_from_matrix(FloatMatrix *matrix) {
+float *sm_to_array(FloatMatrix *matrix) {
   if (matrix == NULL || matrix->values == NULL) {
     log_error("Error: matrix is NULL.\n");
     return NULL;
@@ -401,6 +401,10 @@ float *sm_create_array_from_matrix(FloatMatrix *matrix) {
     }
   }
   return array;
+}
+
+float *sm_create_array_from_matrix(FloatMatrix *matrix) {
+  return sm_to_array(matrix);
 }
 
 FloatMatrix *sm_get_row(const FloatMatrix *mat, size_t i) {

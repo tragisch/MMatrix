@@ -355,7 +355,7 @@ static MStatus write_MAT_file_generic(const char *filename, size_t rows,
   return MSTATUS_OK;
 }
 
-MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename) {
+MStatus dm_write_mat_file_ex(const DoubleMatrix *matrix, const char *filename) {
   if (!matrix || !matrix->values) {
     return MSTATUS_INVALID_ARGUMENT;
   }
@@ -368,7 +368,7 @@ MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename) {
                                 MAT_FT_MAT5, comp);
 }
 
-MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename) {
+MStatus sm_write_mat_file_ex(const FloatMatrix *matrix, const char *filename) {
   if (!matrix || !matrix->values) {
     return MSTATUS_INVALID_ARGUMENT;
   }
@@ -381,12 +381,28 @@ MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename) {
                                 MAT_FT_MAT5, comp);
 }
 
+MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename) {
+  return dm_write_mat_file_ex(matrix, filename);
+}
+
+MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename) {
+  return sm_write_mat_file_ex(matrix, filename);
+}
+
+int dm_write_mat_file(const DoubleMatrix *matrix, const char *filename) {
+  return dm_write_mat_file_ex(matrix, filename) == MSTATUS_OK ? 0 : -1;
+}
+
+int sm_write_mat_file(const FloatMatrix *matrix, const char *filename) {
+  return sm_write_mat_file_ex(matrix, filename) == MSTATUS_OK ? 0 : -1;
+}
+
 int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename) {
-  return dm_write_MAT_file_ex(matrix, filename) == MSTATUS_OK ? 0 : -1;
+  return dm_write_mat_file(matrix, filename);
 }
 
 int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename) {
-  return sm_write_MAT_file_ex(matrix, filename) == MSTATUS_OK ? 0 : -1;
+  return sm_write_mat_file(matrix, filename);
 }
 
 typedef void *(*matrix_alloc_fn)(size_t rows, size_t cols);
@@ -451,7 +467,7 @@ static MStatus read_MAT_variable(const char *filename, matvar_t **out_matvar) {
   return MSTATUS_OK;
 }
 
-MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix) {
+MStatus dm_read_mat_file_ex(const char *filename, DoubleMatrix **out_matrix) {
   if (!out_matrix) {
     return MSTATUS_INVALID_ARGUMENT;
   }
@@ -501,7 +517,7 @@ MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix) {
   return MSTATUS_OK;
 }
 
-MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix) {
+MStatus sm_read_mat_file_ex(const char *filename, FloatMatrix **out_matrix) {
   if (!out_matrix) {
     return MSTATUS_INVALID_ARGUMENT;
   }
@@ -553,7 +569,7 @@ MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix) {
   return MSTATUS_OK;
 }
 
-MStatus dms_read_MAT_file_ex(const char *filename,
+MStatus dms_read_mat_file_ex(const char *filename,
                              DoubleSparseMatrix **out_matrix) {
   if (!out_matrix) {
     return MSTATUS_INVALID_ARGUMENT;
@@ -632,28 +648,53 @@ MStatus dms_read_MAT_file_ex(const char *filename,
   return MSTATUS_OK;
 }
 
-DoubleMatrix *dm_read_MAT_file(const char *filename) {
+MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix) {
+  return dm_read_mat_file_ex(filename, out_matrix);
+}
+
+MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix) {
+  return sm_read_mat_file_ex(filename, out_matrix);
+}
+
+MStatus dms_read_MAT_file_ex(const char *filename,
+                             DoubleSparseMatrix **out_matrix) {
+  return dms_read_mat_file_ex(filename, out_matrix);
+}
+
+DoubleMatrix *dm_read_mat_file(const char *filename) {
   DoubleMatrix *matrix = NULL;
-  if (dm_read_MAT_file_ex(filename, &matrix) != MSTATUS_OK) {
+  if (dm_read_mat_file_ex(filename, &matrix) != MSTATUS_OK) {
     return NULL;
   }
   return matrix;
+}
+
+FloatMatrix *sm_read_mat_file(const char *filename) {
+  FloatMatrix *matrix = NULL;
+  if (sm_read_mat_file_ex(filename, &matrix) != MSTATUS_OK) {
+    return NULL;
+  }
+  return matrix;
+}
+
+DoubleSparseMatrix *dms_read_mat_file(const char *filename) {
+  DoubleSparseMatrix *matrix = NULL;
+  if (dms_read_mat_file_ex(filename, &matrix) != MSTATUS_OK) {
+    return NULL;
+  }
+  return matrix;
+}
+
+DoubleMatrix *dm_read_MAT_file(const char *filename) {
+  return dm_read_mat_file(filename);
 }
 
 FloatMatrix *sm_read_MAT_file(const char *filename) {
-  FloatMatrix *matrix = NULL;
-  if (sm_read_MAT_file_ex(filename, &matrix) != MSTATUS_OK) {
-    return NULL;
-  }
-  return matrix;
+  return sm_read_mat_file(filename);
 }
 
 DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
-  DoubleSparseMatrix *matrix = NULL;
-  if (dms_read_MAT_file_ex(filename, &matrix) != MSTATUS_OK) {
-    return NULL;
-  }
-  return matrix;
+  return dms_read_mat_file(filename);
 }
 
 /*******************************/

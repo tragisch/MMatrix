@@ -16,6 +16,14 @@
 #include "m_status.h"
 #include "sm.h"
 
+#ifndef MMATRIX_DEPRECATED
+#if defined(__GNUC__) || defined(__clang__)
+#define MMATRIX_DEPRECATED(msg) __attribute__((deprecated(msg)))
+#else
+#define MMATRIX_DEPRECATED(msg)
+#endif
+#endif
+
 /*******************************/
 /*     Plot DEFINES            */
 /*******************************/
@@ -143,6 +151,8 @@ MIOCompression mio_get_compression(void);
  *
  * @see dm_write_MAT_file_ex, mio_set_format, mio_set_compression
  */
+int dm_write_mat_file(const DoubleMatrix *matrix, const char *filename);
+MMATRIX_DEPRECATED("Use dm_write_mat_file instead")
 int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename);
 
 /**
@@ -155,6 +165,8 @@ int dm_write_MAT_file(const DoubleMatrix *matrix, const char *filename);
  *
  * @see sm_write_MAT_file_ex
  */
+int sm_write_mat_file(const FloatMatrix *matrix, const char *filename);
+MMATRIX_DEPRECATED("Use sm_write_mat_file instead")
 int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename);
 
 /**
@@ -176,6 +188,8 @@ int sm_write_MAT_file(const FloatMatrix *matrix, const char *filename);
  *
  * @see dm_read_MAT_file_ex, dm_destroy
  */
+DoubleMatrix *dm_read_mat_file(const char *filename);
+MMATRIX_DEPRECATED("Use dm_read_mat_file instead")
 DoubleMatrix *dm_read_MAT_file(const char *filename);
 
 /**
@@ -187,6 +201,8 @@ DoubleMatrix *dm_read_MAT_file(const char *filename);
  *
  * @see sm_read_MAT_file_ex
  */
+FloatMatrix *sm_read_mat_file(const char *filename);
+MMATRIX_DEPRECATED("Use sm_read_mat_file instead")
 FloatMatrix *sm_read_MAT_file(const char *filename);
 
 /**
@@ -198,6 +214,8 @@ FloatMatrix *sm_read_MAT_file(const char *filename);
  *
  * @see dms_read_MAT_file_ex
  */
+DoubleSparseMatrix *dms_read_mat_file(const char *filename);
+MMATRIX_DEPRECATED("Use dms_read_mat_file instead")
 DoubleSparseMatrix *dms_read_MAT_file(const char *filename);
 
 /*
@@ -234,6 +252,8 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename);
  *
  * @see mio_set_format, mio_set_compression, MStatus
  */
+MStatus dm_write_mat_file_ex(const DoubleMatrix *matrix, const char *filename);
+MMATRIX_DEPRECATED("Use dm_write_mat_file_ex instead")
 MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename);
 
 /**
@@ -246,6 +266,8 @@ MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename);
  *
  * @see dm_write_MAT_file_ex
  */
+MStatus sm_write_mat_file_ex(const FloatMatrix *matrix, const char *filename);
+MMATRIX_DEPRECATED("Use sm_write_mat_file_ex instead")
 MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename);
 
 /**
@@ -277,6 +299,8 @@ MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename);
  *
  * @see dm_destroy, MStatus
  */
+MStatus dm_read_mat_file_ex(const char *filename, DoubleMatrix **out_matrix);
+MMATRIX_DEPRECATED("Use dm_read_mat_file_ex instead")
 MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix);
 
 /**
@@ -289,6 +313,8 @@ MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix);
  *
  * @see dm_read_MAT_file_ex
  */
+MStatus sm_read_mat_file_ex(const char *filename, FloatMatrix **out_matrix);
+MMATRIX_DEPRECATED("Use sm_read_mat_file_ex instead")
 MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix);
 
 /**
@@ -301,6 +327,9 @@ MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix);
  *
  * @see dm_read_MAT_file_ex
  */
+MStatus dms_read_mat_file_ex(const char *filename,
+                             DoubleSparseMatrix **out_matrix);
+MMATRIX_DEPRECATED("Use dms_read_mat_file_ex instead")
 MStatus dms_read_MAT_file_ex(const char *filename,
                              DoubleSparseMatrix **out_matrix);
 

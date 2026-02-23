@@ -13,9 +13,9 @@
 #include "dms.h"
 #include "sm.h"
 
-DoubleMatrix *dms_to_dm(const DoubleSparseMatrix *dms_create_empty);
-DoubleSparseMatrix *dm_to_dms(const DoubleMatrix *dm_create_empty);
+DoubleMatrix *dms_to_dm(const DoubleSparseMatrix *src);
+DoubleSparseMatrix *dm_to_dms(const DoubleMatrix *src);
 DoubleMatrix *sm_to_dm(const FloatMatrix *sm);
-FloatMatrix *dm_to_sm(const DoubleMatrix *dm_create_empty);
+FloatMatrix *dm_to_sm(const DoubleMatrix *src);
 
 #endif // DM_CONVERT_H

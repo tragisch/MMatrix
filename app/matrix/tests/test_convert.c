@@ -30,7 +30,7 @@
 void test_convert_dense_matrix(void) {
   // Erstelle eine 3x3 Dense-Matrix
   double values[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
-  DoubleMatrix *dm = dm_create_from_2D_array(3, 3, values);
+  DoubleMatrix *dm = dm_from_array_static(3, 3, values);
 
   // Konvertiere zu Sparse-Matrix
   DoubleSparseMatrix *dms = dm_to_dms(dm);
@@ -62,7 +62,7 @@ void test_convert_dense_matrix(void) {
 void test_convert_matrix_with_zeros(void) {
   // Erstelle eine 3x3 Dense-Matrix mit Nullwerten
   double values[3][3] = {{1.0, 0.0, 3.0}, {0.0, 5.0, 0.0}, {7.0, 0.0, 9.0}};
-  DoubleMatrix *dm = dm_create_from_2D_array(3, 3, values);
+  DoubleMatrix *dm = dm_from_array_static(3, 3, values);
 
   // Konvertiere zu Sparse-Matrix
   DoubleSparseMatrix *dms = dm_to_dms(dm);

@@ -16,6 +16,14 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef MMATRIX_DEPRECATED
+#if defined(__GNUC__) || defined(__clang__)
+#define MMATRIX_DEPRECATED(msg) __attribute__((deprecated(msg)))
+#else
+#define MMATRIX_DEPRECATED(msg)
+#endif
+#endif
+
 /**************************************/
 /*         Matrix Struct              */
 /**************************************/
@@ -142,6 +150,8 @@ DoubleMatrix *dm_create(size_t rows, size_t cols);
  *
  * @see dm_destroy
  */
+DoubleMatrix *dm_clone(const DoubleMatrix *m);
+MMATRIX_DEPRECATED("Use dm_clone instead")
 DoubleMatrix *dm_create_clone(const DoubleMatrix *m);
 
 /**
@@ -232,7 +242,12 @@ uint64_t dm_get_random_seed(void);
 /**************************************/
 /*         Matrix Import              */
 /**************************************/
+DoubleMatrix *dm_from_array_ptrs(size_t rows, size_t cols, double **array);
+DoubleMatrix *dm_from_array_static(size_t rows, size_t cols,
+                                   double array[rows][cols]);
+MMATRIX_DEPRECATED("Use dm_from_array_ptrs instead")
 DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array);
+MMATRIX_DEPRECATED("Use dm_from_array_static instead")
 DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
                                       double array[rows][cols]);
 

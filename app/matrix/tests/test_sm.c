@@ -180,12 +180,12 @@ void test_sm_convert_array(void) {
   sm_destroy(mat);
 }
 
-void test_sm_create_array_from_matrix(void) {
+void test_sm_to_array(void) {
   float data[2][3] = {{1.5f, 2.5f, 3.5f}, {4.5f, 5.5f, 6.5f}};
   FloatMatrix *mat = sm_from_array_static(2, 3, data);
   TEST_ASSERT_NOT_NULL(mat);
 
-  float *arr = sm_create_array_from_matrix(mat);
+  float *arr = sm_to_array(mat);
   TEST_ASSERT_NOT_NULL(arr);
 
   float expected[] = {1.5f, 2.5f, 3.5f, 4.5f, 5.5f, 6.5f};

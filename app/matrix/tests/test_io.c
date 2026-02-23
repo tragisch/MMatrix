@@ -102,7 +102,7 @@ void test_sm_write_to_file(void) {
   const char *filename = "test_matrix.mat";
 
   // Write the matrix to a file
-  int result = sm_write_MAT_file(matrix, filename);
+  int result = sm_write_mat_file(matrix, filename);
   TEST_ASSERT_EQUAL(0, result);
 
   // Clean up
@@ -121,7 +121,7 @@ void test_sm_read_from_file(void) {
   const char *filename = "test_matrix.mat";
 
   // Read the matrix from the file
-  FloatMatrix *matrix = sm_read_MAT_file(filename);
+  FloatMatrix *matrix = sm_read_mat_file(filename);
   TEST_ASSERT_NOT_NULL(matrix);
 
   if (matrix) {
@@ -148,7 +148,7 @@ void test_dm_write_to_file(void) {
   const char *filename = "test_matrix.mat";
 
   // Write the matrix to a file
-  int result = dm_write_MAT_file(matrix, filename);
+  int result = dm_write_mat_file(matrix, filename);
   TEST_ASSERT_EQUAL(0, result);
 
   // Clean up
@@ -167,7 +167,7 @@ void test_dm_read_from_file(void) {
   const char *filename = "test_matrix.mat";
 
   // Read the matrix from the file
-  DoubleMatrix *matrix = dm_read_MAT_file(filename);
+  DoubleMatrix *matrix = dm_read_mat_file(filename);
   TEST_ASSERT_NOT_NULL(matrix);
 
   if (matrix) {
@@ -200,7 +200,7 @@ void test_import_and_plot_matrix(void) {
   fclose(probe);
 
   // Read the matrix from the file
-  DoubleMatrix *matrix = dm_read_MAT_file(filename);
+  DoubleMatrix *matrix = dm_read_mat_file(filename);
   TEST_ASSERT_NOT_NULL(matrix);
 
   if (matrix) {
@@ -218,7 +218,7 @@ void test_import_and_plot_matrix(void) {
 
 void test_dm_read_mat_file_ex_should_return_io_error_for_missing_file(void) {
   DoubleMatrix *mat = NULL;
-  MStatus st = dm_read_MAT_file_ex("definitely_missing_file_123456.mat", &mat);
+  MStatus st = dm_read_mat_file_ex("definitely_missing_file_123456.mat", &mat);
   TEST_ASSERT_EQUAL(MSTATUS_IO_ERROR, st);
   TEST_ASSERT_EQUAL((void *)NULL, (void *)mat);
 }

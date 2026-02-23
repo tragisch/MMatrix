@@ -203,7 +203,7 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity) {
   return mat;
 }
 
-DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m) {
+DoubleSparseMatrix *dms_clone(const DoubleSparseMatrix *m) {
   DoubleSparseMatrix *copy = dms_create_empty();
   copy->rows = m->rows;
   copy->cols = m->cols;
@@ -219,6 +219,10 @@ DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m) {
     copy->values[i] = m->values[i];
   }
   return copy;
+}
+
+DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m) {
+  return dms_clone(m);
 }
 
 DoubleSparseMatrix *dms_create_identity(size_t n) {
@@ -258,7 +262,7 @@ cs *dms_to_cs(const DoubleSparseMatrix *coo) {
   return A;
 }
 
-DoubleSparseMatrix *cs_to_dms(const cs *A) {
+DoubleSparseMatrix *dms_from_cs(const cs *A) {
   // Allocate memory for the DoubleSparseMatrix structure
   DoubleSparseMatrix *coo =
       (DoubleSparseMatrix *)malloc(sizeof(DoubleSparseMatrix));
@@ -298,6 +302,8 @@ DoubleSparseMatrix *cs_to_dms(const cs *A) {
 
   return coo;
 }
+
+DoubleSparseMatrix *cs_to_dms(const cs *A) { return dms_from_cs(A); }
 
 DoubleSparseMatrix *dms_create_random_seeded(size_t rows, size_t cols,
                                               double density, uint64_t seed) {
@@ -355,8 +361,8 @@ DoubleSparseMatrix *dms_create_from_array(size_t rows, size_t cols,
   return mat;
 }
 
-DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
-                                             double array[rows][cols]) {
+DoubleSparseMatrix *dms_from_array_static(size_t rows, size_t cols,
+                                          double array[rows][cols]) {
   size_t nnz = 0;
   for (size_t i = 0; i < rows; i++) {
     for (size_t j = 0; j < cols; j++) {
@@ -379,6 +385,11 @@ DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
   }
   mat->nnz = nnz;
   return mat;
+}
+
+DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
+                                             double array[rows][cols]) {
+  return dms_from_array_static(rows, cols, array);
 }
 
 DoubleSparseMatrix *dms_get_row(const DoubleSparseMatrix *mat, size_t i) {
@@ -441,7 +452,7 @@ DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
   cs *A = dms_to_cs(mat1);
   cs *B = dms_to_cs(mat2);
   cs *C = cs_multiply(A, B);
-  DoubleSparseMatrix *result = cs_to_dms(C);
+  DoubleSparseMatrix *result = dms_from_cs(C);
 
   cs_spfree(A);
   cs_spfree(B);
@@ -452,7 +463,7 @@ DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
 
 DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
                                            const double number) {
-  DoubleSparseMatrix *result = dms_create_clone(mat);
+  DoubleSparseMatrix *result = dms_clone(mat);
   for (size_t i = 0; i < mat->nnz; i++) {
     result->values[i] *= number;
   }
@@ -472,7 +483,7 @@ DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
   // use cs_transpose from csparse
   cs *A = dms_to_cs(mat);
   cs *AT = cs_transpose(A, 1);
-  DoubleSparseMatrix *result = cs_to_dms(AT);
+  DoubleSparseMatrix *result = dms_from_cs(AT);
   return result;
 }
 

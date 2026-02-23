@@ -226,7 +226,7 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
   return matrix;
 }
 
-DoubleMatrix *dm_create_clone(const DoubleMatrix *mat) {
+DoubleMatrix *dm_clone(const DoubleMatrix *mat) {
   DoubleMatrix *copy = dm_create(mat->rows, mat->cols);
   for (size_t i = 0; i < mat->rows; i++) {
     for (size_t j = 0; j < mat->cols; j++) {
@@ -235,6 +235,8 @@ DoubleMatrix *dm_create_clone(const DoubleMatrix *mat) {
   }
   return copy;
 }
+
+DoubleMatrix *dm_create_clone(const DoubleMatrix *mat) { return dm_clone(mat); }
 
 DoubleMatrix *dm_create_identity(size_t n) {
   DoubleMatrix *identity = dm_create(n, n);
@@ -266,7 +268,7 @@ DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
   return dm_create_random_seeded(rows, cols, 0);
 }
 
-DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
+DoubleMatrix *dm_from_array_ptrs(size_t rows, size_t cols, double **array) {
   DoubleMatrix *mat = dm_create(rows, cols);
 
   for (size_t i = 0; i < mat->rows; i++) {
@@ -278,8 +280,12 @@ DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
   return mat;
 }
 
-DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
-                                      double array[rows][cols]) {
+DoubleMatrix *dm_create_from_array(size_t rows, size_t cols, double **array) {
+  return dm_from_array_ptrs(rows, cols, array);
+}
+
+DoubleMatrix *dm_from_array_static(size_t rows, size_t cols,
+                                   double array[rows][cols]) {
   DoubleMatrix *matrix = dm_create(rows, cols);
   if (!matrix) return NULL;
 
@@ -292,6 +298,11 @@ DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
     }
   }
   return matrix;
+}
+
+DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
+                                      double array[rows][cols]) {
+  return dm_from_array_static(rows, cols, array);
 }
 
 DoubleMatrix *dm_get_row(const DoubleMatrix *mat, size_t i) {
@@ -362,7 +373,7 @@ DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 
 DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,
                                     const double number) {
-  DoubleMatrix *product = dm_create_clone(mat);
+  DoubleMatrix *product = dm_clone(mat);
   dm_inplace_multiply_by_number(product, number);
   return product;
 }
@@ -419,7 +430,7 @@ DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     return NULL;
   }
 
-  DoubleMatrix *result = dm_create_clone(mat1);
+  DoubleMatrix *result = dm_clone(mat1);
   if (!result) return NULL;
 
   double *a = result->values;
@@ -448,7 +459,7 @@ DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     return NULL;
   }
 
-  DoubleMatrix *result = dm_create_clone(mat1);
+  DoubleMatrix *result = dm_clone(mat1);
   if (!result) return NULL;
 
   double *a = result->values;
@@ -491,7 +502,7 @@ double dm_determinant(const DoubleMatrix *mat) {
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
-    DoubleMatrix *lu = dm_create_clone(mat);
+    DoubleMatrix *lu = dm_clone(mat);
     BLASINT info = 0;
     BLASINT cols = (BLASINT)lu->cols;
     BLASINT rows = (BLASINT)lu->rows;
@@ -558,7 +569,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   if (mat->cols != mat->rows || mat->rows == 0 || mat->cols == 0) {
     log_error("the Matrix has to be square!");
   }
-  DoubleMatrix *inverse = dm_create_clone(mat);
+  DoubleMatrix *inverse = dm_clone(mat);
 
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
@@ -759,7 +770,7 @@ size_t dm_rank(const DoubleMatrix *mat) {
   }
   size_t rank = 0;
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
-  DoubleMatrix *tmp = dm_create_clone(mat);
+  DoubleMatrix *tmp = dm_clone(mat);
   if (tmp == NULL) {
     return 0;
   }
@@ -933,7 +944,7 @@ DoubleMatrix *dm_elementwise_multiply(const DoubleMatrix *mat1,
     return NULL;
   }
 
-  DoubleMatrix *result = dm_create_clone(mat1);
+  DoubleMatrix *result = dm_clone(mat1);
   if (!result) return NULL;
 
   double *a = result->values;
@@ -955,7 +966,7 @@ DoubleMatrix *dm_div(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     return NULL;
   }
 
-  DoubleMatrix *result = dm_create_clone(mat1);
+  DoubleMatrix *result = dm_clone(mat1);
   if (!result) return NULL;
 
   double *a = result->values;
