@@ -237,8 +237,14 @@ cc_library(
 
 cc_library(
     name = "st",
-    srcs = ["src/st.c"],
-    hdrs = ["include/st.h"],
+    srcs = [
+        "src/st.c",
+        "src/st_conv.c",
+    ],
+    hdrs = [
+        "include/st.h",
+        "include/st_conv.h",
+    ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
@@ -297,6 +303,14 @@ unity_test(
 unity_test(
     name = "test_st",
     srcs = ["tests/test_st.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
+)
+
+unity_test(
+    name = "test_st_conv",
+    srcs = ["tests/test_st_conv.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix:st"],

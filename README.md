@@ -30,6 +30,17 @@ All modules support:
 Accelerate for GEMM only around roughly $3072\times3072$ square matrices
 (real-time). Below that, Accelerate is typically faster due to GPU dispatch
 overhead.
+
+---
+
+## Documentation
+
+- Overview and API style: [`docs/Overview.md`](docs/Overview.md)
+- Performance notes: [`docs/Performance.md`](docs/Performance.md)
+- Float dense API (`sm`): [`docs/api/sm.md`](docs/api/sm.md)
+- Double dense API (`dm`): [`docs/api/dm.md`](docs/api/dm.md)
+- Sparse COO API (`dms`): [`docs/api/dms.md`](docs/api/dms.md)
+
   
 ---
 
