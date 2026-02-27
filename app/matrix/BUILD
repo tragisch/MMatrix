@@ -239,11 +239,15 @@ cc_library(
     name = "st",
     srcs = [
         "src/st.c",
+        "src/st_batchnorm.c",
         "src/st_conv.c",
+        "src/st_pool.c",
     ],
     hdrs = [
         "include/st.h",
+        "include/st_batchnorm.h",
         "include/st_conv.h",
+        "include/st_pool.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
@@ -317,6 +321,38 @@ unity_test(
 unity_test(
     name = "test_st_conv",
     srcs = ["tests/test_st_conv.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
+)
+
+unity_test(
+    name = "test_st_conv_backward",
+    srcs = ["tests/test_st_conv_backward.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
+)
+
+unity_test(
+    name = "test_st_pool",
+    srcs = ["tests/test_st_pool.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
+)
+
+unity_test(
+    name = "test_st_ops",
+    srcs = ["tests/test_st_ops.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
+)
+
+unity_test(
+    name = "test_st_batchnorm",
+    srcs = ["tests/test_st_batchnorm.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix:st"],
