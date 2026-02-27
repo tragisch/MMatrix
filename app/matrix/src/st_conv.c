@@ -13,15 +13,74 @@
 #ifdef __ARM_NEON
 #include <arm_neon.h>
 #endif
+#include <errno.h>
+#include <math.h>
 #include <omp.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
 static const char *g_last_backend = "none";
 
-static const double ST_CONV_MPS_MACS_THRESHOLD = 2.0e8;
-static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD = 1000000u;
+static const double ST_CONV_MPS_MACS_THRESHOLD_DEFAULT = 2.0e8;
+static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 1000000u;
+
+static double g_mps_macs_threshold = ST_CONV_MPS_MACS_THRESHOLD_DEFAULT;
+static size_t g_mps_out_elems_threshold =
+    ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT;
+static bool g_mps_thresholds_initialized = false;
+
+bool st_conv_set_mps_thresholds(double macs_threshold,
+                size_t out_elems_threshold);
+void st_conv_get_mps_thresholds(double *out_macs_threshold,
+                size_t *out_out_elems_threshold);
+void st_conv_reload_mps_thresholds_from_env(void);
+
+static bool st_parse_positive_double(const char *text, double *out_value) {
+  if (text == NULL || out_value == NULL) {
+    return false;
+  }
+
+  errno = 0;
+  char *end = NULL;
+  const double value = strtod(text, &end);
+  if (errno != 0 || end == text || (end != NULL && *end != '\0')) {
+    return false;
+  }
+  if (!isfinite(value) || value <= 0.0) {
+    return false;
+  }
+
+  *out_value = value;
+  return true;
+}
+
+static bool st_parse_positive_size_t(const char *text, size_t *out_value) {
+  if (text == NULL || out_value == NULL) {
+    return false;
+  }
+
+  errno = 0;
+  char *end = NULL;
+  const unsigned long long value = strtoull(text, &end, 10);
+  if (errno != 0 || end == text || (end != NULL && *end != '\0')) {
+    return false;
+  }
+  if (value == 0ull || value > (unsigned long long)SIZE_MAX) {
+    return false;
+  }
+
+  *out_value = (size_t)value;
+  return true;
+}
+
+static void st_conv_init_mps_thresholds_once(void) {
+  if (g_mps_thresholds_initialized) {
+    return;
+  }
+  st_conv_reload_mps_thresholds_from_env();
+}
 
 static bool st_conv2d_is_valid_tensor(const FloatTensor *t, size_t ndim) {
   return t != NULL && t->values != NULL && t->ndim == ndim;
@@ -351,12 +410,13 @@ static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
 static bool st_conv2d_should_use_mps(size_t n, size_t c_in, size_t c_out,
                                      size_t out_h, size_t out_w, size_t k_h,
                                      size_t k_w) {
+  st_conv_init_mps_thresholds_once();
+
   const double macs = (double)n * (double)c_out * (double)out_h *
                       (double)out_w * (double)c_in * (double)k_h *
                       (double)k_w;
   const size_t out_elems = n * c_out * out_h * out_w;
-  return macs >= ST_CONV_MPS_MACS_THRESHOLD &&
-         out_elems >= ST_CONV_MPS_OUT_ELEMS_THRESHOLD;
+  return macs >= g_mps_macs_threshold && out_elems >= g_mps_out_elems_threshold;
 }
 
 static bool st_conv2d_bnns_nchw(const FloatTensor *input,
@@ -574,3 +634,55 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
 }
 
 const char *st_conv2d_last_backend(void) { return g_last_backend; }
+
+bool st_conv_set_mps_thresholds(double macs_threshold,
+                                size_t out_elems_threshold) {
+  if (!isfinite(macs_threshold) || macs_threshold <= 0.0 ||
+      out_elems_threshold == 0u) {
+    return false;
+  }
+
+  g_mps_macs_threshold = macs_threshold;
+  g_mps_out_elems_threshold = out_elems_threshold;
+  g_mps_thresholds_initialized = true;
+  return true;
+}
+
+void st_conv_get_mps_thresholds(double *out_macs_threshold,
+                                size_t *out_out_elems_threshold) {
+  st_conv_init_mps_thresholds_once();
+  if (out_macs_threshold != NULL) {
+    *out_macs_threshold = g_mps_macs_threshold;
+  }
+  if (out_out_elems_threshold != NULL) {
+    *out_out_elems_threshold = g_mps_out_elems_threshold;
+  }
+}
+
+void st_conv_reload_mps_thresholds_from_env(void) {
+  g_mps_macs_threshold = ST_CONV_MPS_MACS_THRESHOLD_DEFAULT;
+  g_mps_out_elems_threshold = ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT;
+
+  const char *macs_env = getenv("MMATRIX_ST_CONV_MPS_MACS_THRESHOLD");
+  if (macs_env != NULL) {
+    double parsed = 0.0;
+    if (st_parse_positive_double(macs_env, &parsed)) {
+      g_mps_macs_threshold = parsed;
+    } else {
+      log_error("Error: invalid MMATRIX_ST_CONV_MPS_MACS_THRESHOLD, using default.");
+    }
+  }
+
+  const char *out_elems_env = getenv("MMATRIX_ST_CONV_MPS_OUT_ELEMS_THRESHOLD");
+  if (out_elems_env != NULL) {
+    size_t parsed = 0;
+    if (st_parse_positive_size_t(out_elems_env, &parsed)) {
+      g_mps_out_elems_threshold = parsed;
+    } else {
+      log_error(
+          "Error: invalid MMATRIX_ST_CONV_MPS_OUT_ELEMS_THRESHOLD, using default.");
+    }
+  }
+
+  g_mps_thresholds_initialized = true;
+}

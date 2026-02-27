@@ -46,6 +46,19 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
                     const FloatTensor *bias, const StConv2dParams *params,
                     FloatTensor *output);
 
+// Override MPS AUTO dispatch thresholds at runtime. Returns false on invalid input.
+bool st_conv_set_mps_thresholds(double macs_threshold,
+                                size_t out_elems_threshold);
+
+// Query currently active MPS AUTO dispatch thresholds.
+void st_conv_get_mps_thresholds(double *out_macs_threshold,
+                                size_t *out_out_elems_threshold);
+
+// Reload MPS AUTO dispatch thresholds from environment variables:
+// MMATRIX_ST_CONV_MPS_MACS_THRESHOLD
+// MMATRIX_ST_CONV_MPS_OUT_ELEMS_THRESHOLD
+void st_conv_reload_mps_thresholds_from_env(void);
+
 // Return backend name used by the last st_conv2d_nchw call.
 const char *st_conv2d_last_backend(void);
 

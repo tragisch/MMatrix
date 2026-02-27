@@ -51,6 +51,13 @@
     (void)(actual);                                       \
   } while (0)
 #endif
+#ifndef TEST_ASSERT_EQUAL_size_t
+#define TEST_ASSERT_EQUAL_size_t(expected, actual) \
+  do {                                             \
+    (void)(expected);                              \
+    (void)(actual);                                \
+  } while (0)
+#endif
 #ifndef TEST_ASSERT_NOT_NULL
 #define TEST_ASSERT_NOT_NULL(value) \
   do {                             \
@@ -362,4 +369,34 @@ void test_st_conv2d_nchw_mps_backend_should_fallback_if_unavailable(void) {
   st_destroy(input);
   st_destroy(weight);
   st_destroy(output);
+}
+
+void test_st_conv_mps_thresholds_should_be_settable_and_queryable(void) {
+  bool ok = st_conv_set_mps_thresholds(3.0e8, 2000000u);
+  TEST_ASSERT_TRUE(ok);
+
+  double macs = 0.0;
+  size_t out_elems = 0;
+  st_conv_get_mps_thresholds(&macs, &out_elems);
+
+  TEST_ASSERT_TRUE(macs > 2.99e8 && macs < 3.01e8);
+  TEST_ASSERT_EQUAL_size_t(2000000u, out_elems);
+}
+
+void test_st_conv_mps_thresholds_should_reject_invalid_values(void) {
+  bool ok = st_conv_set_mps_thresholds(1.0e8, 12345u);
+  TEST_ASSERT_TRUE(ok);
+
+  ok = st_conv_set_mps_thresholds(0.0, 12345u);
+  TEST_ASSERT_FALSE(ok);
+
+  ok = st_conv_set_mps_thresholds(1.0e8, 0u);
+  TEST_ASSERT_FALSE(ok);
+
+  double macs = 0.0;
+  size_t out_elems = 0;
+  st_conv_get_mps_thresholds(&macs, &out_elems);
+
+  TEST_ASSERT_TRUE(macs > 0.0);
+  TEST_ASSERT_EQUAL_size_t(12345u, out_elems);
 }
