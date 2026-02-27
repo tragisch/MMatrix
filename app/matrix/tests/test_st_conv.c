@@ -275,3 +275,47 @@ void test_st_conv2d_nchw_cpu_opt_should_match_reference_result(void) {
   st_destroy(weight);
   st_destroy(output);
 }
+
+void test_st_conv2d_nchw_gemm_should_match_reference_result(void) {
+  FloatTensor *input = create_tensor_4d(1, 1, 3, 3);
+  FloatTensor *weight = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *output = create_tensor_4d(1, 1, 2, 2);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(output);
+
+  float in_vals[] = {
+      1.0f, 2.0f, 3.0f,
+      4.0f, 5.0f, 6.0f,
+      7.0f, 8.0f, 9.0f,
+  };
+  float k_vals[] = {
+      1.0f, 0.0f,
+      0.0f, -1.0f,
+  };
+
+  for (size_t i = 0; i < 9; ++i) {
+    input->values[i] = in_vals[i];
+  }
+  for (size_t i = 0; i < 4; ++i) {
+    weight->values[i] = k_vals[i];
+  }
+
+  StConv2dParams p = st_conv2d_default_params();
+  p.backend = ST_CONV_BACKEND_GEMM;
+
+  bool ok = st_conv2d_nchw(input, weight, NULL, &p, output);
+  TEST_ASSERT_TRUE(ok);
+
+  for (size_t i = 0; i < 4; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(EPSILON, -4.0f, output->values[i]);
+  }
+
+  const char *backend = st_conv2d_last_backend();
+  TEST_ASSERT_NOT_NULL(backend);
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(output);
+}

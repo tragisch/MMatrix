@@ -18,7 +18,8 @@ typedef enum StConvBackend {
   ST_CONV_BACKEND_AUTO = 0,
   ST_CONV_BACKEND_REFERENCE = 1,
   ST_CONV_BACKEND_CPU_OPT = 2,
-  ST_CONV_BACKEND_BNNS = 3,
+  ST_CONV_BACKEND_GEMM = 3,
+  ST_CONV_BACKEND_BNNS = 4,
 } StConvBackend;
 
 typedef struct StConv2dParams {

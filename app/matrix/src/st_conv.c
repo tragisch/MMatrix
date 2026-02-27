@@ -7,6 +7,7 @@
  */
 
 #include "st_conv.h"
+#include "sm.h"
 
 #include <log.h>
 #ifdef __ARM_NEON
@@ -193,12 +194,131 @@ static bool st_conv2d_cpu_opt_nchw(const FloatTensor *input,
   return true;
 }
 
+static bool st_conv2d_gemm_nchw(const FloatTensor *input,
+                                const FloatTensor *weight,
+                                const FloatTensor *bias,
+                                const StConv2dParams *params,
+                                FloatTensor *output) {
+  const size_t n = input->shape[0];
+  const size_t c_in = input->shape[1];
+  const size_t h = input->shape[2];
+  const size_t w = input->shape[3];
+
+  const size_t c_out = weight->shape[0];
+  const size_t k_h = weight->shape[2];
+  const size_t k_w = weight->shape[3];
+
+  const size_t out_h = output->shape[2];
+  const size_t out_w = output->shape[3];
+
+  const size_t stride_h = params->stride_h;
+  const size_t stride_w = params->stride_w;
+  const size_t pad_h = params->pad_h;
+  const size_t pad_w = params->pad_w;
+  const size_t dil_h = params->dilation_h;
+  const size_t dil_w = params->dilation_w;
+
+  const size_t patch_size = c_in * k_h * k_w;
+  const size_t out_spatial = out_h * out_w;
+
+  FloatMatrix *w_mat = sm_create(patch_size, c_out);
+  FloatMatrix *col = sm_create(out_spatial, patch_size);
+  FloatMatrix *y = sm_create(out_spatial, c_out);
+  if (!w_mat || !col || !y) {
+    sm_destroy(w_mat);
+    sm_destroy(col);
+    sm_destroy(y);
+    return false;
+  }
+
+  for (size_t co = 0; co < c_out; ++co) {
+    for (size_t ci = 0; ci < c_in; ++ci) {
+      for (size_t kh = 0; kh < k_h; ++kh) {
+        for (size_t kw = 0; kw < k_w; ++kw) {
+          const size_t k_idx = ((co * c_in + ci) * k_h + kh) * k_w + kw;
+          const size_t row = ((ci * k_h) + kh) * k_w + kw;
+          w_mat->values[row * c_out + co] = weight->values[k_idx];
+        }
+      }
+    }
+  }
+
+  for (size_t ni = 0; ni < n; ++ni) {
+    for (size_t oh = 0; oh < out_h; ++oh) {
+      for (size_t ow = 0; ow < out_w; ++ow) {
+        const size_t out_row = oh * out_w + ow;
+
+        for (size_t ci = 0; ci < c_in; ++ci) {
+          for (size_t kh = 0; kh < k_h; ++kh) {
+            for (size_t kw = 0; kw < k_w; ++kw) {
+              const ptrdiff_t in_h =
+                  (ptrdiff_t)(oh * stride_h + kh * dil_h) - (ptrdiff_t)pad_h;
+              const ptrdiff_t in_w =
+                  (ptrdiff_t)(ow * stride_w + kw * dil_w) - (ptrdiff_t)pad_w;
+              const size_t col_idx = ((ci * k_h) + kh) * k_w + kw;
+
+              float v = 0.0f;
+              if (in_h >= 0 && in_w >= 0 && (size_t)in_h < h &&
+                  (size_t)in_w < w) {
+                const size_t in_idx =
+                    ((ni * c_in + ci) * h + (size_t)in_h) * w + (size_t)in_w;
+                v = input->values[in_idx];
+              }
+
+              col->values[out_row * patch_size + col_idx] = v;
+            }
+          }
+        }
+      }
+    }
+
+    if (!sm_gemm(y, 1.0f, col, SM_NO_TRANSPOSE, w_mat, SM_NO_TRANSPOSE,
+                 0.0f)) {
+      sm_destroy(w_mat);
+      sm_destroy(col);
+      sm_destroy(y);
+      return false;
+    }
+
+    for (size_t oh = 0; oh < out_h; ++oh) {
+      for (size_t ow = 0; ow < out_w; ++ow) {
+        const size_t out_row = oh * out_w + ow;
+        for (size_t co = 0; co < c_out; ++co) {
+          float v = y->values[out_row * c_out + co];
+          if (bias) {
+            v += bias->values[co];
+          }
+          const size_t out_idx =
+              ((ni * c_out + co) * out_h + oh) * out_w + ow;
+          output->values[out_idx] = v;
+        }
+      }
+    }
+  }
+
+  sm_destroy(w_mat);
+  sm_destroy(col);
+  sm_destroy(y);
+
+  g_last_backend = "gemm";
+  return true;
+}
+
 static bool st_conv2d_should_use_cpu_opt(size_t n, size_t c_in, size_t c_out,
                                          size_t out_h, size_t out_w,
                                          size_t k_h, size_t k_w) {
   const size_t out_elems = n * c_out * out_h * out_w;
   const size_t kernel_volume = c_in * k_h * k_w;
   return out_elems >= 16384 && kernel_volume >= 27;
+}
+
+static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
+                                      size_t out_h, size_t out_w, size_t k_h,
+                                      size_t k_w) {
+  const double macs = (double)n * (double)c_out * (double)out_h *
+                      (double)out_w * (double)c_in * (double)k_h *
+                      (double)k_w;
+  return macs >= 8.0e7;
 }
 
 static bool st_conv2d_bnns_nchw(const FloatTensor *input,
@@ -334,6 +454,14 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
       }
       return true;
 
+    case ST_CONV_BACKEND_GEMM:
+      ok = st_conv2d_gemm_nchw(input, weight, bias, &local, output);
+      if (!ok) {
+        log_error("Error: st_conv2d_nchw gemm path failed.");
+        return false;
+      }
+      return true;
+
     case ST_CONV_BACKEND_BNNS:
       ok = st_conv2d_bnns_nchw(input, weight, bias, &local, output);
       if (ok) {
@@ -354,6 +482,13 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
       if (ok) {
         g_last_backend = "bnns";
         return true;
+      }
+
+      if (st_conv2d_should_use_gemm(n, c_in, c_out, out_h, out_w, k_h, k_w)) {
+        ok = st_conv2d_gemm_nchw(input, weight, bias, &local, output);
+        if (ok) {
+          return true;
+        }
       }
 
       if (st_conv2d_should_use_cpu_opt(n, c_in, c_out, out_h, out_w, k_h,
