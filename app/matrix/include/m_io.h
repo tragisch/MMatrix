@@ -9,8 +9,6 @@
 #ifndef DM_IO_H
 #define DM_IO_H
 
-#include <matio.h>
-
 #include "dm.h"
 #include "dms.h"
 #include "sm.h"
@@ -56,6 +54,9 @@ void dms_cplot(DoubleSparseMatrix *mat, double strength);
 /*         Matlab Format       */
 /*******************************/
 
+// C API enums intentionally keep default underlying type for ABI stability.
+// NOLINTBEGIN(performance-enum-size)
+
 // MATLAB file format version.
 typedef enum { MIO_FMT_MAT5, MIO_FMT_MAT73 } MIOFormat;
 
@@ -72,6 +73,7 @@ typedef enum MioStatus {
     MIO_STATUS_UNSUPPORTED_TYPE = 5,
     MIO_STATUS_INTERNAL_ERROR = 6,
 } MioStatus;
+// NOLINTEND(performance-enum-size)
 
 // Canonical status-string helper for I/O APIs.
 const char *mio_status_to_string(MioStatus status);

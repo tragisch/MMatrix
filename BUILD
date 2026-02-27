@@ -7,9 +7,9 @@ load("//tools/install:def.bzl", "installer")
 license_test(
     name = "license_test",
     timeout = "short",
-    tags = ["manual"],
     ignore = [".dir-locals.el"],
     marker = "//:MODULE.bazel",
+    tags = ["manual"],
 )
 
 installer(
@@ -29,7 +29,7 @@ alias(
 
 alias(
     name = "refresh_compile_commands",
-    actual = "@wolfd_bazel_compile_commands//:generate_compile_commands",
+    actual = "//tools:refresh_compile_commands",
 )
 
 alias(

@@ -8,6 +8,8 @@
 
 #include "m_io.h"
 
+#include <matio.h>
+
 #include <log.h>
 #include <math.h>
 

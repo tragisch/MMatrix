@@ -126,10 +126,7 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat);
 /**************************************/
 /*       Matrix Arithmetic            */
 /**************************************/
-typedef enum SmTranspose {
-  SM_NO_TRANSPOSE = 0,
-  SM_TRANSPOSE = 1,
-} SmTranspose;
+
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2);
@@ -144,6 +141,10 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b);
 /**************************************/
 /*        Advanced Operations         */
 /**************************************/
+typedef enum SmTranspose {
+  SM_NO_TRANSPOSE = 0,
+  SM_TRANSPOSE = 1,
+} SmTranspose;
 
 // Advanced BLAS-style kernel:
 // C = alpha * op(A) * op(B) + beta * C
