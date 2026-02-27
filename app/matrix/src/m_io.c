@@ -22,6 +22,10 @@
 #define EPSILON 1e-9
 #endif
 
+// Global MATLAB I/O settings (definition).
+MIOFormat g_mio_format = MIO_FMT_MAT5;
+MIOCompression g_mio_compression = MIO_COMPRESS_NONE;
+
 /* Array of heatmap-inspired ANSI 256-color codes */
 const int grey_shades[] = {
     21,  27,  33,  39,  45,  51, 50, 49, 48, 47,  // blue to cyan to green
@@ -72,15 +76,11 @@ static void print_progress_bar(size_t progress, size_t totalSteps,
   float percentage = (float)progress / (float)totalSteps;
   int filledWidth = (int)(percentage * (float)barWidth);
 
-  printf("[");
-  for (int i = 0; i < barWidth; i++) {
-    if (i < filledWidth) {
-      printf("=");
-    } else {
-      printf(" ");
-    }
-  }
-  printf("] %3d%%\r", (int)(percentage * 100));
+  char bar[barWidth + 1];
+  memset(bar, '=', (size_t)filledWidth);
+  memset(bar + filledWidth, ' ', (size_t)(barWidth - filledWidth));
+  bar[barWidth] = '\0';
+  printf("[%s] %3d%%\r", bar, (int)(percentage * 100));
   fflush(stdout);
 }
 
@@ -106,11 +106,11 @@ static int get_rows_coord(size_t y, size_t cols) {
 // from: https://c-for-dummies.com/blog/?p=761
 
 static void show_grid(FloatMatrix *count) {
-  int n_shades = sizeof(grey_shades) / sizeof(grey_shades[0]);
+  int n_shades = (int)(sizeof(grey_shades) / sizeof(grey_shades[0]));
   float max_count = 0.0f;
   for (size_t y = 0; y < count->rows; y++) {
     for (size_t x = 0; x < count->cols; x++) {
-      float val = sm_get(count, x, y);
+      float val = count->values[y * count->cols + x];
       if (val > max_count) {
         max_count = val;
       }
@@ -119,15 +119,16 @@ static void show_grid(FloatMatrix *count) {
   for (int y = 0; y < HEIGHT; y++) {
     for (int x = 0; x < WIDTH; x++) {
       // Check if the character has a color escape code
-      int color = (int)sm_get(count, (size_t)x, (size_t)y);
+      int color = (int)count->values[(size_t)y * count->cols + (size_t)x];
       if (color >= 1) {
         int shade_index =
             (int)((log1pf((float)color) / log1pf((float)max_count)) *
-                  (int)(n_shades - 1));
+                  (float)(n_shades - 1));
         if (shade_index >= n_shades) shade_index = n_shades - 1;
         int grey_color = grey_shades[shade_index];
         char escape_code[20];
-        sprintf(escape_code, ANSI_COLOR_GREY_BASE, grey_color);
+        snprintf(escape_code, sizeof(escape_code), ANSI_COLOR_GREY_BASE,
+                 grey_color);
 
         printf("%s%c%s", escape_code, grid[y][x], ANSI_COLOR_RESET);
       } else {
@@ -223,6 +224,7 @@ void dms_cplot(DoubleSparseMatrix *mat, double strength) {
   print_structure_coo(mat, count, density);
 
   show_grid(count);
+  sm_destroy(count);
 }
 
 void dm_cplot(DoubleMatrix *mat) {
@@ -244,6 +246,7 @@ void dm_cplot(DoubleMatrix *mat) {
   }
 
   show_grid(count);
+  sm_destroy(count);
 }
 
 void sm_cplot(FloatMatrix *mat) {
@@ -263,6 +266,7 @@ void sm_cplot(FloatMatrix *mat) {
   }
 
   show_grid(count);
+  sm_destroy(count);
 }
 
 /*******************************/
@@ -427,43 +431,26 @@ static MioStatus read_MAT_variable(const char *filename,
     return MIO_STATUS_IO_ERROR;
   }
 
-  // loop through all variables in the MAT file
-
-  matvar_t *matvar;
-  int var_count = 0;
-  char varname[256] = {0};
-
-  while ((matvar = Mat_VarReadNext(matfp)) != NULL) {
-    var_count++;
-    if (var_count == 1) {
-      // Name of the first variable
-      strncpy(varname, matvar->name, sizeof(varname) - 1);
-    }
-    Mat_VarFree(matvar);
-  }
-
-  if (var_count == 0) {
+  // Read the first variable with its data
+  matvar_t *matvar = Mat_VarReadNext(matfp);
+  if (!matvar) {
     log_error("No variables found in MAT file.\n");
     Mat_Close(matfp);
     return MIO_STATUS_FORMAT_ERROR;
   }
 
-  if (var_count > 1) {
-    log_error("More than one variable found (%d). Not suppoted yet.\n",
-              var_count);
+  // Check if there is a second variable
+  matvar_t *second = Mat_VarReadNextInfo(matfp);
+  if (second) {
+    log_error("More than one variable found. Not supported yet.\n");
+    Mat_VarFree(second);
+    Mat_VarFree(matvar);
     Mat_Close(matfp);
     return MIO_STATUS_FORMAT_ERROR;
   }
 
-  matvar = Mat_VarRead(matfp, varname);
-  if (!matvar) {
-    log_error("Failed to read variable '%s'\n", varname);
-    Mat_Close(matfp);
-    return MIO_STATUS_IO_ERROR;
-  }
-
   if (matvar->rank != 2) {
-    log_error("Variable %s is not a 2D-Matrix", varname);
+    log_error("Variable %s is not a 2D-Matrix", matvar->name);
     Mat_VarFree(matvar);
     Mat_Close(matfp);
     return MIO_STATUS_FORMAT_ERROR;
@@ -613,37 +600,6 @@ MioStatus dms_read_mat_file_ex(const char *filename,
   size_t count = 0;
   for (size_t col = 0; col < cols; ++col) {
     for (size_t k = (size_t)s->jc[col]; k < (size_t)s->jc[col + 1]; ++k) {
-      if (count >= mat->capacity) {
-        if (mat->capacity == 0) {
-          mat->capacity = 1;
-        } else {
-          mat->capacity *= 2;
-        }
-        void *tmp = realloc(mat->row_indices, mat->capacity * sizeof(size_t));
-        if (!tmp) {
-          log_error("Realloc failed");
-          dms_destroy(mat);
-          Mat_VarFree(matvar);
-          return MIO_STATUS_ALLOC_FAILED;
-        }
-        mat->row_indices = tmp;
-        tmp = realloc(mat->col_indices, mat->capacity * sizeof(size_t));
-        if (!tmp) {
-          log_error("Realloc failed");
-          dms_destroy(mat);
-          Mat_VarFree(matvar);
-          return MIO_STATUS_ALLOC_FAILED;
-        }
-        mat->col_indices = tmp;
-        tmp = realloc(mat->values, mat->capacity * sizeof(double));
-        if (!tmp) {
-          log_error("Realloc failed");
-          dms_destroy(mat);
-          Mat_VarFree(matvar);
-          return MIO_STATUS_ALLOC_FAILED;
-        }
-        mat->values = tmp;
-      }
       mat->row_indices[count] = (size_t)s->ir[k];
       mat->col_indices[count] = col;
       mat->values[count] = ((double *)s->data)[k];
@@ -714,11 +670,14 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename) {
 
 void dms_write_matrix_market(const DoubleSparseMatrix *mat,
                              const char *filename) {
-  FILE *fp = NULL;
-  fp = fopen(filename, "w");
+  if (!mat || !filename) {
+    log_error("Error: Invalid arguments to dms_write_matrix_market.\n");
+    return;
+  }
+  FILE *fp = fopen(filename, "w");
   if (fp == NULL) {
-    log_error("Error: Unable to open file.\n");
-    exit(1);
+    log_error("Error: Unable to open file %s for writing.\n", filename);
+    return;
   }
 
   fprintf(fp, "%%%%MatrixMarket matrix coordinate real general\n");
@@ -733,22 +692,27 @@ void dms_write_matrix_market(const DoubleSparseMatrix *mat,
 }
 
 DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
-  FILE *fp = NULL;
   size_t nrows = 0;
   size_t ncols = 0;
   size_t nnz = 0;
 
   // Open the Matrix Market file for reading
-  fp = fopen(filename, "r");
+  FILE *fp = fopen(filename, "r");
   if (fp == NULL) {
-    log_error("Error: Unable to open file.\n");
-    exit(1);
+    log_error("Error: Unable to open file %s for reading.\n", filename);
+    return NULL;
   }
 
   char line[1024];
-  fgets(line, sizeof(line), fp);
+  if (fgets(line, sizeof(line), fp) == NULL) {
+    log_error("Error: Failed to read header from file %s.\n", filename);
+    fclose(fp);
+    return NULL;
+  }
   if (strstr(line, "%%MatrixMarket matrix coordinate") == NULL) {
-    perror("Error: invalid header. No MatrixMarket matrix coordinate.\n");
+    log_error("Error: invalid header. No MatrixMarket matrix coordinate.\n");
+    fclose(fp);
+    return NULL;
   }
 
   // Skip all comment lines in the file
@@ -773,10 +737,10 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
   }
 
   // Read non-zero values
+  size_t actual_nnz = 0;
   for (size_t i = 0; i < nnz; i++) {
     if (nnz > 500) {
-      print_progress_bar(/*total_steps=*/nnz, /*current_step=*/i,
-                         /*bar_width=*/50);
+      print_progress_bar(i, nnz, 50);
     }
     size_t row_idx = 0;
     size_t col_idx = 0;
@@ -788,12 +752,13 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
     }
 
     if (val != 0.0) {
-      mat->row_indices[i] = (size_t)(row_idx - 1);
-      mat->col_indices[i] = (size_t)(col_idx - 1);
-      mat->values[i] = (double)val;
-      mat->nnz++;
+      mat->row_indices[actual_nnz] = (size_t)(row_idx - 1);
+      mat->col_indices[actual_nnz] = (size_t)(col_idx - 1);
+      mat->values[actual_nnz] = val;
+      actual_nnz++;
     }
   }
+  mat->nnz = actual_nnz;
 
   if (nnz > 500) {
     printf("\n");

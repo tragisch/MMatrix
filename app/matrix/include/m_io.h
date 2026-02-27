@@ -79,8 +79,8 @@ typedef enum MioStatus {
 const char *mio_status_to_string(MioStatus status);
 
 // Global MATLAB I/O settings (defaults).
-static MIOFormat g_mio_format = MIO_FMT_MAT5;
-static MIOCompression g_mio_compression = MIO_COMPRESS_NONE;
+extern MIOFormat g_mio_format;
+extern MIOCompression g_mio_compression;
 
 // Set global MATLAB file format for subsequent writes (not thread-safe).
 void mio_set_format(MIOFormat fmt);
