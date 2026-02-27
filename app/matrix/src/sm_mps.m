@@ -8,7 +8,7 @@
 
 #import "sm_mps.h"
 
-static id<MTLDevice> mps_shared_device(void) {
+static id<MTLDevice> _mps_shared_device(void) {
   static id<MTLDevice> device = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
@@ -17,13 +17,21 @@ static id<MTLDevice> mps_shared_device(void) {
   return device;
 }
 
-static id<MTLCommandQueue> mps_shared_command_queue(id<MTLDevice> device) {
+static id<MTLCommandQueue> _mps_shared_command_queue(void) {
   static id<MTLCommandQueue> queue = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    queue = [device newCommandQueue];
+    queue = [_mps_shared_device() newCommandQueue];
   });
   return queue;
+}
+
+void *mps_get_shared_device(void) {
+  return (__bridge void *)_mps_shared_device();
+}
+
+void *mps_get_shared_command_queue(void) {
+  return (__bridge void *)_mps_shared_command_queue();
 }
 
 bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
@@ -47,12 +55,14 @@ bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
     return false;
   }
 
-  id<MTLDevice> device = mps_shared_device();
+  @autoreleasepool {
+
+  id<MTLDevice> device = _mps_shared_device();
   if (!device) {
     return false;
   }
 
-  id<MTLCommandQueue> commandQueue = mps_shared_command_queue(device);
+  id<MTLCommandQueue> commandQueue = _mps_shared_command_queue();
   if (!commandQueue) {
     return false;
   }
@@ -120,14 +130,19 @@ bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
   [commandBuffer commit];
   [commandBuffer waitUntilCompleted];
 
+  if (commandBuffer.status == MTLCommandBufferStatusError) {
+    return false;
+  }
+
   memcpy(result, matrixC.data.contents, c_bytes);
   return true;
+
+  } // @autoreleasepool
 }
 
-void mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
+bool mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
                          const float *mat2, size_t rows2, size_t cols2,
                          float *result) {
-  (void)mps_matrix_multiply_ex(mat1, rows1, cols1, false, mat2, rows2, cols2,
-                               false, 1.0f, 0.0f, result, rows1, cols2);
+  return mps_matrix_multiply_ex(mat1, rows1, cols1, false, mat2, rows2, cols2,
+                                false, 1.0f, 0.0f, result, rows1, cols2);
 }
-//

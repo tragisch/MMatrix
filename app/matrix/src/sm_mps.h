@@ -22,7 +22,13 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 
-void mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
+/// Returns the shared MTLDevice (as opaque pointer). Thread-safe.
+void *mps_get_shared_device(void);
+
+/// Returns the shared MTLCommandQueue (as opaque pointer). Thread-safe.
+void *mps_get_shared_command_queue(void);
+
+bool mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
                          const float *mat2, size_t rows2, size_t cols2,
                          float *result);
 

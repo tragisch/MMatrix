@@ -248,14 +248,20 @@ cc_library(
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
-    deps = default_deps + [":sm"],
+    deps = default_deps + [":sm"] + select({
+        ":use_accelerate_mps": [":sm_mps_objc"],
+        "//conditions:default": [],
+    }),
 )
 
 objc_library(
     name = "sm_mps_objc",
     srcs = ["src/sm_mps.m"],
     hdrs = ["src/sm_mps.h"],
-    copts = ["-ObjC"],
+    copts = [
+        "-ObjC",
+        "-fobjc-arc",
+    ],
     includes = ["src"],
     target_compatible_with = select({
         ":use_accelerate_mps": ["@platforms//os:macos"],
