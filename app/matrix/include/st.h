@@ -78,4 +78,44 @@ bool st_as_sm_view(const FloatTensor *tensor, FloatMatrix *out_view);
 // Destroy tensor and owned data when owns_data == true.
 void st_destroy(FloatTensor *tensor);
 
+// ---- Element-wise in-place operations ----
+
+// a[i] += b[i] for all elements (broadcast: b may be NULL → no-op).
+bool st_inplace_add(FloatTensor *a, const FloatTensor *b);
+
+// a[i] -= b[i] for all elements.
+bool st_inplace_sub(FloatTensor *a, const FloatTensor *b);
+
+// t[i] *= scalar for all elements.
+bool st_inplace_scale(FloatTensor *t, float scalar);
+
+// a[i] *= b[i] for all elements (Hadamard product).
+bool st_inplace_elementwise_multiply(FloatTensor *a, const FloatTensor *b);
+
+// Fill all elements with given value.
+bool st_fill(FloatTensor *t, float value);
+
+// ---- Activation functions on tensors ----
+
+// ReLU: t[i] = max(0, t[i]) in-place.
+bool st_apply_relu(FloatTensor *t);
+
+// ReLU backward: grad[i] = (activation[i] > 0) ? grad[i] : 0  in-place.
+bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad);
+
+// ---- Reduction ----
+
+// Sum over specified axes, collapsing them.
+// Returns a new tensor with the summed axes removed.
+// axes: array of axis indices to sum over (e.g. {0,2,3} for bias-gradient NCHW).
+FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
+                         size_t num_axes);
+
+// ---- Padding ----
+
+// Zero-pad (or constant-pad) an NCHW tensor along H and W.
+// Returns a new tensor with shape [N, C, H+2*pad_h, W+2*pad_w].
+FloatTensor *st_pad_nchw(const FloatTensor *input, size_t pad_h, size_t pad_w,
+                         float value);
+
 #endif  // ST_H

@@ -812,6 +812,247 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
 
 const char *st_conv2d_last_backend(void) { return g_last_backend; }
 
+/* ---- Backward: gradient w.r.t. input ---- */
+
+bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
+                                  const FloatTensor *weight,
+                                  const StConv2dParams *params,
+                                  FloatTensor *grad_input) {
+  if (!st_conv2d_is_valid_tensor(grad_output, 4) ||
+      !st_conv2d_is_valid_tensor(weight, 4) ||
+      !st_conv2d_is_valid_tensor(grad_input, 4)) {
+    log_error(
+        "Error: st_conv2d_backward_data_nchw expects valid 4D tensors.");
+    return false;
+  }
+  if (!st_is_contiguous(grad_output) || !st_is_contiguous(weight) ||
+      !st_is_contiguous(grad_input)) {
+    log_error(
+        "Error: st_conv2d_backward_data_nchw requires contiguous tensors.");
+    return false;
+  }
+
+  StConv2dParams local = st_conv2d_default_params();
+  if (params) {
+    local = *params;
+  }
+
+  const size_t n = grad_output->shape[0];
+  const size_t c_out = grad_output->shape[1];
+  const size_t out_h = grad_output->shape[2];
+  const size_t out_w = grad_output->shape[3];
+
+  const size_t w_c_out = weight->shape[0];
+  const size_t c_in = weight->shape[1];
+  const size_t k_h = weight->shape[2];
+  const size_t k_w = weight->shape[3];
+
+  if (c_out != w_c_out) {
+    log_error("Error: st_conv2d_backward_data_nchw channel mismatch.");
+    return false;
+  }
+
+  const size_t h = grad_input->shape[2];
+  const size_t w = grad_input->shape[3];
+
+  if (grad_input->shape[0] != n || grad_input->shape[1] != c_in) {
+    log_error("Error: st_conv2d_backward_data_nchw grad_input shape mismatch.");
+    return false;
+  }
+
+  const size_t stride_h = local.stride_h;
+  const size_t stride_w = local.stride_w;
+  const size_t pad_h = local.pad_h;
+  const size_t pad_w = local.pad_w;
+  const size_t dil_h = local.dilation_h;
+  const size_t dil_w = local.dilation_w;
+
+  /* Zero grad_input before accumulating. */
+  memset(grad_input->values, 0, grad_input->numel * sizeof(float));
+
+  /* For each output element, scatter its gradient back to the input positions
+   * that contributed via the corresponding kernel taps. */
+  for (size_t ni = 0; ni < n; ++ni) {
+    for (size_t co = 0; co < c_out; ++co) {
+      for (size_t oh = 0; oh < out_h; ++oh) {
+        for (size_t ow = 0; ow < out_w; ++ow) {
+          const size_t go_idx =
+              ((ni * c_out + co) * out_h + oh) * out_w + ow;
+          const float go_val = grad_output->values[go_idx];
+
+          for (size_t ci = 0; ci < c_in; ++ci) {
+            for (size_t kh = 0; kh < k_h; ++kh) {
+              for (size_t kw = 0; kw < k_w; ++kw) {
+                const ptrdiff_t ih =
+                    (ptrdiff_t)(oh * stride_h + kh * dil_h) -
+                    (ptrdiff_t)pad_h;
+                const ptrdiff_t iw =
+                    (ptrdiff_t)(ow * stride_w + kw * dil_w) -
+                    (ptrdiff_t)pad_w;
+
+                if (ih < 0 || iw < 0 || (size_t)ih >= h ||
+                    (size_t)iw >= w) {
+                  continue;
+                }
+
+                const size_t gi_idx =
+                    ((ni * c_in + ci) * h + (size_t)ih) * w + (size_t)iw;
+                const size_t w_idx =
+                    ((co * c_in + ci) * k_h + kh) * k_w + kw;
+                grad_input->values[gi_idx] +=
+                    go_val * weight->values[w_idx];
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+/* ---- Backward: gradient w.r.t. weight ---- */
+
+bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
+                                    const FloatTensor *grad_output,
+                                    const StConv2dParams *params,
+                                    FloatTensor *grad_weight) {
+  if (!st_conv2d_is_valid_tensor(input, 4) ||
+      !st_conv2d_is_valid_tensor(grad_output, 4) ||
+      !st_conv2d_is_valid_tensor(grad_weight, 4)) {
+    log_error(
+        "Error: st_conv2d_backward_weight_nchw expects valid 4D tensors.");
+    return false;
+  }
+  if (!st_is_contiguous(input) || !st_is_contiguous(grad_output) ||
+      !st_is_contiguous(grad_weight)) {
+    log_error(
+        "Error: st_conv2d_backward_weight_nchw requires contiguous tensors.");
+    return false;
+  }
+
+  StConv2dParams local = st_conv2d_default_params();
+  if (params) {
+    local = *params;
+  }
+
+  const size_t n = input->shape[0];
+  const size_t c_in = input->shape[1];
+  const size_t h = input->shape[2];
+  const size_t w = input->shape[3];
+
+  const size_t c_out = grad_output->shape[1];
+  const size_t out_h = grad_output->shape[2];
+  const size_t out_w = grad_output->shape[3];
+
+  if (grad_weight->shape[0] != c_out || grad_weight->shape[1] != c_in) {
+    log_error(
+        "Error: st_conv2d_backward_weight_nchw grad_weight shape mismatch.");
+    return false;
+  }
+
+  const size_t k_h = grad_weight->shape[2];
+  const size_t k_w = grad_weight->shape[3];
+
+  const size_t stride_h = local.stride_h;
+  const size_t stride_w = local.stride_w;
+  const size_t pad_h = local.pad_h;
+  const size_t pad_w = local.pad_w;
+  const size_t dil_h = local.dilation_h;
+  const size_t dil_w = local.dilation_w;
+
+  /* Zero grad_weight before accumulating. */
+  memset(grad_weight->values, 0, grad_weight->numel * sizeof(float));
+
+  for (size_t ni = 0; ni < n; ++ni) {
+    for (size_t co = 0; co < c_out; ++co) {
+      for (size_t oh = 0; oh < out_h; ++oh) {
+        for (size_t ow = 0; ow < out_w; ++ow) {
+          const size_t go_idx =
+              ((ni * c_out + co) * out_h + oh) * out_w + ow;
+          const float go_val = grad_output->values[go_idx];
+
+          for (size_t ci = 0; ci < c_in; ++ci) {
+            for (size_t kh = 0; kh < k_h; ++kh) {
+              for (size_t kw = 0; kw < k_w; ++kw) {
+                const ptrdiff_t ih =
+                    (ptrdiff_t)(oh * stride_h + kh * dil_h) -
+                    (ptrdiff_t)pad_h;
+                const ptrdiff_t iw =
+                    (ptrdiff_t)(ow * stride_w + kw * dil_w) -
+                    (ptrdiff_t)pad_w;
+
+                if (ih < 0 || iw < 0 || (size_t)ih >= h ||
+                    (size_t)iw >= w) {
+                  continue;
+                }
+
+                const size_t in_idx =
+                    ((ni * c_in + ci) * h + (size_t)ih) * w + (size_t)iw;
+                const size_t gw_idx =
+                    ((co * c_in + ci) * k_h + kh) * k_w + kw;
+                grad_weight->values[gw_idx] +=
+                    go_val * input->values[in_idx];
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return true;
+}
+
+/* ---- Backward: gradient w.r.t. bias ---- */
+
+bool st_conv2d_backward_bias(const FloatTensor *grad_output,
+                             FloatTensor *grad_bias) {
+  if (!st_conv2d_is_valid_tensor(grad_output, 4)) {
+    log_error("Error: st_conv2d_backward_bias expects valid 4D grad_output.");
+    return false;
+  }
+  if (grad_bias == NULL || grad_bias->values == NULL || grad_bias->ndim != 1 ||
+      !st_is_contiguous(grad_bias)) {
+    log_error(
+        "Error: st_conv2d_backward_bias grad_bias must be contiguous 1D.");
+    return false;
+  }
+  if (!st_is_contiguous(grad_output)) {
+    log_error(
+        "Error: st_conv2d_backward_bias requires contiguous grad_output.");
+    return false;
+  }
+
+  const size_t n = grad_output->shape[0];
+  const size_t c_out = grad_output->shape[1];
+  const size_t out_h = grad_output->shape[2];
+  const size_t out_w = grad_output->shape[3];
+
+  if (grad_bias->shape[0] != c_out) {
+    log_error("Error: st_conv2d_backward_bias grad_bias shape mismatch.");
+    return false;
+  }
+
+  /* Summe über N, H, W für jeden Kanal. */
+  memset(grad_bias->values, 0, c_out * sizeof(float));
+
+  for (size_t ni = 0; ni < n; ++ni) {
+    for (size_t co = 0; co < c_out; ++co) {
+      const float *plane =
+          grad_output->values + (ni * c_out + co) * out_h * out_w;
+      float sum = 0.0f;
+      for (size_t i = 0; i < out_h * out_w; ++i) {
+        sum += plane[i];
+      }
+      grad_bias->values[co] += sum;
+    }
+  }
+
+  return true;
+}
+
 bool st_conv_set_mps_thresholds(double macs_threshold,
                                 size_t out_elems_threshold) {
   if (!isfinite(macs_threshold) || macs_threshold <= 0.0 ||

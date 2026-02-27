@@ -62,4 +62,26 @@ void st_conv_reload_mps_thresholds_from_env(void);
 // Return backend name used by the last st_conv2d_nchw call.
 const char *st_conv2d_last_backend(void);
 
+// ---- Backward passes for training ----
+
+// Gradient w.r.t. input: grad_input[N,Cin,H,W] from grad_output[N,Cout,outH,outW]
+// and weight[Cout,Cin,Kh,Kw].  grad_input must be pre-allocated and will be overwritten.
+bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
+                                  const FloatTensor *weight,
+                                  const StConv2dParams *params,
+                                  FloatTensor *grad_input);
+
+// Gradient w.r.t. weight: grad_weight[Cout,Cin,Kh,Kw] from input[N,Cin,H,W]
+// and grad_output[N,Cout,outH,outW].  grad_weight must be pre-allocated and will
+// be overwritten.
+bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
+                                    const FloatTensor *grad_output,
+                                    const StConv2dParams *params,
+                                    FloatTensor *grad_weight);
+
+// Gradient w.r.t. bias: grad_bias[Cout] = sum of grad_output over N, H, W.
+// grad_bias must be a pre-allocated 1D tensor with shape [Cout].
+bool st_conv2d_backward_bias(const FloatTensor *grad_output,
+                             FloatTensor *grad_bias);
+
 #endif  // ST_CONV_H

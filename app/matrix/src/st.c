@@ -10,6 +10,7 @@
 #include "sm.h"
 
 #include <log.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -329,4 +330,275 @@ void st_destroy(FloatTensor *tensor) {
   }
 
   free(tensor);
+}
+
+/* ---- Element-wise in-place operations ---- */
+
+bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {
+  if (a == NULL || a->values == NULL) {
+    return false;
+  }
+  if (b == NULL) {
+    return true; /* no-op */
+  }
+  if (b->values == NULL || a->numel != b->numel) {
+    log_error("Error: st_inplace_add size mismatch.");
+    return false;
+  }
+  if (!st_is_contiguous(a) || !st_is_contiguous(b)) {
+    log_error("Error: st_inplace_add requires contiguous tensors.");
+    return false;
+  }
+
+  for (size_t i = 0; i < a->numel; ++i) {
+    a->values[i] += b->values[i];
+  }
+  return true;
+}
+
+bool st_inplace_sub(FloatTensor *a, const FloatTensor *b) {
+  if (a == NULL || a->values == NULL || b == NULL || b->values == NULL) {
+    return false;
+  }
+  if (a->numel != b->numel) {
+    log_error("Error: st_inplace_sub size mismatch.");
+    return false;
+  }
+  if (!st_is_contiguous(a) || !st_is_contiguous(b)) {
+    log_error("Error: st_inplace_sub requires contiguous tensors.");
+    return false;
+  }
+
+  for (size_t i = 0; i < a->numel; ++i) {
+    a->values[i] -= b->values[i];
+  }
+  return true;
+}
+
+bool st_inplace_scale(FloatTensor *t, float scalar) {
+  if (t == NULL || t->values == NULL) {
+    return false;
+  }
+  if (!st_is_contiguous(t)) {
+    log_error("Error: st_inplace_scale requires contiguous tensor.");
+    return false;
+  }
+
+  for (size_t i = 0; i < t->numel; ++i) {
+    t->values[i] *= scalar;
+  }
+  return true;
+}
+
+bool st_inplace_elementwise_multiply(FloatTensor *a, const FloatTensor *b) {
+  if (a == NULL || a->values == NULL || b == NULL || b->values == NULL) {
+    return false;
+  }
+  if (a->numel != b->numel) {
+    log_error("Error: st_inplace_elementwise_multiply size mismatch.");
+    return false;
+  }
+  if (!st_is_contiguous(a) || !st_is_contiguous(b)) {
+    log_error(
+        "Error: st_inplace_elementwise_multiply requires contiguous tensors.");
+    return false;
+  }
+
+  for (size_t i = 0; i < a->numel; ++i) {
+    a->values[i] *= b->values[i];
+  }
+  return true;
+}
+
+bool st_fill(FloatTensor *t, float value) {
+  if (t == NULL || t->values == NULL) {
+    return false;
+  }
+  if (!st_is_contiguous(t)) {
+    log_error("Error: st_fill requires contiguous tensor.");
+    return false;
+  }
+
+  if (value == 0.0f) {
+    memset(t->values, 0, t->numel * sizeof(float));
+  } else {
+    for (size_t i = 0; i < t->numel; ++i) {
+      t->values[i] = value;
+    }
+  }
+  return true;
+}
+
+/* ---- Activation functions on tensors ---- */
+
+bool st_apply_relu(FloatTensor *t) {
+  if (t == NULL || t->values == NULL) {
+    return false;
+  }
+  if (!st_is_contiguous(t)) {
+    log_error("Error: st_apply_relu requires contiguous tensor.");
+    return false;
+  }
+
+  for (size_t i = 0; i < t->numel; ++i) {
+    if (t->values[i] < 0.0f) {
+      t->values[i] = 0.0f;
+    }
+  }
+  return true;
+}
+
+bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad) {
+  if (activation == NULL || activation->values == NULL || grad == NULL ||
+      grad->values == NULL) {
+    return false;
+  }
+  if (activation->numel != grad->numel) {
+    log_error("Error: st_apply_relu_backward size mismatch.");
+    return false;
+  }
+  if (!st_is_contiguous(activation) || !st_is_contiguous(grad)) {
+    log_error(
+        "Error: st_apply_relu_backward requires contiguous tensors.");
+    return false;
+  }
+
+  for (size_t i = 0; i < grad->numel; ++i) {
+    if (activation->values[i] <= 0.0f) {
+      grad->values[i] = 0.0f;
+    }
+  }
+  return true;
+}
+
+/* ---- Reduction: sum over axes ---- */
+
+FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
+                         size_t num_axes) {
+  if (t == NULL || t->values == NULL || axes == NULL || num_axes == 0) {
+    return NULL;
+  }
+  if (!st_is_contiguous(t)) {
+    log_error("Error: st_sum_axes requires contiguous tensor.");
+    return NULL;
+  }
+  if (num_axes > t->ndim) {
+    log_error("Error: st_sum_axes more axes than dimensions.");
+    return NULL;
+  }
+
+  /* Validate axes and build a reduction mask. */
+  bool reduce[ST_MAX_DIMS] = {false};
+  for (size_t i = 0; i < num_axes; ++i) {
+    if (axes[i] >= t->ndim) {
+      log_error("Error: st_sum_axes axis out of range.");
+      return NULL;
+    }
+    if (reduce[axes[i]]) {
+      log_error("Error: st_sum_axes duplicate axis.");
+      return NULL;
+    }
+    reduce[axes[i]] = true;
+  }
+
+  /* Compute output shape: keep non-reduced dimensions. */
+  size_t out_shape[ST_MAX_DIMS] = {0};
+  size_t out_ndim = 0;
+  for (size_t d = 0; d < t->ndim; ++d) {
+    if (!reduce[d]) {
+      out_shape[out_ndim++] = t->shape[d];
+    }
+  }
+
+  /* Edge case: all dims reduced → scalar tensor with ndim=1, shape={1}. */
+  if (out_ndim == 0) {
+    out_ndim = 1;
+    out_shape[0] = 1;
+  }
+
+  FloatTensor *result = st_create(out_ndim, out_shape);
+  if (!result) {
+    return NULL;
+  }
+
+  /* Generic N-dimensional summation via multi-index iteration. */
+  size_t indices[ST_MAX_DIMS] = {0};
+
+  for (size_t linear = 0; linear < t->numel; ++linear) {
+    /* Decompose linear index into multi-index. */
+    size_t tmp = linear;
+    for (size_t d = t->ndim; d-- > 0;) {
+      indices[d] = tmp % t->shape[d];
+      tmp /= t->shape[d];
+    }
+
+    /* Compute output linear index from non-reduced dimensions. */
+    size_t out_linear = 0;
+    size_t out_stride = 1;
+    size_t out_d = out_ndim;
+    for (size_t d = t->ndim; d-- > 0;) {
+      if (!reduce[d]) {
+        --out_d;
+        out_linear += indices[d] * out_stride;
+        out_stride *= out_shape[out_d];
+      }
+    }
+
+    result->values[out_linear] += t->values[linear];
+  }
+
+  return result;
+}
+
+/* ---- Padding ---- */
+
+FloatTensor *st_pad_nchw(const FloatTensor *input, size_t pad_h, size_t pad_w,
+                         float value) {
+  if (input == NULL || input->values == NULL || input->ndim != 4) {
+    log_error("Error: st_pad_nchw expects valid 4D tensor.");
+    return NULL;
+  }
+  if (!st_is_contiguous(input)) {
+    log_error("Error: st_pad_nchw requires contiguous tensor.");
+    return NULL;
+  }
+  if (pad_h == 0 && pad_w == 0) {
+    return st_clone(input);
+  }
+
+  const size_t n = input->shape[0];
+  const size_t c = input->shape[1];
+  const size_t h = input->shape[2];
+  const size_t w = input->shape[3];
+
+  const size_t new_h = h + 2 * pad_h;
+  const size_t new_w = w + 2 * pad_w;
+
+  size_t out_shape[4] = {n, c, new_h, new_w};
+  FloatTensor *result = st_create(4, out_shape);
+  if (!result) {
+    return NULL;
+  }
+
+  /* Fill with padding value if non-zero (st_create already zeroed). */
+  if (value != 0.0f) {
+    for (size_t i = 0; i < result->numel; ++i) {
+      result->values[i] = value;
+    }
+  }
+
+  /* Copy input data into the padded region. */
+  for (size_t ni = 0; ni < n; ++ni) {
+    for (size_t ci = 0; ci < c; ++ci) {
+      for (size_t hi = 0; hi < h; ++hi) {
+        const float *src =
+            input->values + ((ni * c + ci) * h + hi) * w;
+        float *dst = result->values +
+                     ((ni * c + ci) * new_h + (hi + pad_h)) * new_w + pad_w;
+        memcpy(dst, src, w * sizeof(float));
+      }
+    }
+  }
+
+  return result;
 }
