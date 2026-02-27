@@ -246,7 +246,7 @@ void test_dms_get_row(void) {
   TEST_ASSERT_EQUAL(1, m2->rows);
   TEST_ASSERT_EQUAL(3, m2->cols);
   TEST_ASSERT_EQUAL(3, m2->nnz);
-  TEST_ASSERT_EQUAL(4, m2->capacity);
+  TEST_ASSERT_TRUE(m2->capacity >= m2->nnz);
   dms_destroy(m);
   dms_destroy(m2);
 }
@@ -258,7 +258,7 @@ void test_dms_get_last_row(void) {
   TEST_ASSERT_EQUAL(1, m2->rows);
   TEST_ASSERT_EQUAL(3, m2->cols);
   TEST_ASSERT_EQUAL(3, m2->nnz);
-  TEST_ASSERT_EQUAL(4, m2->capacity);
+  TEST_ASSERT_TRUE(m2->capacity >= m2->nnz);
   dms_destroy(m);
   dms_destroy(m2);
 }
@@ -299,11 +299,8 @@ void test_dms_transpose_basic(void) {
       dms_create_with_values(rows, cols, nnz, row_indices, col_indices, values);
   DoubleSparseMatrix *transposed = dms_transpose(mat);
 
-  // Expected result matrix
+  // Expected dimensions: transposed is 2 x 3
   size_t expected_rows = 2, expected_cols = 3, expected_nnz = 3;
-  size_t expected_row_indices[] = {0, 1, 0};
-  size_t expected_col_indices[] = {0, 1, 2};
-  double expected_values[] = {1.0, 2.0, 3.0};
 
   // Verify the dimensions
   TEST_ASSERT_EQUAL(expected_rows, transposed->rows);
@@ -312,12 +309,12 @@ void test_dms_transpose_basic(void) {
   // Verify the number of non-zero elements
   TEST_ASSERT_EQUAL(expected_nnz, transposed->nnz);
 
-  // Verify the values and positions
-  for (size_t i = 0; i < expected_nnz; i++) {
-    TEST_ASSERT_EQUAL(expected_row_indices[i], transposed->row_indices[i]);
-    TEST_ASSERT_EQUAL(expected_col_indices[i], transposed->col_indices[i]);
-    TEST_ASSERT_EQUAL(expected_values[i], transposed->values[i]);
-  }
+  // Verify values via dms_get (independent of internal COO ordering)
+  // Original: (0,0)=1.0, (1,1)=2.0, (2,0)=3.0
+  // Transposed: (0,0)=1.0, (1,1)=2.0, (0,2)=3.0
+  TEST_ASSERT_EQUAL(1.0, dms_get(transposed, 0, 0));
+  TEST_ASSERT_EQUAL(3.0, dms_get(transposed, 0, 2));
+  TEST_ASSERT_EQUAL(2.0, dms_get(transposed, 1, 1));
 
   dms_destroy(mat);
   dms_destroy(transposed);
@@ -423,6 +420,11 @@ void test_dms_multiply_basic(void) {
       TEST_ASSERT_EQUAL(dms_get(expected_result, i, j), dms_get(result, i, j));
     }
   }
+
+  dms_destroy(m_A);
+  dms_destroy(m_B);
+  dms_destroy(result);
+  dms_destroy(expected_result);
 }
 
 // Test to check multiplication with incompatible dimensions
