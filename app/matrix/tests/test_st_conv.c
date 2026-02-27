@@ -400,3 +400,175 @@ void test_st_conv_mps_thresholds_should_reject_invalid_values(void) {
   TEST_ASSERT_TRUE(macs > 0.0);
   TEST_ASSERT_EQUAL_size_t(12345u, out_elems);
 }
+
+/* ---- Tests for 1x1 convolution fast-path ---- */
+
+void test_st_conv2d_1x1_gemm_should_match_reference(void) {
+  /* 1x1 conv: [1, 3, 4, 4] * [2, 3, 1, 1] → [1, 2, 4, 4] */
+  FloatTensor *input = create_tensor_4d(1, 3, 4, 4);
+  FloatTensor *weight = create_tensor_4d(2, 3, 1, 1);
+  FloatTensor *out_ref = create_tensor_4d(1, 2, 4, 4);
+  FloatTensor *out_gemm = create_tensor_4d(1, 2, 4, 4);
+  size_t bias_shape[1] = {2};
+  FloatTensor *bias = st_create(1, bias_shape);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(out_ref);
+  TEST_ASSERT_NOT_NULL(out_gemm);
+  TEST_ASSERT_NOT_NULL(bias);
+
+  /* Fill with simple pattern */
+  for (size_t i = 0; i < 3 * 4 * 4; ++i) {
+    input->values[i] = (float)(i + 1) * 0.1f;
+  }
+  for (size_t i = 0; i < 2 * 3; ++i) {
+    weight->values[i] = (float)(i) * 0.5f - 1.0f;
+  }
+  bias->values[0] = 0.5f;
+  bias->values[1] = -0.5f;
+
+  StConv2dParams p_ref = st_conv2d_default_params();
+  p_ref.backend = ST_CONV_BACKEND_REFERENCE;
+  bool ok = st_conv2d_nchw(input, weight, bias, &p_ref, out_ref);
+  TEST_ASSERT_TRUE(ok);
+
+  StConv2dParams p_gemm = st_conv2d_default_params();
+  p_gemm.backend = ST_CONV_BACKEND_GEMM;
+  ok = st_conv2d_nchw(input, weight, bias, &p_gemm, out_gemm);
+  TEST_ASSERT_TRUE(ok);
+
+  /* The backend should report gemm_1x1 */
+  const char *backend = st_conv2d_last_backend();
+  TEST_ASSERT_NOT_NULL(backend);
+
+  /* Compare all output elements */
+  for (size_t i = 0; i < 2 * 4 * 4; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, out_ref->values[i], out_gemm->values[i]);
+  }
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(out_ref);
+  st_destroy(out_gemm);
+  st_destroy(bias);
+}
+
+void test_st_conv2d_1x1_auto_should_dispatch_correctly(void) {
+  /* 1x1 conv via AUTO backend → should pick gemm_1x1 */
+  FloatTensor *input = create_tensor_4d(1, 2, 3, 3);
+  FloatTensor *weight = create_tensor_4d(2, 2, 1, 1);
+  FloatTensor *output = create_tensor_4d(1, 2, 3, 3);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(output);
+
+  for (size_t i = 0; i < 2 * 3 * 3; ++i) {
+    input->values[i] = (float)i;
+  }
+  /* identity-ish weights */
+  weight->values[0] = 1.0f;
+  weight->values[1] = 0.0f;
+  weight->values[2] = 0.0f;
+  weight->values[3] = 1.0f;
+
+  StConv2dParams p = st_conv2d_default_params();
+  /* AUTO is default */
+
+  bool ok = st_conv2d_nchw(input, weight, NULL, &p, output);
+  TEST_ASSERT_TRUE(ok);
+
+  /* With identity weights, output should equal input */
+  for (size_t i = 0; i < 2 * 3 * 3; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, input->values[i], output->values[i]);
+  }
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(output);
+}
+
+/* ---- Test with padding (exercises border/inner split in cpu_opt) ---- */
+
+void test_st_conv2d_cpu_opt_with_padding_should_match_reference(void) {
+  /* 3x3 conv with pad=1 on 4x4 input → 4x4 output */
+  FloatTensor *input = create_tensor_4d(1, 1, 4, 4);
+  FloatTensor *weight = create_tensor_4d(1, 1, 3, 3);
+  FloatTensor *out_ref = create_tensor_4d(1, 1, 4, 4);
+  FloatTensor *out_opt = create_tensor_4d(1, 1, 4, 4);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(out_ref);
+  TEST_ASSERT_NOT_NULL(out_opt);
+
+  for (size_t i = 0; i < 16; ++i) {
+    input->values[i] = (float)(i + 1);
+  }
+  for (size_t i = 0; i < 9; ++i) {
+    weight->values[i] = (i == 4) ? 1.0f : 0.0f; /* center-only kernel */
+  }
+
+  StConv2dParams p = st_conv2d_default_params();
+  p.pad_h = 1;
+  p.pad_w = 1;
+
+  p.backend = ST_CONV_BACKEND_REFERENCE;
+  bool ok = st_conv2d_nchw(input, weight, NULL, &p, out_ref);
+  TEST_ASSERT_TRUE(ok);
+
+  p.backend = ST_CONV_BACKEND_CPU_OPT;
+  ok = st_conv2d_nchw(input, weight, NULL, &p, out_opt);
+  TEST_ASSERT_TRUE(ok);
+
+  for (size_t i = 0; i < 16; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, out_ref->values[i], out_opt->values[i]);
+  }
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(out_ref);
+  st_destroy(out_opt);
+}
+
+/* ---- Test with larger tensor (exercises AUTO dispatch paths) ---- */
+
+void test_st_conv2d_auto_larger_tensor_all_backends_agree(void) {
+  /* Batch=2, C_in=3, 8x8 input, 3x3 kernel, C_out=4 → 6x6 output */
+  FloatTensor *input = create_tensor_4d(2, 3, 8, 8);
+  FloatTensor *weight = create_tensor_4d(4, 3, 3, 3);
+  FloatTensor *out_ref = create_tensor_4d(2, 4, 6, 6);
+  FloatTensor *out_auto = create_tensor_4d(2, 4, 6, 6);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(out_ref);
+  TEST_ASSERT_NOT_NULL(out_auto);
+
+  for (size_t i = 0; i < 2 * 3 * 8 * 8; ++i) {
+    input->values[i] = (float)(i % 17) * 0.1f - 0.8f;
+  }
+  for (size_t i = 0; i < 4 * 3 * 3 * 3; ++i) {
+    weight->values[i] = (float)(i % 11) * 0.2f - 1.0f;
+  }
+
+  StConv2dParams p = st_conv2d_default_params();
+  p.backend = ST_CONV_BACKEND_REFERENCE;
+  bool ok = st_conv2d_nchw(input, weight, NULL, &p, out_ref);
+  TEST_ASSERT_TRUE(ok);
+
+  p.backend = ST_CONV_BACKEND_AUTO;
+  ok = st_conv2d_nchw(input, weight, NULL, &p, out_auto);
+  TEST_ASSERT_TRUE(ok);
+
+  const size_t total = 2 * 4 * 6 * 6;
+  for (size_t i = 0; i < total; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, out_ref->values[i], out_auto->values[i]);
+  }
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(out_ref);
+  st_destroy(out_auto);
+}

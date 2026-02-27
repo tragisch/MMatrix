@@ -16,12 +16,14 @@
 #include <errno.h>
 #include <math.h>
 #include <omp.h>
+#include <stdatomic.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
-static const char *g_last_backend = "none";
+/* Thread-local: each thread records its own last-used backend. */
+static _Thread_local const char *g_last_backend = "none";
 
 static const double ST_CONV_MPS_MACS_THRESHOLD_DEFAULT = 2.0e8;
 static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 1000000u;
@@ -29,7 +31,8 @@ static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 1000000u;
 static double g_mps_macs_threshold = ST_CONV_MPS_MACS_THRESHOLD_DEFAULT;
 static size_t g_mps_out_elems_threshold =
     ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT;
-static bool g_mps_thresholds_initialized = false;
+/* Atomic flag: safe concurrent read of the "already initialised" state. */
+static atomic_bool g_mps_thresholds_initialized = false;
 
 bool st_conv_set_mps_thresholds(double macs_threshold,
                 size_t out_elems_threshold);
@@ -76,10 +79,31 @@ static bool st_parse_positive_size_t(const char *text, size_t *out_value) {
 }
 
 static void st_conv_init_mps_thresholds_once(void) {
-  if (g_mps_thresholds_initialized) {
+  if (atomic_load_explicit(&g_mps_thresholds_initialized,
+                          memory_order_acquire)) {
     return;
   }
   st_conv_reload_mps_thresholds_from_env();
+}
+
+/* ---- Overflow-safe arithmetic helpers ---- */
+
+/** Multiply two size_t values; return false on overflow. */
+static inline bool st_safe_mul(size_t a, size_t b, size_t *out) {
+  if (a != 0 && b > SIZE_MAX / a) {
+    return false;
+  }
+  *out = a * b;
+  return true;
+}
+
+/** Multiply three size_t values; return false on overflow. */
+static inline bool st_safe_mul3(size_t a, size_t b, size_t c, size_t *out) {
+  size_t ab;
+  if (!st_safe_mul(a, b, &ab)) {
+    return false;
+  }
+  return st_safe_mul(ab, c, out);
 }
 
 static bool st_conv2d_is_valid_tensor(const FloatTensor *t, size_t ndim) {
@@ -177,18 +201,62 @@ static bool st_conv2d_cpu_opt_nchw(const FloatTensor *input,
   const size_t dil_h = params->dilation_h;
   const size_t dil_w = params->dilation_w;
 
-#pragma omp parallel for collapse(2) if (n * c_out >= 4)
+  /* Pre-compute safe ow range where all kw taps land inside the input
+   * (requires dil_w == 1).  Left/right borders need per-pixel checks. */
+  size_t ow_safe_lo = 0;
+  size_t ow_safe_hi = 0;
+  if (dil_w == 1) {
+    ow_safe_lo = (pad_w > 0) ? (pad_w + stride_w - 1) / stride_w : 0;
+    if (w + pad_w >= k_w) {
+      ow_safe_hi = (w + pad_w - k_w) / stride_w + 1;
+      if (ow_safe_hi > out_w) {
+        ow_safe_hi = out_w;
+      }
+    }
+    if (ow_safe_lo > ow_safe_hi) {
+      ow_safe_hi = ow_safe_lo;
+    }
+  }
+
+#pragma omp parallel for collapse(3) if (n * c_out * out_h >= 4)
   for (size_t ni = 0; ni < n; ++ni) {
     for (size_t co = 0; co < c_out; ++co) {
       for (size_t oh = 0; oh < out_h; ++oh) {
-        for (size_t ow = 0; ow < out_w; ++ow) {
+        /* --- Left border (full bounds checks) --- */
+        for (size_t ow = 0; ow < ow_safe_lo; ++ow) {
           float sum = 0.0f;
-          const ptrdiff_t in_w_base_common =
+          for (size_t ci = 0; ci < c_in; ++ci) {
+            for (size_t kh = 0; kh < k_h; ++kh) {
+              const ptrdiff_t in_h_base =
+                  (ptrdiff_t)(oh * stride_h + kh * dil_h) - (ptrdiff_t)pad_h;
+              if (in_h_base < 0 || (size_t)in_h_base >= h) {
+                continue;
+              }
+              const size_t in_row_off =
+                  ((ni * c_in + ci) * h + (size_t)in_h_base) * w;
+              const size_t w_off = ((co * c_in + ci) * k_h + kh) * k_w;
+              for (size_t kw = 0; kw < k_w; ++kw) {
+                const ptrdiff_t in_w_cur =
+                    (ptrdiff_t)(ow * stride_w + kw * dil_w) - (ptrdiff_t)pad_w;
+                if (in_w_cur < 0 || (size_t)in_w_cur >= w) {
+                  continue;
+                }
+                sum += input->values[in_row_off + (size_t)in_w_cur] *
+                       weight->values[w_off + kw];
+              }
+            }
+          }
+          if (bias) {
+            sum += bias->values[co];
+          }
+          output->values[((ni * c_out + co) * out_h + oh) * out_w + ow] = sum;
+        }
+
+        /* --- Inner region (kw taps guaranteed in-bounds, dil_w==1) --- */
+        for (size_t ow = ow_safe_lo; ow < ow_safe_hi; ++ow) {
+          float sum = 0.0f;
+          const ptrdiff_t in_w_base =
               (ptrdiff_t)(ow * stride_w) - (ptrdiff_t)pad_w;
-          const bool can_use_fast_kw =
-              (dil_w == 1) &&
-              (in_w_base_common >= 0) &&
-              ((size_t)in_w_base_common + k_w <= w);
 
           for (size_t ci = 0; ci < c_in; ++ci) {
             for (size_t kh = 0; kh < k_h; ++kh) {
@@ -201,52 +269,63 @@ static bool st_conv2d_cpu_opt_nchw(const FloatTensor *input,
               const size_t in_row_off =
                   ((ni * c_in + ci) * h + (size_t)in_h_base) * w;
               const size_t w_off = ((co * c_in + ci) * k_h + kh) * k_w;
-
-              if (can_use_fast_kw) {
-                const float *in_ptr =
-                    &input->values[in_row_off + (size_t)in_w_base_common];
-                const float *w_ptr = &weight->values[w_off];
+              const float *in_ptr =
+                  &input->values[in_row_off + (size_t)in_w_base];
+              const float *w_ptr = &weight->values[w_off];
 
 #ifdef __ARM_NEON
-                float32x4_t vacc = vdupq_n_f32(0.0f);
-                size_t kw = 0;
-                for (; kw + 4 <= k_w; kw += 4) {
-                  const float32x4_t vin = vld1q_f32(in_ptr + kw);
-                  const float32x4_t vw = vld1q_f32(w_ptr + kw);
-                  vacc = vmlaq_f32(vacc, vin, vw);
-                }
-                sum += vaddvq_f32(vacc);
-                for (; kw < k_w; ++kw) {
-                  sum += in_ptr[kw] * w_ptr[kw];
-                }
-#else
-                for (size_t kw = 0; kw < k_w; ++kw) {
-                  sum += in_ptr[kw] * w_ptr[kw];
-                }
-#endif
-              } else {
-                for (size_t kw = 0; kw < k_w; ++kw) {
-                  const ptrdiff_t in_w_cur =
-                      in_w_base_common + (ptrdiff_t)(kw * dil_w);
-
-                  if (in_w_cur < 0 || (size_t)in_w_cur >= w) {
-                    continue;
-                  }
-
-                  const size_t in_idx = in_row_off + (size_t)in_w_cur;
-                  const size_t w_idx = w_off + kw;
-                  sum += input->values[in_idx] * weight->values[w_idx];
-                }
+              float32x4_t vacc = vdupq_n_f32(0.0f);
+              size_t kw = 0;
+              for (; kw + 4 <= k_w; kw += 4) {
+                const float32x4_t vin = vld1q_f32(in_ptr + kw);
+                const float32x4_t vw = vld1q_f32(w_ptr + kw);
+                vacc = vmlaq_f32(vacc, vin, vw);
               }
+              sum += vaddvq_f32(vacc);
+              for (; kw < k_w; ++kw) {
+                sum += in_ptr[kw] * w_ptr[kw];
+              }
+#else
+              for (size_t kw = 0; kw < k_w; ++kw) {
+                sum += in_ptr[kw] * w_ptr[kw];
+              }
+#endif
             }
           }
-
           if (bias) {
             sum += bias->values[co];
           }
+          output->values[((ni * c_out + co) * out_h + oh) * out_w + ow] = sum;
+        }
 
-          const size_t out_idx = ((ni * c_out + co) * out_h + oh) * out_w + ow;
-          output->values[out_idx] = sum;
+        /* --- Right border (full bounds checks) --- */
+        for (size_t ow = ow_safe_hi; ow < out_w; ++ow) {
+          float sum = 0.0f;
+          for (size_t ci = 0; ci < c_in; ++ci) {
+            for (size_t kh = 0; kh < k_h; ++kh) {
+              const ptrdiff_t in_h_base =
+                  (ptrdiff_t)(oh * stride_h + kh * dil_h) - (ptrdiff_t)pad_h;
+              if (in_h_base < 0 || (size_t)in_h_base >= h) {
+                continue;
+              }
+              const size_t in_row_off =
+                  ((ni * c_in + ci) * h + (size_t)in_h_base) * w;
+              const size_t w_off = ((co * c_in + ci) * k_h + kh) * k_w;
+              for (size_t kw = 0; kw < k_w; ++kw) {
+                const ptrdiff_t in_w_cur =
+                    (ptrdiff_t)(ow * stride_w + kw * dil_w) - (ptrdiff_t)pad_w;
+                if (in_w_cur < 0 || (size_t)in_w_cur >= w) {
+                  continue;
+                }
+                sum += input->values[in_row_off + (size_t)in_w_cur] *
+                       weight->values[w_off + kw];
+              }
+            }
+          }
+          if (bias) {
+            sum += bias->values[co];
+          }
+          output->values[((ni * c_out + co) * out_h + oh) * out_w + ow] = sum;
         }
       }
     }
@@ -255,6 +334,65 @@ static bool st_conv2d_cpu_opt_nchw(const FloatTensor *input,
   g_last_backend = "cpu_opt";
   return true;
 }
+
+/* ---- 1x1 fast-path: direct GEMM without im2col ---- */
+
+static inline bool st_conv2d_is_1x1_no_pad(const StConv2dParams *params,
+                                            size_t k_h, size_t k_w) {
+  return k_h == 1 && k_w == 1 && params->pad_h == 0 && params->pad_w == 0 &&
+         params->dilation_h == 1 && params->dilation_w == 1 &&
+         params->stride_h == 1 && params->stride_w == 1;
+}
+
+static bool st_conv2d_gemm_1x1_nchw(const FloatTensor *input,
+                                     const FloatTensor *weight,
+                                     const FloatTensor *bias,
+                                     FloatTensor *output) {
+  const size_t n = input->shape[0];
+  const size_t c_in = input->shape[1];
+  const size_t h = input->shape[2];
+  const size_t w = input->shape[3];
+  const size_t c_out = weight->shape[0];
+  const size_t spatial = h * w;
+
+  /* Weight is [C_out, C_in, 1, 1] — row-major [C_out, C_in]. */
+  FloatMatrix w_view = {
+      .rows = c_out, .cols = c_in, .capacity = 0, .values = weight->values};
+
+  for (size_t ni = 0; ni < n; ++ni) {
+    /* input_n  : [C_in,  H*W]  row-major view */
+    FloatMatrix in_view = {.rows = c_in,
+                           .cols = spatial,
+                           .capacity = 0,
+                           .values = input->values + ni * c_in * spatial};
+    /* output_n : [C_out, H*W]  row-major view — matches NCHW layout */
+    FloatMatrix out_view = {.rows = c_out,
+                            .cols = spatial,
+                            .capacity = 0,
+                            .values = output->values + ni * c_out * spatial};
+
+    /* output_n = weight × input_n  (no im2col needed for 1x1) */
+    if (!sm_gemm(&out_view, 1.0f, &w_view, SM_NO_TRANSPOSE, &in_view,
+                 SM_NO_TRANSPOSE, 0.0f)) {
+      return false;
+    }
+
+    if (bias) {
+      for (size_t co = 0; co < c_out; ++co) {
+        const float b = bias->values[co];
+        float *row = output->values + ni * c_out * spatial + co * spatial;
+        for (size_t i = 0; i < spatial; ++i) {
+          row[i] += b;
+        }
+      }
+    }
+  }
+
+  g_last_backend = "gemm_1x1";
+  return true;
+}
+
+/* ---- General GEMM path (im2col) ---- */
 
 static bool st_conv2d_gemm_nchw(const FloatTensor *input,
                                 const FloatTensor *weight,
@@ -273,6 +411,11 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
   const size_t out_h = output->shape[2];
   const size_t out_w = output->shape[3];
 
+  /* 1x1 fast-path: skip im2col entirely. */
+  if (st_conv2d_is_1x1_no_pad(params, k_h, k_w)) {
+    return st_conv2d_gemm_1x1_nchw(input, weight, bias, output);
+  }
+
   const size_t stride_h = params->stride_h;
   const size_t stride_w = params->stride_w;
   const size_t pad_h = params->pad_h;
@@ -280,8 +423,13 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
   const size_t dil_h = params->dilation_h;
   const size_t dil_w = params->dilation_w;
 
-  const size_t patch_size = c_in * k_h * k_w;
-  const size_t out_spatial = out_h * out_w;
+  size_t patch_size = 0;
+  size_t out_spatial = 0;
+  if (!st_safe_mul3(c_in, k_h, k_w, &patch_size) ||
+      !st_safe_mul(out_h, out_w, &out_spatial)) {
+    log_error("Error: st_conv2d_gemm_nchw size overflow in im2col dims.");
+    return false;
+  }
 
   FloatMatrix *w_mat = sm_create(patch_size, c_out);
   FloatMatrix *col = sm_create(out_spatial, patch_size);
@@ -306,29 +454,30 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
   }
 
   for (size_t ni = 0; ni < n; ++ni) {
-    for (size_t oh = 0; oh < out_h; ++oh) {
-      for (size_t ow = 0; ow < out_w; ++ow) {
-        const size_t out_row = oh * out_w + ow;
+    /* im2col: build column matrix — parallelise over output rows. */
+#pragma omp parallel for if (out_spatial >= 256)
+    for (size_t out_row = 0; out_row < out_spatial; ++out_row) {
+      const size_t oh = out_row / out_w;
+      const size_t ow = out_row % out_w;
 
-        for (size_t ci = 0; ci < c_in; ++ci) {
-          for (size_t kh = 0; kh < k_h; ++kh) {
-            for (size_t kw = 0; kw < k_w; ++kw) {
-              const ptrdiff_t in_h =
-                  (ptrdiff_t)(oh * stride_h + kh * dil_h) - (ptrdiff_t)pad_h;
-              const ptrdiff_t in_w =
-                  (ptrdiff_t)(ow * stride_w + kw * dil_w) - (ptrdiff_t)pad_w;
-              const size_t col_idx = ((ci * k_h) + kh) * k_w + kw;
+      for (size_t ci = 0; ci < c_in; ++ci) {
+        for (size_t kh = 0; kh < k_h; ++kh) {
+          for (size_t kw = 0; kw < k_w; ++kw) {
+            const ptrdiff_t in_h =
+                (ptrdiff_t)(oh * stride_h + kh * dil_h) - (ptrdiff_t)pad_h;
+            const ptrdiff_t in_w =
+                (ptrdiff_t)(ow * stride_w + kw * dil_w) - (ptrdiff_t)pad_w;
+            const size_t col_idx = ((ci * k_h) + kh) * k_w + kw;
 
-              float v = 0.0f;
-              if (in_h >= 0 && in_w >= 0 && (size_t)in_h < h &&
-                  (size_t)in_w < w) {
-                const size_t in_idx =
-                    ((ni * c_in + ci) * h + (size_t)in_h) * w + (size_t)in_w;
-                v = input->values[in_idx];
-              }
-
-              col->values[out_row * patch_size + col_idx] = v;
+            float v = 0.0f;
+            if (in_h >= 0 && in_w >= 0 && (size_t)in_h < h &&
+                (size_t)in_w < w) {
+              const size_t in_idx =
+                  ((ni * c_in + ci) * h + (size_t)in_h) * w + (size_t)in_w;
+              v = input->values[in_idx];
             }
+
+            col->values[out_row * patch_size + col_idx] = v;
           }
         }
       }
@@ -395,7 +544,7 @@ static bool st_conv2d_should_use_cpu_opt(size_t n, size_t c_in, size_t c_out,
                                          size_t k_h, size_t k_w) {
   const size_t out_elems = n * c_out * out_h * out_w;
   const size_t kernel_volume = c_in * k_h * k_w;
-  return out_elems >= 16384 && kernel_volume >= 27;
+  return out_elems >= 4096 && kernel_volume >= 9;
 }
 
 static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
@@ -404,7 +553,15 @@ static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
   const double macs = (double)n * (double)c_out * (double)out_h *
                       (double)out_w * (double)c_in * (double)k_h *
                       (double)k_w;
-  return macs >= 8.0e7;
+  /* When BLAS is available, sm_gemm delegates to cblas_sgemm which is
+   * highly optimised — a lower threshold pays off.  Without BLAS the
+   * naive OMP fallback makes im2col + GEMM less attractive. */
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+  const double threshold = 1.0e6;
+#else
+  const double threshold = 2.0e8;
+#endif
+  return macs >= threshold;
 }
 
 static bool st_conv2d_should_use_mps(size_t n, size_t c_in, size_t c_out,
@@ -465,8 +622,14 @@ bool st_conv2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
     return false;
   }
 
-  const size_t eff_h = params->dilation_h * (kernel_h - 1) + 1;
-  const size_t eff_w = params->dilation_w * (kernel_w - 1) + 1;
+  /* Overflow-safe effective kernel size: dil * (k-1) + 1 */
+  size_t dil_km1_h, dil_km1_w;
+  if (!st_safe_mul(params->dilation_h, kernel_h - 1, &dil_km1_h) ||
+      !st_safe_mul(params->dilation_w, kernel_w - 1, &dil_km1_w)) {
+    return false;
+  }
+  const size_t eff_h = dil_km1_h + 1;
+  const size_t eff_w = dil_km1_w + 1;
 
   if (in_h + 2 * params->pad_h < eff_h || in_w + 2 * params->pad_w < eff_w) {
     return false;
@@ -595,6 +758,14 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
 
     case ST_CONV_BACKEND_AUTO:
     default:
+      /* 1x1 convolutions: always prefer direct GEMM (zero im2col cost). */
+      if (st_conv2d_is_1x1_no_pad(&local, k_h, k_w)) {
+        ok = st_conv2d_gemm_1x1_nchw(input, weight, bias, output);
+        if (ok) {
+          return true;
+        }
+      }
+
       if (st_conv2d_should_use_mps(n, c_in, c_out, out_h, out_w, k_h, k_w)) {
         ok = st_conv2d_mps_nchw(input, weight, bias, &local, output);
         if (ok) {
@@ -644,7 +815,8 @@ bool st_conv_set_mps_thresholds(double macs_threshold,
 
   g_mps_macs_threshold = macs_threshold;
   g_mps_out_elems_threshold = out_elems_threshold;
-  g_mps_thresholds_initialized = true;
+  atomic_store_explicit(&g_mps_thresholds_initialized, true,
+                        memory_order_release);
   return true;
 }
 
@@ -684,5 +856,6 @@ void st_conv_reload_mps_thresholds_from_env(void) {
     }
   }
 
-  g_mps_thresholds_initialized = true;
+  atomic_store_explicit(&g_mps_thresholds_initialized, true,
+                        memory_order_release);
 }
