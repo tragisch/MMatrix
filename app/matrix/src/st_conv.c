@@ -9,6 +9,10 @@
 #include "st_conv.h"
 #include "sm.h"
 
+#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#include "sm_mps.h"
+#endif
+
 #include <log.h>
 #ifdef __ARM_NEON
 #include <arm_neon.h>
@@ -521,14 +525,16 @@ static bool st_conv2d_mps_nchw(const FloatTensor *input,
                                const StConv2dParams *params,
                                FloatTensor *output) {
 #if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
-  // Placeholder for next iteration: explicit MPS conv2d kernel binding.
-  // Keep stable behavior by returning false until kernel is wired.
-  (void)input;
-  (void)weight;
-  (void)bias;
-  (void)params;
-  (void)output;
-  return false;
+  return mps_conv2d_nchw(
+      input->values, input->shape[0],
+      input->shape[1], input->shape[2], input->shape[3],
+      weight->values, weight->shape[0],
+      weight->shape[2], weight->shape[3],
+      bias ? bias->values : NULL,
+      params->stride_h, params->stride_w,
+      params->pad_h, params->pad_w,
+      params->dilation_h, params->dilation_w,
+      output->values, output->shape[2], output->shape[3]);
 #else
   (void)input;
   (void)weight;

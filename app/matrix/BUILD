@@ -138,6 +138,7 @@ mps_linkopts = select({
         "-framework Accelerate",
         "-framework Metal",
         "-framework MetalPerformanceShaders",
+        "-framework MetalPerformanceShadersGraph",
         "-lc++abi",
     ],
     "//conditions:default": [],

@@ -146,3 +146,141 @@ bool mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,
   return mps_matrix_multiply_ex(mat1, rows1, cols1, false, mat2, rows2, cols2,
                                 false, 1.0f, 0.0f, result, rows1, cols2);
 }
+
+/* ------------------------------------------------------------------ */
+/*  MPS Conv2D via MPSGraph (macOS 11+)                               */
+/* ------------------------------------------------------------------ */
+
+bool mps_conv2d_nchw(const float *input, size_t n,
+                     size_t c_in, size_t h_in, size_t w_in,
+                     const float *weight, size_t c_out,
+                     size_t k_h, size_t k_w, const float *bias,
+                     size_t stride_h, size_t stride_w,
+                     size_t pad_h, size_t pad_w,
+                     size_t dil_h, size_t dil_w,
+                     float *output, size_t h_out, size_t w_out) {
+  if (!input || !weight || !output) {
+    return false;
+  }
+  if (n == 0 || c_in == 0 || c_out == 0 || h_in == 0 || w_in == 0) {
+    return false;
+  }
+  if (k_h == 0 || k_w == 0 || h_out == 0 || w_out == 0) {
+    return false;
+  }
+
+  @autoreleasepool {
+
+  id<MTLDevice> device = _mps_shared_device();
+  if (!device) {
+    return false;
+  }
+
+  id<MTLCommandQueue> queue = _mps_shared_command_queue();
+  if (!queue) {
+    return false;
+  }
+
+  /* ---- Build the MPSGraph ---- */
+  MPSGraph *graph = [[MPSGraph alloc] init];
+
+  MPSShape *inShape = @[ @(n), @(c_in), @(h_in), @(w_in) ];
+  MPSShape *wShape  = @[ @(c_out), @(c_in), @(k_h), @(k_w) ];
+
+  MPSGraphTensor *inT = [graph placeholderWithShape:inShape
+                                           dataType:MPSDataTypeFloat32
+                                               name:@"input"];
+  MPSGraphTensor *wT  = [graph placeholderWithShape:wShape
+                                           dataType:MPSDataTypeFloat32
+                                               name:@"weight"];
+
+  MPSGraphConvolution2DOpDescriptor *convDesc =
+      [MPSGraphConvolution2DOpDescriptor
+          descriptorWithStrideInX:(NSUInteger)stride_w
+                        strideInY:(NSUInteger)stride_h
+                  dilationRateInX:(NSUInteger)dil_w
+                  dilationRateInY:(NSUInteger)dil_h
+                           groups:1
+                      paddingLeft:(NSUInteger)pad_w
+                     paddingRight:(NSUInteger)pad_w
+                       paddingTop:(NSUInteger)pad_h
+                    paddingBottom:(NSUInteger)pad_h
+                     paddingStyle:MPSGraphPaddingStyleExplicit
+                       dataLayout:MPSGraphTensorNamedDataLayoutNCHW
+                    weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
+
+  MPSGraphTensor *convT = [graph convolution2DWithSourceTensor:inT
+                                                 weightsTensor:wT
+                                                    descriptor:convDesc
+                                                          name:@"conv2d"];
+
+  /* Optional bias: broadcast-add [1, C_out, 1, 1] over NCHW output. */
+  MPSGraphTensor *resultT = convT;
+  MPSGraphTensor *biasT   = nil;
+
+  if (bias) {
+    biasT   = [graph placeholderWithShape:@[ @1, @(c_out), @1, @1 ]
+                                 dataType:MPSDataTypeFloat32
+                                     name:@"bias"];
+    resultT = [graph additionWithPrimaryTensor:convT
+                               secondaryTensor:biasT
+                                          name:@"add_bias"];
+  }
+
+  /* ---- Prepare feed data ---- */
+  MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
+
+  const size_t inBytes = n * c_in * h_in * w_in * sizeof(float);
+  const size_t wBytes  = c_out * c_in * k_h * k_w * sizeof(float);
+
+  MPSGraphTensorData *inData = [[MPSGraphTensorData alloc]
+      initWithDevice:gDev
+                data:[NSData dataWithBytes:input length:inBytes]
+               shape:inShape
+            dataType:MPSDataTypeFloat32];
+
+  MPSGraphTensorData *wData = [[MPSGraphTensorData alloc]
+      initWithDevice:gDev
+                data:[NSData dataWithBytes:weight length:wBytes]
+               shape:wShape
+            dataType:MPSDataTypeFloat32];
+
+  NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feeds =
+      [NSMutableDictionary dictionaryWithCapacity:3];
+  feeds[inT] = inData;
+  feeds[wT]  = wData;
+
+  if (bias && biasT) {
+    const size_t bBytes = c_out * sizeof(float);
+    MPSGraphTensorData *bData = [[MPSGraphTensorData alloc]
+        initWithDevice:gDev
+                  data:[NSData dataWithBytes:bias length:bBytes]
+                 shape:@[ @1, @(c_out), @1, @1 ]
+              dataType:MPSDataTypeFloat32];
+    feeds[biasT] = bData;
+  }
+
+  /* ---- Run graph synchronously ---- */
+  NSDictionary<MPSGraphTensor *, MPSGraphTensorData *> *results = nil;
+
+  @try {
+    results = [graph runWithMTLCommandQueue:queue
+                                     feeds:feeds
+                             targetTensors:@[ resultT ]
+                          targetOperations:nil];
+  } @catch (NSException *exception) {
+    return false;
+  }
+
+  MPSGraphTensorData *outData = results[resultT];
+  if (!outData) {
+    return false;
+  }
+
+  /* Copy NCHW result back to caller buffer. */
+  [outData.mpsndarray readBytes:output strideBytes:nil];
+
+  return true;
+
+  } // @autoreleasepool
+}
