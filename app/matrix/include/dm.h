@@ -128,14 +128,14 @@ DoubleMatrix *dm_transpose(const DoubleMatrix *mat);
 /**************************************/
 /*        In-place Operations         */
 /**************************************/
-void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2);
-void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2);
-void dm_inplace_transpose(DoubleMatrix *mat);
-void dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar);
-void dm_inplace_gauss_elimination(DoubleMatrix *mat);
-void dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
+bool dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2);
+bool dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2);
+bool dm_inplace_transpose(DoubleMatrix *mat);
+bool dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar);
+bool dm_inplace_gauss_elimination(DoubleMatrix *mat);
+bool dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
                                      const DoubleMatrix *mat2);
-void dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2);
+bool dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2);
 
 /**************************************/
 /*         Matrix Properties          */

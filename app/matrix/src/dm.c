@@ -52,7 +52,12 @@ static bool dm_seed_initialized = false;
 /*       Private Functions     */
 /*******************************/
 
-void dm_inplace_gauss_elimination(DoubleMatrix *mat) {
+bool dm_inplace_gauss_elimination(DoubleMatrix *mat) {
+  if (!mat || !mat->values || mat->rows == 0 || mat->cols == 0) {
+    log_error("Error: invalid matrix for Gaussian elimination.\n");
+    return false;
+  }
+
   size_t rows = mat->rows;
   size_t cols = mat->cols;
 
@@ -96,6 +101,8 @@ void dm_inplace_gauss_elimination(DoubleMatrix *mat) {
       }
     }
   }
+
+  return true;
 }
 
 size_t dm_rank_euler(const DoubleMatrix *mat) {
@@ -108,7 +115,10 @@ size_t dm_rank_euler(const DoubleMatrix *mat) {
   memcpy(copy->values, mat->values, mat->rows * mat->cols * sizeof(double));
 
   // Apply Gaussian Elimination on the copy
-  dm_inplace_gauss_elimination(copy);
+  if (!dm_inplace_gauss_elimination(copy)) {
+    dm_destroy(copy);
+    return 0;
+  }
 
   // Count the number of non-zero rows in the row-echelon form
   size_t rank = 0;
@@ -374,7 +384,11 @@ DoubleMatrix *dm_multiply(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 DoubleMatrix *dm_multiply_by_number(const DoubleMatrix *mat,
                                     const double number) {
   DoubleMatrix *product = dm_clone(mat);
-  dm_inplace_multiply_by_number(product, number);
+  if (!product) return NULL;
+  if (!dm_inplace_multiply_by_number(product, number)) {
+    dm_destroy(product);
+    return NULL;
+  }
   return product;
 }
 
@@ -656,8 +670,11 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   }
 
   // Skalieren mit 1 / det
-  dm_inplace_multiply_by_number(inverse, 1 / det);
-  dm_inplace_transpose(inverse);
+  if (!dm_inplace_multiply_by_number(inverse, 1 / det) ||
+      !dm_inplace_transpose(inverse)) {
+    dm_destroy(inverse);
+    return NULL;
+  }
 
 #endif
   return inverse;
@@ -852,10 +869,15 @@ bool dm_is_equal_size(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 }
 
 // In-place operations
-void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+bool dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+  if (!mat1 || !mat2 || !mat1->values || !mat2->values) {
+    log_error("Error: invalid matrix input.\n");
+    return false;
+  }
+
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
     log_error("Error: invalid matrix dimensions.\n");
-    return;
+    return false;
   }
 
   double *a = mat1->values;
@@ -874,13 +896,20 @@ void dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] += b[i];
   }
 #endif
+
+  return true;
 }
 
 // In-place difference
-void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+bool dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+  if (!mat1 || !mat2 || !mat1->values || !mat2->values) {
+    log_error("Error: invalid matrix input.\n");
+    return false;
+  }
+
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
     log_error("Error: invalid matrix dimensions.\n");
-    return;
+    return false;
   }
 
   double *a = mat1->values;
@@ -899,13 +928,15 @@ void dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] -= b[i];
   }
 #endif
+
+  return true;
 }
 
 // In-place transpose
-void dm_inplace_transpose(DoubleMatrix *mat) {
+bool dm_inplace_transpose(DoubleMatrix *mat) {
   if (mat == NULL || mat->values == NULL || mat->rows != mat->cols) {
     log_error("Error: In-place transposition requires a square matrix.");
-    return;
+    return false;
   }
 
   double *A = mat->values;
@@ -919,9 +950,16 @@ void dm_inplace_transpose(DoubleMatrix *mat) {
       A[j * n + i] = temp;
     }
   }
+
+  return true;
 }
 
-void dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar) {
+bool dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar) {
+  if (!mat || !mat->values) {
+    log_error("Error: invalid matrix input.\n");
+    return false;
+  }
+
   double *a = mat->values;
   size_t size = mat->rows * mat->cols;
 
@@ -935,6 +973,8 @@ void dm_inplace_multiply_by_number(DoubleMatrix *mat, const double scalar) {
     a[i] *= scalar;
   }
 #endif
+
+  return true;
 }
 
 DoubleMatrix *dm_elementwise_multiply(const DoubleMatrix *mat1,
@@ -989,11 +1029,11 @@ DoubleMatrix *dm_div(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   return result;
 }
 
-void dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
+bool dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
                                      const DoubleMatrix *mat2) {
   if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
     log_error("Error: invalid matrix dimensions for Hadamard product.\n");
-    return;
+    return false;
   }
 
   double *a = mat1->values;
@@ -1012,12 +1052,14 @@ void dm_inplace_elementwise_multiply(DoubleMatrix *mat1,
     a[i] *= b[i];
   }
 #endif
+
+  return true;
 }
 
-void dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
+bool dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
   if (!mat1 || !mat2 || !dm_is_equal_size(mat1, mat2)) {
     log_error("Error: invalid matrix dimensions for elementwise division.\n");
-    return;
+    return false;
   }
 
   double *a = mat1->values;
@@ -1036,4 +1078,6 @@ void dm_inplace_div(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
     a[i] /= b[i];
   }
 #endif
+
+  return true;
 }

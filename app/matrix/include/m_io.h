@@ -13,7 +13,6 @@
 
 #include "dm.h"
 #include "dms.h"
-#include "m_status.h"
 #include "sm.h"
 
 #ifndef MMATRIX_DEPRECATED
@@ -62,6 +61,20 @@ typedef enum { MIO_FMT_MAT5, MIO_FMT_MAT73 } MIOFormat;
 
 // MATLAB file compression mode.
 typedef enum { MIO_COMPRESS_NONE, MIO_COMPRESS_ZLIB } MIOCompression;
+
+// I/O specific status codes.
+typedef enum MioStatus {
+    MIO_STATUS_OK = 0,
+    MIO_STATUS_INVALID_ARGUMENT = 1,
+    MIO_STATUS_IO_ERROR = 2,
+    MIO_STATUS_ALLOC_FAILED = 3,
+    MIO_STATUS_FORMAT_ERROR = 4,
+    MIO_STATUS_UNSUPPORTED_TYPE = 5,
+    MIO_STATUS_INTERNAL_ERROR = 6,
+} MioStatus;
+
+// Canonical status-string helper for I/O APIs.
+const char *mio_status_to_string(MioStatus status);
 
 // Global MATLAB I/O settings (defaults).
 static MIOFormat g_mio_format = MIO_FMT_MAT5;
@@ -112,36 +125,44 @@ DoubleSparseMatrix *dms_read_MAT_file(const char *filename);
 
 /*
  ====================================================================
- NEW I/O Functions (preferred, return MStatus error codes)
+ NEW I/O Functions (preferred, return MioStatus error codes)
  ====================================================================
  */
 
-// Preferred writer: returns MStatus and uses global format/compression settings.
-MStatus dm_write_mat_file_ex(const DoubleMatrix *matrix, const char *filename);
+// Preferred writer: returns MioStatus and uses global format/compression settings.
+MioStatus dm_write_mat_file_ex(const DoubleMatrix *matrix,
+                               const char *filename);
 MMATRIX_DEPRECATED("Use dm_write_mat_file_ex instead")
-MStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix, const char *filename);
+MioStatus dm_write_MAT_file_ex(const DoubleMatrix *matrix,
+                               const char *filename);
 
-// Preferred writer: returns MStatus.
-MStatus sm_write_mat_file_ex(const FloatMatrix *matrix, const char *filename);
+// Preferred writer: returns MioStatus.
+MioStatus sm_write_mat_file_ex(const FloatMatrix *matrix,
+                               const char *filename);
 MMATRIX_DEPRECATED("Use sm_write_mat_file_ex instead")
-MStatus sm_write_MAT_file_ex(const FloatMatrix *matrix, const char *filename);
+MioStatus sm_write_MAT_file_ex(const FloatMatrix *matrix,
+                               const char *filename);
 
-// Preferred reader: returns MStatus and writes result to out_matrix.
-MStatus dm_read_mat_file_ex(const char *filename, DoubleMatrix **out_matrix);
+// Preferred reader: returns MioStatus and writes result to out_matrix.
+MioStatus dm_read_mat_file_ex(const char *filename,
+                              DoubleMatrix **out_matrix);
 MMATRIX_DEPRECATED("Use dm_read_mat_file_ex instead")
-MStatus dm_read_MAT_file_ex(const char *filename, DoubleMatrix **out_matrix);
+MioStatus dm_read_MAT_file_ex(const char *filename,
+                              DoubleMatrix **out_matrix);
 
-// Preferred reader: returns MStatus and writes result to out_matrix.
-MStatus sm_read_mat_file_ex(const char *filename, FloatMatrix **out_matrix);
+// Preferred reader: returns MioStatus and writes result to out_matrix.
+MioStatus sm_read_mat_file_ex(const char *filename,
+                              FloatMatrix **out_matrix);
 MMATRIX_DEPRECATED("Use sm_read_mat_file_ex instead")
-MStatus sm_read_MAT_file_ex(const char *filename, FloatMatrix **out_matrix);
+MioStatus sm_read_MAT_file_ex(const char *filename,
+                              FloatMatrix **out_matrix);
 
-// Preferred reader: returns MStatus and writes result to out_matrix.
-MStatus dms_read_mat_file_ex(const char *filename,
-                             DoubleSparseMatrix **out_matrix);
+// Preferred reader: returns MioStatus and writes result to out_matrix.
+MioStatus dms_read_mat_file_ex(const char *filename,
+                               DoubleSparseMatrix **out_matrix);
 MMATRIX_DEPRECATED("Use dms_read_mat_file_ex instead")
-MStatus dms_read_MAT_file_ex(const char *filename,
-                             DoubleSparseMatrix **out_matrix);
+MioStatus dms_read_MAT_file_ex(const char *filename,
+                               DoubleSparseMatrix **out_matrix);
 
 DoubleSparseMatrix *dms_read_matrix_market(const char *filename);
 void dms_write_matrix_market(const DoubleSparseMatrix *mat,

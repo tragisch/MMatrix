@@ -130,15 +130,6 @@ typedef enum SmTranspose {
   SM_NO_TRANSPOSE = 0,
   SM_TRANSPOSE = 1,
 } SmTranspose;
-
-bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
-             SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b,
-             float beta);
-
-// Fused GEMM + bias + ReLU; bias is 1xcols or rowsxcols.
-bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a,
-                       const FloatMatrix *B, SmTranspose trans_b,
-                       const FloatMatrix *bias);
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2);
@@ -151,17 +142,34 @@ FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2);
 FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b);
 
 /**************************************/
+/*        Advanced Operations         */
+/**************************************/
+
+// Advanced BLAS-style kernel:
+// C = alpha * op(A) * op(B) + beta * C
+// where op(X) is X or X^T depending on transpose flags.
+bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
+             SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b,
+             float beta);
+
+// Advanced fused kernel: GEMM + optional bias + ReLU activation.
+// bias shape must be 1xcols or rowsxcols.
+bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a,
+                       const FloatMatrix *B, SmTranspose trans_b,
+                       const FloatMatrix *bias);
+
+/**************************************/
 /*        Matrix In-Place Ops         */
 /**************************************/
-void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2);
-void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2);
-void sm_inplace_square_transpose(FloatMatrix *mat);
-void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar);
-void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
+bool sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2);
+bool sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2);
+bool sm_inplace_square_transpose(FloatMatrix *mat);
+bool sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar);
+bool sm_inplace_elementwise_multiply(FloatMatrix *mat1,
                                      const FloatMatrix *mat2);
-void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2);
-void sm_inplace_normalize_rows(FloatMatrix *mat);
-void sm_inplace_normalize_cols(FloatMatrix *mat);
+bool sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2);
+bool sm_inplace_normalize_rows(FloatMatrix *mat);
+bool sm_inplace_normalize_cols(FloatMatrix *mat);
 
 /**************************************/
 /*       Matrix Properties            */

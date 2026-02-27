@@ -218,8 +218,8 @@ void test_import_and_plot_matrix(void) {
 
 void test_dm_read_mat_file_ex_should_return_io_error_for_missing_file(void) {
   DoubleMatrix *mat = NULL;
-  MStatus st = dm_read_mat_file_ex("definitely_missing_file_123456.mat", &mat);
-  TEST_ASSERT_EQUAL(MSTATUS_IO_ERROR, st);
+  MioStatus st = dm_read_mat_file_ex("definitely_missing_file_123456.mat", &mat);
+  TEST_ASSERT_EQUAL(MIO_STATUS_IO_ERROR, st);
   TEST_ASSERT_EQUAL((void *)NULL, (void *)mat);
 }
 

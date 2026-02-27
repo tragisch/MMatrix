@@ -93,7 +93,7 @@ DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
                                              double array[rows][cols]);
 
 // Append COO triple (i, j, value); duplicates are allowed and summed in dms_get().
-void dms_set(DoubleSparseMatrix *mat, size_t i, size_t j, double value);
+bool dms_set(DoubleSparseMatrix *mat, size_t i, size_t j, double value);
 
 // Read value at (i, j) as sum of matching COO triples (O(nnz) worst case).
 double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j);
@@ -121,7 +121,7 @@ double dms_density(const DoubleSparseMatrix *mat);
 void dms_print(const DoubleSparseMatrix *mat);
 
 // Reallocate COO arrays to new_capacity (must be >= nnz).
-void dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity);
+bool dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity);
 
 // Destroy sparse matrix; safe on NULL. Do not call twice on same pointer.
 void dms_destroy(DoubleSparseMatrix *mat);

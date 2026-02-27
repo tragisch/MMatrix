@@ -600,7 +600,11 @@ FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B) {
   FloatMatrix *B_T;
   if (B->rows == B->cols) {
     B_T = sm_clone(B);
-    sm_inplace_square_transpose(B_T);
+    if (!B_T || !sm_inplace_square_transpose(B_T)) {
+      sm_destroy(product);
+      sm_destroy(B_T);
+      return NULL;
+    }
   } else {
     B_T = sm_transpose(B);
   }
@@ -627,11 +631,11 @@ FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B) {
   return product;
 }
 
-void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
+bool sm_inplace_elementwise_multiply(FloatMatrix *mat1,
                                      const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
     log_error("Error: invalid matrix dimensions for Hadamard product.\n");
-    return;
+    return false;
   }
 
   size_t size = mat1->rows * mat1->cols;
@@ -639,7 +643,7 @@ void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
 #if defined(USE_ACCELERATE_MPS) || defined(USE_ACCELERATE)
 
   vDSP_vmul(mat1->values, 1, mat2->values, 1, mat1->values, 1, size);
-  return;
+  return true;
 #else
 
   float *a = mat1->values;
@@ -663,6 +667,8 @@ void sm_inplace_elementwise_multiply(FloatMatrix *mat1,
   }
 #endif
 #endif
+
+  return true;
 }
 
 FloatMatrix *sm_elementwise_multiply(const FloatMatrix *mat1,
@@ -675,13 +681,20 @@ FloatMatrix *sm_elementwise_multiply(const FloatMatrix *mat1,
   FloatMatrix *result = sm_clone(mat1);
   if (!result) return NULL;
 
-  sm_inplace_elementwise_multiply(result, mat2);
+  if (!sm_inplace_elementwise_multiply(result, mat2)) {
+    sm_destroy(result);
+    return NULL;
+  }
   return result;
 }
 
 FloatMatrix *sm_multiply_by_number(const FloatMatrix *mat, const float number) {
   FloatMatrix *product = sm_clone(mat);
-  sm_inplace_multiply_by_number(product, number);
+  if (!product) return NULL;
+  if (!sm_inplace_multiply_by_number(product, number)) {
+    sm_destroy(product);
+    return NULL;
+  }
   return product;
 }
 
@@ -690,7 +703,10 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat) {
 
   if (sm_is_square(mat)) {
     FloatMatrix *copy = sm_clone(mat);
-    sm_inplace_square_transpose(copy);
+    if (!copy || !sm_inplace_square_transpose(copy)) {
+      sm_destroy(copy);
+      return NULL;
+    }
     return copy;
   }
 
@@ -897,7 +913,10 @@ FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2) {
     return NULL;
   }
   FloatMatrix *sum = sm_clone(mat1);
-  sm_inplace_add(sum, mat2);
+  if (!sum || !sm_inplace_add(sum, mat2)) {
+    sm_destroy(sum);
+    return NULL;
+  }
   return sum;
 }
 
@@ -907,7 +926,10 @@ FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2) {
     return NULL;
   }
   FloatMatrix *difference = sm_clone(mat1);
-  sm_inplace_diff(difference, mat2);
+  if (!difference || !sm_inplace_diff(difference, mat2)) {
+    sm_destroy(difference);
+    return NULL;
+  }
   return difference;
 }
 
@@ -1391,10 +1413,15 @@ bool sm_is_equal_size(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 }
 
 // In-place operations
-void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
+bool sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
+  if (!mat1 || !mat2 || !mat1->values || !mat2->values) {
+    log_error("Error: invalid matrix input.\n");
+    return false;
+  }
+
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
     log_error("Error: invalid matrix dimensions.\n");
-    return;
+    return false;
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
@@ -1419,13 +1446,20 @@ void sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
   }
 #endif
 #endif
+
+  return true;
 }
 
 // In-place difference
-void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
+bool sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
+  if (!mat1 || !mat2 || !mat1->values || !mat2->values) {
+    log_error("Error: invalid matrix input.\n");
+    return false;
+  }
+
   if (mat1->rows != mat2->rows || mat1->cols != mat2->cols) {
     log_error("Error: invalid matrix dimensions.\n");
-    return;
+    return false;
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
@@ -1451,12 +1485,14 @@ void sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
   }
 #endif
 #endif
+
+  return true;
 }
 
-void sm_inplace_square_transpose(FloatMatrix *mat) {
+bool sm_inplace_square_transpose(FloatMatrix *mat) {
   if (mat == NULL || mat->values == NULL || mat->rows != mat->cols) {
     log_error("Error: In-place transposition requires a square matrix.");
-    return;
+    return false;
   }
 
   size_t n = mat->rows;
@@ -1474,10 +1510,17 @@ void sm_inplace_square_transpose(FloatMatrix *mat) {
       }
     }
   }
+
+  return true;
 }
 
 // In-place scale
-void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
+bool sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
+  if (!mat || !mat->values) {
+    log_error("Error: invalid matrix input.\n");
+    return false;
+  }
+
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
   cblas_sscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
@@ -1500,13 +1543,15 @@ void sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
   }
 #endif
 #endif
+
+  return true;
 }
 
 // In-place division
-void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
+bool sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
     log_error("Error: invalid matrix dimensions for elementwise division.\n");
-    return;
+    return false;
   }
 
   size_t size = mat1->rows * mat1->cols;
@@ -1536,6 +1581,8 @@ void sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
   }
 #endif
 #endif
+
+  return true;
 }
 
 FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2) {
@@ -1547,12 +1594,17 @@ FloatMatrix *sm_div(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   FloatMatrix *result = sm_clone(mat1);
   if (!result) return NULL;
 
-  sm_inplace_div(result, mat2);
+  if (!sm_inplace_div(result, mat2)) {
+    sm_destroy(result);
+    return NULL;
+  }
   return result;
 }
 
-void sm_inplace_normalize_rows(FloatMatrix *mat) {
-  if (!mat || mat->rows == 0 || mat->cols == 0) return;
+bool sm_inplace_normalize_rows(FloatMatrix *mat) {
+  if (!mat || !mat->values || mat->rows == 0 || mat->cols == 0) {
+    return false;
+  }
 
   size_t rows = mat->rows;
   size_t cols = mat->cols;
@@ -1584,11 +1636,15 @@ void sm_inplace_normalize_rows(FloatMatrix *mat) {
     }
   }
 #endif
+
+  return true;
 }
 
 // Normalize each column of the matrix to unit norm (L2)
-void sm_inplace_normalize_cols(FloatMatrix *mat) {
-  if (!mat || mat->rows == 0 || mat->cols == 0) return;
+bool sm_inplace_normalize_cols(FloatMatrix *mat) {
+  if (!mat || !mat->values || mat->rows == 0 || mat->cols == 0) {
+    return false;
+  }
 
   size_t rows = mat->rows;
   size_t cols = mat->cols;
@@ -1620,5 +1676,7 @@ void sm_inplace_normalize_cols(FloatMatrix *mat) {
     }
   }
 #endif
+
+  return true;
 }
 //

@@ -65,11 +65,13 @@ static size_t dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
   return low;  // Element not found, return the insertion position
 }
 
-static void dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
-                                 double value, size_t position) {
+static bool dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
+                               double value, size_t position) {
   // Increase the capacity if needed
   if (matrix->nnz == matrix->capacity) {
-    dms_realloc(matrix, matrix->capacity * 2);
+    if (!dms_realloc(matrix, matrix->capacity * 2)) {
+      return false;
+    }
   }
 
   // Shift the existing elements to make space for the new element
@@ -86,6 +88,8 @@ static void dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
 
   // Increment the count of non-zero elements
   matrix->nnz++;
+
+  return true;
 }
 
 static uint64_t dms_mix64(uint64_t x) {
@@ -500,7 +504,17 @@ double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j) {
   return 0.0;
 }
 
-void dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
+bool dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
+  if (!matrix || !matrix->row_indices || !matrix->col_indices ||
+      !matrix->values) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return false;
+  }
+  if (i >= matrix->rows || j >= matrix->cols) {
+    log_error("Error: matrix index out of bounds.\n");
+    return false;
+  }
+
   // Find the position of the element (i, j) in the matrix
   size_t position = dms_binary_search(matrix, i, j);
 
@@ -508,37 +522,54 @@ void dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
       matrix->col_indices[position] == j) {
     // Element already exists at position (i, j), update the value
     matrix->values[position] = value;
+    return true;
   } else {
-    dms_insert_element(matrix, i, j, value, position);
+    return dms_insert_element(matrix, i, j, value, position);
   }
 }
 
-void dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity) {
+bool dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity) {
+  if (!mat) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return false;
+  }
+
   if (new_capacity <= mat->capacity) {
-    printf("Can not resize matrix to smaller capacity!\n");
-    exit(EXIT_FAILURE);
+    log_error("Error: cannot resize matrix to smaller/equal capacity.\n");
+    return false;
   }
 
   if (new_capacity == 0) {
     new_capacity = mat->capacity * 2;
   }
 
-  // resize matrix:
+  // resize matrix stepwise to keep struct consistent on failure
   size_t *row_indices =
       (size_t *)realloc(mat->row_indices, (new_capacity) * sizeof(size_t));
+  if (row_indices == NULL) {
+    log_error("Error allocating row indices for sparse matrix resize!\n");
+    return false;
+  }
+  mat->row_indices = row_indices;
+
   size_t *col_indices =
       (size_t *)realloc(mat->col_indices, (new_capacity) * sizeof(size_t));
+  if (col_indices == NULL) {
+    log_error("Error allocating column indices for sparse matrix resize!\n");
+    return false;
+  }
+  mat->col_indices = col_indices;
+
   double *values =
       (double *)realloc(mat->values, (new_capacity) * sizeof(double));
-  if (row_indices == NULL || col_indices == NULL || values == NULL) {
-    printf("Error allocating memory!\n");
-    exit(EXIT_FAILURE);
+  if (values == NULL) {
+    log_error("Error allocating values for sparse matrix resize!\n");
+    return false;
   }
-
-  mat->capacity = new_capacity;
-  mat->row_indices = row_indices;
-  mat->col_indices = col_indices;
   mat->values = values;
+  mat->capacity = new_capacity;
+
+  return true;
 }
 
 void dms_print(const DoubleSparseMatrix *mat) {
