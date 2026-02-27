@@ -9,6 +9,7 @@
 #include "dm.h"
 
 #include <log.h>
+#include <math.h>
 #include <omp.h>
 #include <pcg_variants.h>
 #include <stdint.h>
@@ -17,10 +18,6 @@
 static const double EPSILON = 1e-9;
 static uint64_t dm_global_seed = 0;
 static bool dm_seed_initialized = false;
-
-/*******************************/
-/*      Define Environment     */
-/*******************************/
 
 /*******************************/
 /*      Define Environment     */
@@ -42,8 +39,7 @@ static bool dm_seed_initialized = false;
 #include <cblas.h>
 #include <lapacke.h>
 #else
-#include <math.h>
-#include <omp.h>
+// nothing
 #endif
 
 #define BLOCK_SIZE 64
@@ -84,19 +80,17 @@ bool dm_inplace_gauss_elimination(DoubleMatrix *mat) {
     }
 
     // Perform row operations to eliminate values below the pivot
-    double pivot_val = dm_get(mat, pivot, pivot);
+    double pivot_val = A[pivot * cols + pivot];
     if (fabs(pivot_val) > EPSILON) {  // Check if pivot is non-zero
-      double *A = mat->values;
-      size_t ld = mat->cols;
 
 #pragma omp parallel for
       for (size_t row = pivot + 1; row < rows; row++) {
-        double factor = A[row * ld + pivot] / pivot_val;
-        A[row * ld + pivot] = 0.0;
+        double factor = A[row * cols + pivot] / pivot_val;
+        A[row * cols + pivot] = 0.0;
 
 #pragma omp simd
         for (size_t col = pivot + 1; col < cols; col++) {
-          A[row * ld + col] -= factor * A[pivot * ld + col];
+          A[row * cols + col] -= factor * A[pivot * cols + col];
         }
       }
     }
@@ -194,6 +188,49 @@ uint64_t dm_get_random_seed(void) {
   return dm_global_seed;
 }
 
+static bool dm_lu_decompose(DoubleMatrix *mat, size_t *pivot_order) {
+  size_t n = mat->rows;
+  if (mat->cols != n) return false;
+
+  for (size_t pivot = 0; pivot < n; pivot++) {
+    double max_val = fabs(mat->values[pivot * n + pivot]);
+    size_t max_row = pivot;
+    for (size_t row = pivot + 1; row < n; row++) {
+      double val = fabs(mat->values[row * n + pivot]);
+      if (val > max_val) {
+        max_val = val;
+        max_row = row;
+      }
+    }
+
+    if (max_val < EPSILON) {
+      return false;
+    }
+
+    pivot_order[pivot] = max_row;
+
+    if (max_row != pivot) {
+      for (size_t col = 0; col < n; col++) {
+        double tmp = mat->values[pivot * n + col];
+        mat->values[pivot * n + col] = mat->values[max_row * n + col];
+        mat->values[max_row * n + col] = tmp;
+      }
+    }
+
+    double pivot_val = mat->values[pivot * n + pivot];
+#pragma omp parallel for
+    for (size_t row = pivot + 1; row < n; row++) {
+      double factor = mat->values[row * n + pivot] / pivot_val;
+      mat->values[row * n + pivot] = factor;
+      for (size_t col = pivot + 1; col < n; col++) {
+        mat->values[row * n + col] -= factor * mat->values[pivot * n + col];
+      }
+    }
+  }
+
+  return true;
+}
+
 /*******************************/
 /*      Public Functions      */
 /*******************************/
@@ -203,6 +240,10 @@ const char *dm_active_library(void) { return ACTIVE_LIB; }
 
 DoubleMatrix *dm_create_empty(void) {
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
+  if (!matrix) {
+    log_error("Error: could not allocate DoubleMatrix struct.\n");
+    return NULL;
+  }
   matrix->rows = 0;
   matrix->cols = 0;
   matrix->capacity = 0;
@@ -229,20 +270,26 @@ DoubleMatrix *dm_create(size_t rows, size_t cols) {
     return NULL;
   }
   DoubleMatrix *matrix = (DoubleMatrix *)malloc(sizeof(DoubleMatrix));
+  if (!matrix) {
+    log_error("Error: could not allocate DoubleMatrix struct.\n");
+    return NULL;
+  }
   matrix->rows = rows;
   matrix->cols = cols;
   matrix->capacity = rows * cols;
   matrix->values = (double *)calloc(rows * cols, sizeof(double));
+  if (!matrix->values) {
+    free(matrix);
+    log_error("Error: could not allocate values array.\n");
+    return NULL;
+  }
   return matrix;
 }
 
 DoubleMatrix *dm_clone(const DoubleMatrix *mat) {
   DoubleMatrix *copy = dm_create(mat->rows, mat->cols);
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      dm_set(copy, i, j, dm_get(mat, i, j));
-    }
-  }
+  if (!copy) return NULL;
+  memcpy(copy->values, mat->values, mat->rows * mat->cols * sizeof(double));
   return copy;
 }
 
@@ -250,13 +297,19 @@ DoubleMatrix *dm_create_clone(const DoubleMatrix *mat) { return dm_clone(mat); }
 
 DoubleMatrix *dm_create_identity(size_t n) {
   DoubleMatrix *identity = dm_create(n, n);
+  if (!identity) return NULL;
   for (size_t i = 0; i < n; i++) {
-    dm_set(identity, i, i, 1.0);
+    identity->values[i * n + i] = 1.0;
   }
   return identity;
 }
 
 DoubleMatrix *dm_create_random_seeded(size_t rows, size_t cols, uint64_t seed) {
+  if (cols != 0 && rows > SIZE_MAX / cols) {
+    log_error("Overflow detected in matrix allocation.");
+    return NULL;
+  }
+
   DoubleMatrix *mat = dm_create(rows, cols);
   if (!mat) {
     return NULL;
@@ -279,11 +332,18 @@ DoubleMatrix *dm_create_random(size_t rows, size_t cols) {
 }
 
 DoubleMatrix *dm_from_array_ptrs(size_t rows, size_t cols, double **array) {
-  DoubleMatrix *mat = dm_create(rows, cols);
+  if (array == NULL) {
+    log_error("Error: array is NULL.\n");
+    return NULL;
+  }
 
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      dm_set(mat, i, j, array[i][j]);
+  DoubleMatrix *mat = dm_create(rows, cols);
+  if (!mat) return NULL;
+
+#pragma omp parallel for
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      mat->values[i * cols + j] = array[i][j];
     }
   }
 
@@ -317,9 +377,8 @@ DoubleMatrix *dm_create_from_2D_array(size_t rows, size_t cols,
 
 DoubleMatrix *dm_get_row(const DoubleMatrix *mat, size_t i) {
   DoubleMatrix *row = dm_create(1, mat->cols);
-  for (size_t j = 0; j < mat->cols; j++) {
-    dm_set(row, 0, j, dm_get(mat, i, j));
-  }
+  if (!row) return NULL;
+  memcpy(row->values, &mat->values[i * mat->cols], mat->cols * sizeof(double));
   return row;
 }
 
@@ -329,8 +388,9 @@ DoubleMatrix *dm_get_last_row(const DoubleMatrix *mat) {
 
 DoubleMatrix *dm_get_col(const DoubleMatrix *mat, size_t j) {
   DoubleMatrix *col = dm_create(mat->rows, 1);
+  if (!col) return NULL;
   for (size_t i = 0; i < mat->rows; i++) {
-    dm_set(col, i, 0, dm_get(mat, i, j));
+    col->values[i] = mat->values[i * mat->cols + j];
   }
   return col;
 }
@@ -439,31 +499,16 @@ bool dm_is_equal(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 }
 
 DoubleMatrix *dm_add(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
-  if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
+  if (!mat1 || !mat2 || mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
     log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
-
   DoubleMatrix *result = dm_clone(mat1);
   if (!result) return NULL;
-
-  double *a = result->values;
-  const double *b = mat2->values;
-  size_t size = result->rows * result->cols;
-
-#if defined(USE_ACCELERATE)
-  vDSP_vaddD(a, 1, b, 1, a, 1, size);
-#elif defined(USE_OPENBLAS)
-  for (size_t i = 0; i < size; ++i) {
-    a[i] += b[i];
+  if (!dm_inplace_add(result, mat2)) {
+    dm_destroy(result);
+    return NULL;
   }
-#else
-#pragma omp parallel for
-  for (size_t i = 0; i < size; ++i) {
-    a[i] += b[i];
-  }
-#endif
-
   return result;
 }
 
@@ -499,19 +544,18 @@ DoubleMatrix *dm_diff(const DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 double dm_determinant(const DoubleMatrix *mat) {
   if (mat->cols != mat->rows) {
     log_error("the Matrix has to be square!");
+    return 0.0;
   }
-  double det = 0;
   if (mat->cols == 1) {
-    return dm_get(mat, 0, 0);
+    return mat->values[0];
   } else if (mat->cols == 2) {
-    return dm_get(mat, 0, 0) * dm_get(mat, 1, 1) -
-           dm_get(mat, 0, 1) * dm_get(mat, 1, 0);
+    double *a = mat->values;
+    return a[0] * a[3] - a[1] * a[2];
   } else if (mat->cols == 3) {
     double *a = mat->values;
-    det = a[0] * (a[4] * a[8] - a[5] * a[7]) -
-          a[1] * (a[3] * a[8] - a[5] * a[6]) +
-          a[2] * (a[3] * a[7] - a[4] * a[6]);
-    return det;
+    return a[0] * (a[4] * a[8] - a[5] * a[7]) -
+           a[1] * (a[3] * a[8] - a[5] * a[6]) +
+           a[2] * (a[3] * a[7] - a[4] * a[6]);
   } else {
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
@@ -528,52 +572,63 @@ double dm_determinant(const DoubleMatrix *mat) {
       dm_destroy(lu);
       return 0;
     }
-    // det = 1.0;
-    double local_det = 1.0;
-#pragma omp parallel
-    {
-      double thread_det = 1.0;
-      double *values = lu->values;
-      size_t stride = lu->cols + 1;
-      size_t n = mat->cols;
-#pragma omp simd reduction(* : thread_det)
-      for (size_t i = 0; i < n; i++) {
-        thread_det *= values[i * stride];
-      }
-#pragma omp critical
-      {
-        local_det *= thread_det;
-      }
+    double det = 1.0;
+    for (size_t i = 0; i < mat->cols; i++) {
+      det *= lu->values[i * (lu->cols + 1)];
+      if (ipiv[i] != (BLASINT)(i + 1)) det = -det;
     }
-    det = local_det;
     free(ipiv);
     dm_destroy(lu);
 
 #else
-    // Optimized fallback with direct memory access and OpenMP
-    double det = 0.0;
-    size_t n = mat->cols;
-    const double *src = mat->values;
+    DoubleMatrix *copy = dm_clone(mat);
+    if (!copy) return 0.0;
 
-#pragma omp parallel for reduction(+ : det)
-    for (size_t i = 0; i < n; i++) {
-      DoubleMatrix *sub_mat = dm_create(n - 1, n - 1);
-      double *dst = sub_mat->values;
+    size_t n = mat->rows;
+    double *a = copy->values;
+    int sign = 1;
 
-      for (size_t j = 1; j < n; j++) {
-        for (size_t k = 0; k < n; k++) {
-          if (k < i) {
-            dst[(j - 1) * (n - 1) + k] = src[j * n + k];
-          } else if (k > i) {
-            dst[(j - 1) * (n - 1) + (k - 1)] = src[j * n + k];
-          }
+    for (size_t k = 0; k < n; ++k) {
+      size_t max_row = k;
+      double max_val = fabs(a[k * n + k]);
+      for (size_t i = k + 1; i < n; ++i) {
+        double val = fabs(a[i * n + k]);
+        if (val > max_val) {
+          max_val = val;
+          max_row = i;
         }
       }
 
-      double sign = (i % 2 == 0) ? 1.0 : -1.0;
-      det += sign * src[i] * dm_determinant(sub_mat);
-      dm_destroy(sub_mat);
+      if (max_val < EPSILON) {
+        dm_destroy(copy);
+        return 0.0;
+      }
+
+      if (max_row != k) {
+        for (size_t j = 0; j < n; ++j) {
+          double tmp = a[k * n + j];
+          a[k * n + j] = a[max_row * n + j];
+          a[max_row * n + j] = tmp;
+        }
+        sign = -sign;
+      }
+
+      double pivot = a[k * n + k];
+      for (size_t i = k + 1; i < n; ++i) {
+        double factor = a[i * n + k] / pivot;
+        a[i * n + k] = 0.0;
+        for (size_t j = k + 1; j < n; ++j) {
+          a[i * n + j] -= factor * a[k * n + j];
+        }
+      }
     }
+
+    double det = (double)sign;
+    for (size_t i = 0; i < n; ++i) {
+      det *= a[i * n + i];
+    }
+
+    dm_destroy(copy);
 #endif
     return det;
   }
@@ -582,15 +637,14 @@ double dm_determinant(const DoubleMatrix *mat) {
 DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   if (mat->cols != mat->rows || mat->rows == 0 || mat->cols == 0) {
     log_error("the Matrix has to be square!");
+    return NULL;
   }
-  DoubleMatrix *inverse = dm_clone(mat);
 
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
-
+  DoubleMatrix *inverse = dm_clone(mat);
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
   if (ipiv == NULL) {
-    free(inverse->values);
-    free(inverse);
+    dm_destroy(inverse);
     log_error("Error: Memory allocation for ipiv failed.\n");
     return NULL;
   }
@@ -600,8 +654,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   dgetrf_(&n, &n, inverse->values, &n, ipiv, &info);
   if (info != 0) {
     free(ipiv);
-    free(inverse->values);
-    free(inverse);
+    dm_destroy(inverse);
     log_error("Error: dgetrf failed.\n");
     return NULL;
   }
@@ -614,8 +667,7 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   double *work = (double *)malloc((size_t)lwork * sizeof(double));
   if (work == NULL) {
     free(ipiv);
-    free(inverse->values);
-    free(inverse);
+    dm_destroy(inverse);
     log_error("Error: Memory allocation for work array failed.\n");
     return NULL;
   }
@@ -624,60 +676,74 @@ DoubleMatrix *dm_inverse(const DoubleMatrix *mat) {
   free(work);
   free(ipiv);
   if (info != 0) {
-    free(inverse->values);
-    free(inverse);
+    dm_destroy(inverse);
     log_error("Error: dgetri failed.\n");
     return NULL;
   }
+  return inverse;
 #else
+  size_t n = mat->cols;
+  DoubleMatrix *copy = dm_clone(mat);
+  if (!copy) return NULL;
 
-  double det = dm_determinant(mat);
-  if (fabs(det) < EPSILON) {
-    log_error("Error: Matrix is singular and cannot be inverted.\n");
+  DoubleMatrix *inverse = dm_create_identity(n);
+  if (!inverse) {
+    dm_destroy(copy);
+    return NULL;
+  }
+
+  size_t *pivot_order = (size_t *)malloc(n * sizeof(size_t));
+  if (!pivot_order) {
+    dm_destroy(copy);
     dm_destroy(inverse);
     return NULL;
   }
 
-  for (size_t i = 0; i < mat->cols; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      DoubleMatrix *sub_mat = dm_create(mat->cols - 1, mat->cols - 1);
-      if (sub_mat == NULL) {
-        dm_destroy(inverse);
-        log_error("Error: Memory allocation for sub-matrix failed.\n");
-        return NULL;
+  if (!dm_lu_decompose(copy, pivot_order)) {
+    log_error("Error: LU decomposition failed (matrix is singular).\n");
+    free(pivot_order);
+    dm_destroy(copy);
+    dm_destroy(inverse);
+    return NULL;
+  }
+
+  // Apply pivot permutation to the identity matrix
+  for (size_t i = 0; i < n; ++i) {
+    if (pivot_order[i] != i) {
+      for (size_t j = 0; j < n; ++j) {
+        double tmp = inverse->values[i * n + j];
+        inverse->values[i * n + j] = inverse->values[pivot_order[i] * n + j];
+        inverse->values[pivot_order[i] * n + j] = tmp;
       }
-
-      // Erstellen der Untermatrix
-      for (size_t k = 0; k < mat->cols; k++) {
-        for (size_t l = 0; l < mat->cols; l++) {
-          if (k < i && l < j) {
-            dm_set(sub_mat, k, l, dm_get(mat, k, l));
-          } else if (k < i && l > j) {
-            dm_set(sub_mat, k, l - 1, dm_get(mat, k, l));
-          } else if (k > i && l < j) {
-            dm_set(sub_mat, k - 1, l, dm_get(mat, k, l));
-          } else if (k > i && l > j) {
-            dm_set(sub_mat, k - 1, l - 1, dm_get(mat, k, l));
-          }
-        }
-      }
-
-      double sign = ((i + j) % 2 == 0) ? 1.0 : -1.0;
-      dm_set(inverse, i, j, sign * dm_determinant(sub_mat));
-
-      dm_destroy(sub_mat);
     }
   }
 
-  // Skalieren mit 1 / det
-  if (!dm_inplace_multiply_by_number(inverse, 1 / det) ||
-      !dm_inplace_transpose(inverse)) {
-    dm_destroy(inverse);
-    return NULL;
+  for (size_t col = 0; col < n; col++) {
+    // Forward substitution (L * y = e_col)
+    for (size_t i = 1; i < n; i++) {
+      double sum = inverse->values[i * n + col];
+      for (size_t j = 0; j < i; j++) {
+        sum -= copy->values[i * n + j] * inverse->values[j * n + col];
+      }
+      inverse->values[i * n + col] = sum;
+    }
+
+    // Backward substitution (U * x = y)
+    size_t i = n;
+    do {
+      --i;
+      double sum = inverse->values[i * n + col];
+      for (size_t j = i + 1; j < n; j++) {
+        sum -= copy->values[i * n + j] * inverse->values[j * n + col];
+      }
+      inverse->values[i * n + col] = sum / copy->values[i * n + i];
+    } while (i != 0);
   }
 
-#endif
+  free(pivot_order);
+  dm_destroy(copy);
   return inverse;
+#endif
 }
 
 void dm_set(DoubleMatrix *mat, size_t i, size_t j, const double value) {
@@ -689,6 +755,10 @@ double dm_get(const DoubleMatrix *mat, size_t i, size_t j) {
 }
 
 void dm_reshape(DoubleMatrix *matrix, size_t new_rows, size_t new_cols) {
+  if (new_rows * new_cols != matrix->rows * matrix->cols) {
+    log_error("Error: reshape dimensions must preserve element count.\n");
+    return;
+  }
   matrix->rows = new_rows;
   matrix->cols = new_cols;
 }
@@ -741,9 +811,11 @@ void dm_print(const DoubleMatrix *matrix) {
 }
 
 void dm_destroy(DoubleMatrix *mat) {
-  free(mat->values);
+  if (!mat) return;
+  if (mat->values) {
+    free(mat->values);
+  }
   free(mat);
-  mat = NULL;
 }
 
 double dm_trace(const DoubleMatrix *mat) {
@@ -838,15 +910,17 @@ size_t dm_rank(const DoubleMatrix *mat) {
 }
 
 double dm_density(const DoubleMatrix *mat) {
+  size_t size = mat->rows * mat->cols;
   int counter = 0;
-  for (size_t i = 0; i < mat->rows; i++) {
-    for (size_t j = 0; j < mat->cols; j++) {
-      if (fabs(dm_get(mat, i, j)) > EPSILON) {
-        counter++;
-      }
+  const double *values = mat->values;
+
+#pragma omp parallel for reduction(+ : counter)
+  for (size_t i = 0; i < size; i++) {
+    if (fabs(values[i]) > EPSILON) {
+      counter++;
     }
   }
-  return (double)counter / (double)(mat->rows * mat->cols);
+  return (double)counter / (double)size;
 }
 
 // Matrix is empty
@@ -887,9 +961,7 @@ bool dm_inplace_add(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 #if defined(USE_ACCELERATE)
   vDSP_vaddD(a, 1, b, 1, a, 1, size);
 #elif defined(USE_OPENBLAS)
-  for (size_t i = 0; i < size; ++i) {
-    a[i] += b[i];
-  }
+  cblas_daxpy((BLASINT)size, 1.0, b, 1, a, 1);
 #else
 #pragma omp simd
   for (size_t i = 0; i < size; ++i) {
@@ -919,9 +991,7 @@ bool dm_inplace_diff(DoubleMatrix *mat1, const DoubleMatrix *mat2) {
 #if defined(USE_ACCELERATE)
   vDSP_vsubD(b, 1, a, 1, a, 1, size);  // result = a - b
 #elif defined(USE_OPENBLAS)
-  for (size_t i = 0; i < size; ++i) {
-    a[i] -= b[i];
-  }
+  cblas_daxpy((BLASINT)size, -1.0, b, 1, a, 1);
 #else
 #pragma omp simd
   for (size_t i = 0; i < size; ++i) {
