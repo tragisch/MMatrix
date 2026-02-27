@@ -870,8 +870,9 @@ bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
   /* Zero grad_input before accumulating. */
   memset(grad_input->values, 0, grad_input->numel * sizeof(float));
 
-  /* For each output element, scatter its gradient back to the input positions
-   * that contributed via the corresponding kernel taps. */
+  /* Parallelize over batch items — each ni writes to its own grad_input
+   * slice, so no race conditions. */
+#pragma omp parallel for schedule(static) if (n > 1)
   for (size_t ni = 0; ni < n; ++ni) {
     for (size_t co = 0; co < c_out; ++co) {
       for (size_t oh = 0; oh < out_h; ++oh) {
@@ -1038,14 +1039,20 @@ bool st_conv2d_backward_bias(const FloatTensor *grad_output,
   /* Summe über N, H, W für jeden Kanal. */
   memset(grad_bias->values, 0, c_out * sizeof(float));
 
+  const size_t out_spatial = out_h * out_w;
+
   for (size_t ni = 0; ni < n; ++ni) {
     for (size_t co = 0; co < c_out; ++co) {
       const float *plane =
-          grad_output->values + (ni * c_out + co) * out_h * out_w;
+          grad_output->values + (ni * c_out + co) * out_spatial;
       float sum = 0.0f;
-      for (size_t i = 0; i < out_h * out_w; ++i) {
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+      vDSP_sve(plane, 1, &sum, (vDSP_Length)out_spatial);
+#else
+      for (size_t i = 0; i < out_spatial; ++i) {
         sum += plane[i];
       }
+#endif
       grad_bias->values[co] += sum;
     }
   }

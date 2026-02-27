@@ -14,6 +14,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#define BLASINT int
+#include <Accelerate/Accelerate.h>
+#elif defined(USE_OPENBLAS)
+#define BLASINT int
+#include <cblas.h>
+#endif
+
 static bool st_validate_shape(size_t ndim, const size_t *shape) {
   if (ndim == 0 || ndim > ST_MAX_DIMS || shape == NULL) {
     return false;
@@ -350,9 +358,15 @@ bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {
     return false;
   }
 
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
+    defined(USE_ACCELERATE_MPS)
+  cblas_saxpy((BLASINT)a->numel, 1.0f, b->values, 1, a->values, 1);
+#else
+#pragma omp parallel for schedule(static) if (a->numel > 10000)
   for (size_t i = 0; i < a->numel; ++i) {
     a->values[i] += b->values[i];
   }
+#endif
   return true;
 }
 
@@ -369,9 +383,15 @@ bool st_inplace_sub(FloatTensor *a, const FloatTensor *b) {
     return false;
   }
 
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
+    defined(USE_ACCELERATE_MPS)
+  cblas_saxpy((BLASINT)a->numel, -1.0f, b->values, 1, a->values, 1);
+#else
+#pragma omp parallel for schedule(static) if (a->numel > 10000)
   for (size_t i = 0; i < a->numel; ++i) {
     a->values[i] -= b->values[i];
   }
+#endif
   return true;
 }
 
@@ -384,9 +404,16 @@ bool st_inplace_scale(FloatTensor *t, float scalar) {
     return false;
   }
 
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+  cblas_sscal((BLASINT)t->numel, scalar, t->values, 1);
+#elif defined(USE_OPENBLAS)
+  cblas_sscal((BLASINT)t->numel, scalar, t->values, 1);
+#else
+#pragma omp parallel for schedule(static) if (t->numel > 10000)
   for (size_t i = 0; i < t->numel; ++i) {
     t->values[i] *= scalar;
   }
+#endif
   return true;
 }
 
@@ -404,9 +431,15 @@ bool st_inplace_elementwise_multiply(FloatTensor *a, const FloatTensor *b) {
     return false;
   }
 
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+  vDSP_vmul(a->values, 1, b->values, 1, a->values, 1,
+            (vDSP_Length)a->numel);
+#else
+#pragma omp parallel for schedule(static) if (a->numel > 10000)
   for (size_t i = 0; i < a->numel; ++i) {
     a->values[i] *= b->values[i];
   }
+#endif
   return true;
 }
 
@@ -422,9 +455,13 @@ bool st_fill(FloatTensor *t, float value) {
   if (value == 0.0f) {
     memset(t->values, 0, t->numel * sizeof(float));
   } else {
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+    vDSP_vfill(&value, t->values, 1, (vDSP_Length)t->numel);
+#else
     for (size_t i = 0; i < t->numel; ++i) {
       t->values[i] = value;
     }
+#endif
   }
   return true;
 }
@@ -440,11 +477,18 @@ bool st_apply_relu(FloatTensor *t) {
     return false;
   }
 
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+  /* vDSP_vthr: t[i] = max(t[i], threshold) */
+  float zero = 0.0f;
+  vDSP_vthr(t->values, 1, &zero, t->values, 1, (vDSP_Length)t->numel);
+#else
+#pragma omp parallel for schedule(static) if (t->numel > 10000)
   for (size_t i = 0; i < t->numel; ++i) {
     if (t->values[i] < 0.0f) {
       t->values[i] = 0.0f;
     }
   }
+#endif
   return true;
 }
 
@@ -463,6 +507,7 @@ bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad) {
     return false;
   }
 
+#pragma omp parallel for schedule(static) if (grad->numel > 10000)
   for (size_t i = 0; i < grad->numel; ++i) {
     if (activation->values[i] <= 0.0f) {
       grad->values[i] = 0.0f;
@@ -521,26 +566,96 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
     return NULL;
   }
 
-  /* Generic N-dimensional summation via multi-index iteration. */
+  /* ---- Fast path for common patterns ---- */
+
+  /* Pattern: reduce axes {0, 2, 3} of 4D NCHW → [C] (bias gradient). */
+  if (t->ndim == 4 && num_axes == 3 && reduce[0] && reduce[2] && reduce[3] &&
+      !reduce[1]) {
+    const size_t n = t->shape[0];
+    const size_t c = t->shape[1];
+    const size_t spatial = t->shape[2] * t->shape[3];
+
+    for (size_t ci = 0; ci < c; ++ci) {
+      float sum = 0.0f;
+      for (size_t ni = 0; ni < n; ++ni) {
+        const float *plane = t->values + (ni * c + ci) * spatial;
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+        float plane_sum = 0.0f;
+        vDSP_sve(plane, 1, &plane_sum, (vDSP_Length)spatial);
+        sum += plane_sum;
+#else
+        for (size_t i = 0; i < spatial; ++i) {
+          sum += plane[i];
+        }
+#endif
+      }
+      result->values[ci] = sum;
+    }
+    return result;
+  }
+
+  /* Pattern: reduce single leading axis of 2D [M, N] → [N]. */
+  if (t->ndim == 2 && num_axes == 1 && reduce[0] && !reduce[1]) {
+    const size_t rows = t->shape[0];
+    const size_t cols = t->shape[1];
+    for (size_t r = 0; r < rows; ++r) {
+      const float *row = t->values + r * cols;
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
+    defined(USE_ACCELERATE_MPS)
+      cblas_saxpy((BLASINT)cols, 1.0f, row, 1, result->values, 1);
+#else
+      for (size_t j = 0; j < cols; ++j) {
+        result->values[j] += row[j];
+      }
+#endif
+    }
+    return result;
+  }
+
+  /* ---- Generic N-dimensional fallback (pre-compute strides) ---- */
+
+  /* Precompute input strides to avoid repeated division/modulo. */
+  size_t in_strides[ST_MAX_DIMS];
+  in_strides[t->ndim - 1] = 1;
+  for (size_t d = t->ndim - 1; d > 0; --d) {
+    in_strides[d - 1] = in_strides[d] * t->shape[d];
+  }
+
+  /* Precompute output strides for non-reduced dims. */
+  size_t out_strides[ST_MAX_DIMS] = {0};
+  if (out_ndim > 0) {
+    out_strides[out_ndim - 1] = 1;
+    for (size_t d = out_ndim - 1; d > 0; --d) {
+      out_strides[d - 1] = out_strides[d] * out_shape[d];
+    }
+  }
+
+  /* Map: for each input dim that is NOT reduced, which output dim? */
+  size_t dim_to_out[ST_MAX_DIMS] = {0};
+  {
+    size_t od = 0;
+    for (size_t d = 0; d < t->ndim; ++d) {
+      if (!reduce[d]) {
+        dim_to_out[d] = od++;
+      }
+    }
+  }
+
   size_t indices[ST_MAX_DIMS] = {0};
 
   for (size_t linear = 0; linear < t->numel; ++linear) {
-    /* Decompose linear index into multi-index. */
-    size_t tmp = linear;
-    for (size_t d = t->ndim; d-- > 0;) {
-      indices[d] = tmp % t->shape[d];
-      tmp /= t->shape[d];
+    /* Decompose linear index via strides (no division). */
+    size_t rem = linear;
+    for (size_t d = 0; d < t->ndim; ++d) {
+      indices[d] = rem / in_strides[d];
+      rem %= in_strides[d];
     }
 
-    /* Compute output linear index from non-reduced dimensions. */
+    /* Compute output linear index. */
     size_t out_linear = 0;
-    size_t out_stride = 1;
-    size_t out_d = out_ndim;
-    for (size_t d = t->ndim; d-- > 0;) {
+    for (size_t d = 0; d < t->ndim; ++d) {
       if (!reduce[d]) {
-        --out_d;
-        out_linear += indices[d] * out_stride;
-        out_stride *= out_shape[out_d];
+        out_linear += indices[d] * out_strides[dim_to_out[d]];
       }
     }
 

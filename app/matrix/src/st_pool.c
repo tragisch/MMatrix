@@ -13,6 +13,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#include <Accelerate/Accelerate.h>
+#endif
+
 /* ---- Validation helpers ---- */
 
 static bool st_pool_is_valid_4d(const FloatTensor *t) {
@@ -79,38 +83,41 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
-  for (size_t ni = 0; ni < n; ++ni) {
-    for (size_t ci = 0; ci < c; ++ci) {
-      const float *in_plane = input->values + (ni * c + ci) * h * w;
+  const size_t nc = n * c;
 
-      for (size_t ohi = 0; ohi < oh; ++ohi) {
-        for (size_t owi = 0; owi < ow; ++owi) {
-          float max_val = -INFINITY;
-          size_t max_idx = 0;
+#pragma omp parallel for schedule(static) if (nc > 4)
+  for (size_t nci = 0; nci < nc; ++nci) {
+    const size_t ni = nci / c;
+    const size_t ci = nci % c;
+    const float *in_plane = input->values + (ni * c + ci) * h * w;
 
-          for (size_t kh = 0; kh < kernel_h; ++kh) {
-            for (size_t kw = 0; kw < kernel_w; ++kw) {
-              const ptrdiff_t ih =
-                  (ptrdiff_t)(ohi * stride_h + kh) - (ptrdiff_t)pad_h;
-              const ptrdiff_t iw =
-                  (ptrdiff_t)(owi * stride_w + kw) - (ptrdiff_t)pad_w;
+    for (size_t ohi = 0; ohi < oh; ++ohi) {
+      for (size_t owi = 0; owi < ow; ++owi) {
+        float max_val = -INFINITY;
+        size_t max_idx = 0;
 
-              if (ih >= 0 && iw >= 0 && (size_t)ih < h && (size_t)iw < w) {
-                const size_t in_idx = (size_t)ih * w + (size_t)iw;
-                const float val = in_plane[in_idx];
-                if (val > max_val) {
-                  max_val = val;
-                  max_idx = in_idx;
-                }
+        for (size_t kh = 0; kh < kernel_h; ++kh) {
+          for (size_t kw = 0; kw < kernel_w; ++kw) {
+            const ptrdiff_t ih =
+                (ptrdiff_t)(ohi * stride_h + kh) - (ptrdiff_t)pad_h;
+            const ptrdiff_t iw =
+                (ptrdiff_t)(owi * stride_w + kw) - (ptrdiff_t)pad_w;
+
+            if (ih >= 0 && iw >= 0 && (size_t)ih < h && (size_t)iw < w) {
+              const size_t in_idx = (size_t)ih * w + (size_t)iw;
+              const float val = in_plane[in_idx];
+              if (val > max_val) {
+                max_val = val;
+                max_idx = in_idx;
               }
             }
           }
+        }
 
-          const size_t out_idx = ((ni * c + ci) * oh + ohi) * ow + owi;
-          output->values[out_idx] = max_val;
-          if (indices) {
-            indices->values[out_idx] = (float)max_idx;
-          }
+        const size_t out_idx = ((ni * c + ci) * oh + ohi) * ow + owi;
+        output->values[out_idx] = max_val;
+        if (indices) {
+          indices->values[out_idx] = (float)max_idx;
         }
       }
     }
@@ -147,32 +154,35 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
-  for (size_t ni = 0; ni < n; ++ni) {
-    for (size_t ci = 0; ci < c; ++ci) {
-      const float *in_plane = input->values + (ni * c + ci) * h * w;
+  const size_t nc_avg = n * c;
 
-      for (size_t ohi = 0; ohi < oh; ++ohi) {
-        for (size_t owi = 0; owi < ow; ++owi) {
-          float sum = 0.0f;
-          size_t count = 0;
+#pragma omp parallel for schedule(static) if (nc_avg > 4)
+  for (size_t nci = 0; nci < nc_avg; ++nci) {
+    const size_t ni = nci / c;
+    const size_t ci = nci % c;
+    const float *in_plane = input->values + (ni * c + ci) * h * w;
 
-          for (size_t kh = 0; kh < kernel_h; ++kh) {
-            for (size_t kw = 0; kw < kernel_w; ++kw) {
-              const ptrdiff_t ih =
-                  (ptrdiff_t)(ohi * stride_h + kh) - (ptrdiff_t)pad_h;
-              const ptrdiff_t iw =
-                  (ptrdiff_t)(owi * stride_w + kw) - (ptrdiff_t)pad_w;
+    for (size_t ohi = 0; ohi < oh; ++ohi) {
+      for (size_t owi = 0; owi < ow; ++owi) {
+        float sum = 0.0f;
+        size_t count = 0;
 
-              if (ih >= 0 && iw >= 0 && (size_t)ih < h && (size_t)iw < w) {
-                sum += in_plane[(size_t)ih * w + (size_t)iw];
-                ++count;
-              }
+        for (size_t kh = 0; kh < kernel_h; ++kh) {
+          for (size_t kw = 0; kw < kernel_w; ++kw) {
+            const ptrdiff_t ih =
+                (ptrdiff_t)(ohi * stride_h + kh) - (ptrdiff_t)pad_h;
+            const ptrdiff_t iw =
+                (ptrdiff_t)(owi * stride_w + kw) - (ptrdiff_t)pad_w;
+
+            if (ih >= 0 && iw >= 0 && (size_t)ih < h && (size_t)iw < w) {
+              sum += in_plane[(size_t)ih * w + (size_t)iw];
+              ++count;
             }
           }
-
-          const size_t out_idx = ((ni * c + ci) * oh + ohi) * ow + owi;
-          output->values[out_idx] = (count > 0) ? sum / (float)count : 0.0f;
         }
+
+        const size_t out_idx = ((ni * c + ci) * oh + ohi) * ow + owi;
+        output->values[out_idx] = (count > 0) ? sum / (float)count : 0.0f;
       }
     }
   }
@@ -332,15 +342,22 @@ bool st_global_avgpool2d_nchw(const FloatTensor *input, FloatTensor *output) {
     return false;
   }
 
-  for (size_t ni = 0; ni < n; ++ni) {
-    for (size_t ci = 0; ci < c; ++ci) {
-      const float *plane = input->values + (ni * c + ci) * spatial;
-      float sum = 0.0f;
-      for (size_t i = 0; i < spatial; ++i) {
-        sum += plane[i];
-      }
-      output->values[ni * c + ci] = sum / (float)spatial;
+  const size_t nc_gfwd = n * c;
+
+#pragma omp parallel for schedule(static) if (nc_gfwd > 8)
+  for (size_t nci = 0; nci < nc_gfwd; ++nci) {
+    const size_t ni = nci / c;
+    const size_t ci = nci % c;
+    const float *plane = input->values + (ni * c + ci) * spatial;
+    float sum = 0.0f;
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+    vDSP_sve(plane, 1, &sum, (vDSP_Length)spatial);
+#else
+    for (size_t i = 0; i < spatial; ++i) {
+      sum += plane[i];
     }
+#endif
+    output->values[ni * c + ci] = sum / (float)spatial;
   }
 
   return true;
