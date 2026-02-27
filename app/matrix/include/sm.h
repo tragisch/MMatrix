@@ -49,7 +49,7 @@ FloatMatrix *sm_create_zeros(size_t rows, size_t cols);
 // Create uninitialized matrix (rows x cols), returns NULL on allocation failure.
 FloatMatrix *sm_create(size_t rows, size_t cols);
 
-// Create matrix from external values pointer (no copy, caller manages values lifetime).
+// Create matrix with a copy of the provided values array (caller retains ownership of input).
 FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values);
 
 // Create deep copy of matrix, returns NULL on allocation failure.

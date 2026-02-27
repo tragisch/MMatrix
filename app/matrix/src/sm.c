@@ -91,7 +91,7 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
 
   // Inline LU elimination (no pivot matrix, just elimination)
   FloatMatrix *dummy = copy;
-  size_t n = dummy->rows;
+  size_t n = (dummy->rows < dummy->cols) ? dummy->rows : dummy->cols;
   for (size_t pivot = 0; pivot < n; pivot++) {
     float pivot_val = dummy->values[pivot * dummy->cols + pivot];
     if (fabsf(pivot_val) < EPSILON) continue;
@@ -168,9 +168,8 @@ float *sm_to_column_major(const FloatMatrix *mat) {
     return NULL;
   }
 
-#pragma omp parallel for
+#pragma omp parallel for collapse(2)
   for (size_t j = 0; j < cols; ++j) {
-#pragma omp parallel for
     for (size_t i = 0; i < rows; ++i) {
       col_major[j * rows + i] = mat->values[i * cols + j];
     }
@@ -186,6 +185,10 @@ const char *sm_active_library(void) { return ACTIVE_LIB; }
 
 FloatMatrix *sm_create_empty(void) {
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
+  if (!matrix) {
+    log_error("Error: could not allocate FloatMatrix struct.\n");
+    return NULL;
+  }
   matrix->rows = 0;
   matrix->cols = 0;
   matrix->capacity = 0;
@@ -714,6 +717,7 @@ FloatMatrix *sm_transpose(const FloatMatrix *mat) {
   size_t m = mat->cols;
 
   FloatMatrix *transposed = sm_create(m, n);
+  if (!transposed) return NULL;
 
   float *src = mat->values;
   float *dst = transposed->values;
@@ -771,7 +775,7 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   size_t rows = b_copy->rows;
   size_t cols = b_copy->cols;
 
-#pragma omp parallel
+#pragma omp parallel for
   for (size_t i = 0; i < rows; ++i) {
     for (size_t j = 0; j < cols; ++j) {
       dst[i * cols + j] = src[j * rows + i];
@@ -908,7 +912,7 @@ bool sm_is_equal(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 }
 
 FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2) {
-  if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
+  if (!mat1 || !mat2 || mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
     log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
@@ -921,7 +925,7 @@ FloatMatrix *sm_add(const FloatMatrix *mat1, const FloatMatrix *mat2) {
 }
 
 FloatMatrix *sm_diff(const FloatMatrix *mat1, const FloatMatrix *mat2) {
-  if (mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
+  if (!mat1 || !mat2 || mat1->cols != mat2->cols || mat1->rows != mat2->rows) {
     log_error("Error: invalid matrix dimensions.\n");
     return NULL;
   }
@@ -1012,9 +1016,10 @@ float sm_determinant(const FloatMatrix *mat) {
       sm_destroy(lu);
       return 0;
     }
-    float det = 1.0;
+    float det = 1.0f;
     for (size_t i = 0; i < mat->cols; i++) {
       det *= sm_get(lu, i, i);
+      if (ipiv[i] != (BLASINT)(i + 1)) det = -det;
     }
     free(ipiv);
     sm_destroy(lu);
@@ -1025,6 +1030,7 @@ float sm_determinant(const FloatMatrix *mat) {
 
     size_t n = mat->rows;
     float *a = copy->values;
+    int sign = 1;
 
     for (size_t k = 0; k < n; ++k) {
       // Pivot
@@ -1049,6 +1055,7 @@ float sm_determinant(const FloatMatrix *mat) {
           a[k * n + j] = a[max_row * n + j];
           a[max_row * n + j] = tmp;
         }
+        sign = -sign;
       }
 
       float pivot = a[k * n + k];
@@ -1061,7 +1068,7 @@ float sm_determinant(const FloatMatrix *mat) {
       }
     }
 
-    float det = 1.0f;
+    float det = (float)sign;
     for (size_t i = 0; i < n; ++i) {
       det *= a[i * n + i];
     }
@@ -1154,6 +1161,17 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     sm_destroy(copy);
     sm_destroy(inverse);
     return NULL;
+  }
+
+  // Apply pivot permutation to the identity matrix (right-hand side)
+  for (size_t i = 0; i < n; ++i) {
+    if (pivot_order[i] != i) {
+      for (size_t j = 0; j < n; ++j) {
+        float tmp = inverse->values[i * n + j];
+        inverse->values[i * n + j] = inverse->values[pivot_order[i] * n + j];
+        inverse->values[pivot_order[i] * n + j] = tmp;
+      }
+    }
   }
 
   for (size_t col = 0; col < n; col++) {
@@ -1325,40 +1343,48 @@ size_t sm_rank(const FloatMatrix *mat) {
   size_t rank = 0;
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
     defined(USE_ACCELERATE_MPS)
-  BLASINT m = (BLASINT)mat->rows;
-  BLASINT n = (BLASINT)mat->cols;
+  // Work on a copy to avoid modifying the const input
+  FloatMatrix *qr_copy = sm_clone(mat);
+  if (!qr_copy) return 0;
+
+  BLASINT m = (BLASINT)qr_copy->rows;
+  BLASINT n = (BLASINT)qr_copy->cols;
   BLASINT lda = n;
   BLASINT lwork = -1;
   float wkopt;
   float *work;
   BLASINT info;
 
-  sgeqrf_(&m, &n, mat->values, &lda, NULL, &wkopt, &lwork, &info);
+  sgeqrf_(&m, &n, qr_copy->values, &lda, NULL, &wkopt, &lwork, &info);
   lwork = (BLASINT)wkopt;
   work = (float *)malloc((size_t)lwork * sizeof(float));
   if (work == NULL) {
+    sm_destroy(qr_copy);
     return 0;  // Memory allocation failed
   }
 
   float *tau = (float *)malloc((size_t)(m < n ? m : n) * sizeof(float));
   if (tau == NULL) {
     free(work);
+    sm_destroy(qr_copy);
     return 0;  // Memory allocation failed
   }
 
-  sgeqrf_(&m, &n, mat->values, &lda, tau, work, &lwork, &info);
+  sgeqrf_(&m, &n, qr_copy->values, &lda, tau, work, &lwork, &info);
   free(work);
   free(tau);
   if (info != 0) {
+    sm_destroy(qr_copy);
     return 0;  // QR factorization failed
   }
 
   int k = (m < n) ? m : n;
   for (int i = 0; i < k; ++i) {
-    if (fabsf(mat->values[i * lda + i]) > EPSILON) {
+    if (fabsf(qr_copy->values[i * lda + i]) > EPSILON) {
       rank++;
     }
   }
+  sm_destroy(qr_copy);
 #else
   rank = sm_rank_euler(mat);
 #endif
@@ -1375,7 +1401,8 @@ float sm_density(const FloatMatrix *mat) {
     float32x4_t abs_v = vabsq_f32(v);
     float32x4_t eps = vdupq_n_f32(EPSILON);
     uint32x4_t cmp = vcgtq_f32(abs_v, eps);
-    counter += (int)vaddvq_u32(cmp);
+    // vcgtq_f32 yields 0xFFFFFFFF per true lane; reinterpret as -1 (int32)
+    counter -= (int)vaddvq_s32(vreinterpretq_s32_u32(cmp));
   }
   for (; i < size; ++i) {
     if (fabsf(mat->values[i]) > EPSILON) {

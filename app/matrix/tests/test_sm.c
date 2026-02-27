@@ -786,7 +786,8 @@ void test_sm_determinant_5x5(void) {
 
   float det = sm_determinant(mat);
   // Größere Matrix + Float-Arithmetik: toleranter Vergleich gegen Rundungsfehler
-  TEST_ASSERT_FLOAT_WITHIN(1e-1f, -120120.0f, det);
+  // Korrekt: det = +120120.0 (numpy-verifiziert)
+  TEST_ASSERT_FLOAT_WITHIN(1e-1f, 120120.0f, det);
   sm_destroy(mat);
 }
 
