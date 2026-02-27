@@ -20,6 +20,9 @@
 
 static const char *g_last_backend = "none";
 
+static const double ST_CONV_MPS_MACS_THRESHOLD = 2.0e8;
+static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD = 1000000u;
+
 static bool st_conv2d_is_valid_tensor(const FloatTensor *t, size_t ndim) {
   return t != NULL && t->values != NULL && t->ndim == ndim;
 }
@@ -304,6 +307,30 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
   return true;
 }
 
+static bool st_conv2d_mps_nchw(const FloatTensor *input,
+                               const FloatTensor *weight,
+                               const FloatTensor *bias,
+                               const StConv2dParams *params,
+                               FloatTensor *output) {
+#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+  // Placeholder for next iteration: explicit MPS conv2d kernel binding.
+  // Keep stable behavior by returning false until kernel is wired.
+  (void)input;
+  (void)weight;
+  (void)bias;
+  (void)params;
+  (void)output;
+  return false;
+#else
+  (void)input;
+  (void)weight;
+  (void)bias;
+  (void)params;
+  (void)output;
+  return false;
+#endif
+}
+
 static bool st_conv2d_should_use_cpu_opt(size_t n, size_t c_in, size_t c_out,
                                          size_t out_h, size_t out_w,
                                          size_t k_h, size_t k_w) {
@@ -319,6 +346,17 @@ static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
                       (double)out_w * (double)c_in * (double)k_h *
                       (double)k_w;
   return macs >= 8.0e7;
+}
+
+static bool st_conv2d_should_use_mps(size_t n, size_t c_in, size_t c_out,
+                                     size_t out_h, size_t out_w, size_t k_h,
+                                     size_t k_w) {
+  const double macs = (double)n * (double)c_out * (double)out_h *
+                      (double)out_w * (double)c_in * (double)k_h *
+                      (double)k_w;
+  const size_t out_elems = n * c_out * out_h * out_w;
+  return macs >= ST_CONV_MPS_MACS_THRESHOLD &&
+         out_elems >= ST_CONV_MPS_OUT_ELEMS_THRESHOLD;
 }
 
 static bool st_conv2d_bnns_nchw(const FloatTensor *input,
@@ -462,6 +500,25 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
       }
       return true;
 
+    case ST_CONV_BACKEND_MPS:
+      ok = st_conv2d_mps_nchw(input, weight, bias, &local, output);
+      if (ok) {
+        g_last_backend = "mps";
+        return true;
+      }
+      ok = st_conv2d_gemm_nchw(input, weight, bias, &local, output);
+      if (ok) {
+        g_last_backend = "mps_fallback_gemm";
+        return true;
+      }
+      ok = st_conv2d_reference_nchw(input, weight, bias, &local, output);
+      if (!ok) {
+        log_error("Error: st_conv2d_nchw mps fallback path failed.");
+        return false;
+      }
+      g_last_backend = "mps_fallback_reference";
+      return true;
+
     case ST_CONV_BACKEND_BNNS:
       ok = st_conv2d_bnns_nchw(input, weight, bias, &local, output);
       if (ok) {
@@ -478,6 +535,14 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
 
     case ST_CONV_BACKEND_AUTO:
     default:
+      if (st_conv2d_should_use_mps(n, c_in, c_out, out_h, out_w, k_h, k_w)) {
+        ok = st_conv2d_mps_nchw(input, weight, bias, &local, output);
+        if (ok) {
+          g_last_backend = "mps";
+          return true;
+        }
+      }
+
       ok = st_conv2d_bnns_nchw(input, weight, bias, &local, output);
       if (ok) {
         g_last_backend = "bnns";
