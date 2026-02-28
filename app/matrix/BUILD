@@ -254,7 +254,10 @@ cc_library(
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + [":sm"] + select({
-        ":use_accelerate_mps": [":sm_mps_objc"],
+        ":use_accelerate_mps": [
+            ":sm_mps_objc",
+            ":st_mps_objc",
+        ],
         "//conditions:default": [],
     }),
 )
@@ -272,6 +275,22 @@ objc_library(
         ":use_accelerate_mps": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
+)
+
+objc_library(
+    name = "st_mps_objc",
+    srcs = ["src/st_mps.m"],
+    hdrs = ["src/st_mps.h"],
+    copts = [
+        "-ObjC",
+        "-fobjc-arc",
+    ],
+    includes = ["src"],
+    target_compatible_with = select({
+        ":use_accelerate_mps": ["@platforms//os:macos"],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
+    deps = [":sm_mps_objc"],
 )
 
 cc_library(
@@ -353,6 +372,22 @@ unity_test(
 unity_test(
     name = "test_st_batchnorm",
     srcs = ["tests/test_st_batchnorm.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
+)
+
+unity_test(
+    name = "test_st_conv_backward_gemm",
+    srcs = ["tests/test_st_conv_backward_gemm.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = ["@//app/matrix:st"],
+)
+
+unity_test(
+    name = "test_st_batchnorm_relu",
+    srcs = ["tests/test_st_batchnorm_relu.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix:st"],

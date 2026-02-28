@@ -17,6 +17,15 @@
 #include <Accelerate/Accelerate.h>
 #endif
 
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+#endif
+
+#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#include "st_mps.h"
+#define ST_POOL_MPS_THRESHOLD 4096  /* numel threshold for MPS dispatch */
+#endif
+
 /* ---- Validation helpers ---- */
 
 static bool st_pool_is_valid_4d(const FloatTensor *t) {
@@ -83,6 +92,17 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
+#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+  /* MPS dispatch for large tensors (indices not supported on MPS path). */
+  if (!indices && input->numel >= ST_POOL_MPS_THRESHOLD) {
+    bool ok = st_maxpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
+                               stride_h, stride_w, pad_h, pad_w,
+                               output->values, oh, ow);
+    if (ok) return true;
+    /* Fallback to CPU on MPS failure. */
+  }
+#endif
+
   const size_t nc = n * c;
 
 #pragma omp parallel for schedule(static) if (nc > 4)
@@ -92,7 +112,45 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     const float *in_plane = input->values + (ni * c + ci) * h * w;
 
     for (size_t ohi = 0; ohi < oh; ++ohi) {
+#ifdef __ARM_NEON
+      /* NEON-optimized path: process 4 output positions at a time when
+       * possible.  For no-padding (pad_h==0, pad_w==0) and kernel fully
+       * inside, we can safely vectorise the inner loop. */
+      size_t owi = 0;
+      if (pad_h == 0 && pad_w == 0 && ow >= 4 && stride_w == 1 &&
+          !indices) {
+        for (; owi + 4 <= ow; owi += 4) {
+          float32x4_t vmax = vdupq_n_f32(-INFINITY);
+          for (size_t kh = 0; kh < kernel_h; ++kh) {
+            const size_t ih_val = ohi * stride_h + kh;
+            if (ih_val >= h) break;
+            for (size_t kw = 0; kw < kernel_w; ++kw) {
+              /* Load 4 contiguous input elements */
+              const size_t base_iw = owi * stride_w + kw;
+              if (base_iw + 3 < w) {
+                float32x4_t vin = vld1q_f32(&in_plane[ih_val * w + base_iw]);
+                vmax = vmaxq_f32(vmax, vin);
+              } else {
+                /* Scalar fallback near right edge */
+                float tmp[4];
+                for (int t = 0; t < 4; ++t) {
+                  size_t iw_t = (owi + (size_t)t) * stride_w + kw;
+                  tmp[t] = (iw_t < w) ? in_plane[ih_val * w + iw_t] : -INFINITY;
+                }
+                float32x4_t vin = vld1q_f32(tmp);
+                vmax = vmaxq_f32(vmax, vin);
+              }
+            }
+          }
+          const size_t base_out = ((ni * c + ci) * oh + ohi) * ow + owi;
+          vst1q_f32(&output->values[base_out], vmax);
+        }
+      }
+      /* Scalar remainder / fallback */
+      for (; owi < ow; ++owi) {
+#else
       for (size_t owi = 0; owi < ow; ++owi) {
+#endif
         float max_val = -INFINITY;
         size_t max_idx = 0;
 
@@ -154,6 +212,17 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
+#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+  /* MPS dispatch for large tensors. */
+  if (input->numel >= ST_POOL_MPS_THRESHOLD) {
+    bool ok = st_avgpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
+                               stride_h, stride_w, pad_h, pad_w,
+                               output->values, oh, ow);
+    if (ok) return true;
+    /* Fallback to CPU on MPS failure. */
+  }
+#endif
+
   const size_t nc_avg = n * c;
 
 #pragma omp parallel for schedule(static) if (nc_avg > 4)
@@ -163,7 +232,46 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     const float *in_plane = input->values + (ni * c + ci) * h * w;
 
     for (size_t ohi = 0; ohi < oh; ++ohi) {
+#ifdef __ARM_NEON
+      /* NEON-optimized path for avgpool: process 4 output positions when
+       * there is no padding and stride_w == 1. */
+      size_t owi_avg = 0;
+      if (pad_h == 0 && pad_w == 0 && ow >= 4 && stride_w == 1) {
+        const float inv_count = 1.0f / (float)(kernel_h * kernel_w);
+        const float32x4_t vinv = vdupq_n_f32(inv_count);
+        for (; owi_avg + 4 <= ow; owi_avg += 4) {
+          float32x4_t vsum = vdupq_n_f32(0.0f);
+          bool all_inside = true;
+          for (size_t kh = 0; kh < kernel_h && all_inside; ++kh) {
+            const size_t ih_val = ohi * stride_h + kh;
+            if (ih_val >= h) { all_inside = false; break; }
+            for (size_t kw = 0; kw < kernel_w; ++kw) {
+              const size_t base_iw = owi_avg * stride_w + kw;
+              if (base_iw + 3 < w) {
+                float32x4_t vin = vld1q_f32(&in_plane[ih_val * w + base_iw]);
+                vsum = vaddq_f32(vsum, vin);
+              } else {
+                all_inside = false;
+                break;
+              }
+            }
+          }
+          if (all_inside) {
+            vsum = vmulq_f32(vsum, vinv);
+            const size_t base_out = ((ni * c + ci) * oh + ohi) * ow + owi_avg;
+            vst1q_f32(&output->values[base_out], vsum);
+          } else {
+            /* Fallback to scalar for this batch of 4 */
+            owi_avg -= 0;  /* will be re-processed below */
+            break;
+          }
+        }
+      }
+      /* Scalar remainder / fallback */
+      for (size_t owi = owi_avg; owi < ow; ++owi) {
+#else
       for (size_t owi = 0; owi < ow; ++owi) {
+#endif
         float sum = 0.0f;
         size_t count = 0;
 

@@ -47,4 +47,28 @@ bool st_batchnorm2d_backward(const FloatTensor *grad_output,
                              FloatTensor *grad_input, FloatTensor *grad_gamma,
                              FloatTensor *grad_beta);
 
+// ---- Fused Batch Normalization + ReLU (single pass) ----
+
+// Forward pass for fused BatchNorm + ReLU.
+// Identical to st_batchnorm2d_forward but applies ReLU (max(0,x)) in the same pass.
+// output  [N, C, H, W] — normalized, scaled, shifted, then ReLU'd
+bool st_batchnorm2d_forward_relu(const FloatTensor *input,
+                                 const FloatTensor *gamma,
+                                 const FloatTensor *beta, float epsilon,
+                                 FloatTensor *output, FloatTensor *mean,
+                                 FloatTensor *var);
+
+// Backward pass for fused BatchNorm + ReLU.
+// bn_output is the output of st_batchnorm2d_forward_relu (post-ReLU).
+// Uses bn_output > 0 as ReLU mask on grad_output, then performs BN backward.
+bool st_batchnorm2d_backward_relu(const FloatTensor *grad_output,
+                                  const FloatTensor *input,
+                                  const FloatTensor *bn_output,
+                                  const FloatTensor *mean,
+                                  const FloatTensor *var,
+                                  const FloatTensor *gamma, float epsilon,
+                                  FloatTensor *grad_input,
+                                  FloatTensor *grad_gamma,
+                                  FloatTensor *grad_beta);
+
 #endif  // ST_BATCHNORM_H
