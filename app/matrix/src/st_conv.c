@@ -9,6 +9,10 @@
 #include "st_conv.h"
 #include "sm.h"
 
+#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#include <Accelerate/Accelerate.h>
+#endif
+
 #if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
 #include "sm_mps.h"
 #endif
@@ -1029,7 +1033,7 @@ static bool st_conv2d_backward_data_gemm(const FloatTensor *grad_output,
  * Input tile: 4×4, output tile: 2×2.
  */
 
-static bool st_conv2d_backward_data_winograd_3x3(
+static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
     const FloatTensor *grad_output, const FloatTensor *weight,
     const StConv2dParams *local, FloatTensor *grad_input) {
   const size_t n = grad_output->shape[0];

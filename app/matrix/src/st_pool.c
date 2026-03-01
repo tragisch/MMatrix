@@ -9,7 +9,7 @@
 #include "st_pool.h"
 
 #include <log.h>
-#include <math.h>
+#include <float.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -120,7 +120,7 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
       if (pad_h == 0 && pad_w == 0 && ow >= 4 && stride_w == 1 &&
           !indices) {
         for (; owi + 4 <= ow; owi += 4) {
-          float32x4_t vmax = vdupq_n_f32(-INFINITY);
+          float32x4_t vmax = vdupq_n_f32(-FLT_MAX);
           for (size_t kh = 0; kh < kernel_h; ++kh) {
             const size_t ih_val = ohi * stride_h + kh;
             if (ih_val >= h) break;
@@ -135,7 +135,7 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
                 float tmp[4];
                 for (int t = 0; t < 4; ++t) {
                   size_t iw_t = (owi + (size_t)t) * stride_w + kw;
-                  tmp[t] = (iw_t < w) ? in_plane[ih_val * w + iw_t] : -INFINITY;
+                  tmp[t] = (iw_t < w) ? in_plane[ih_val * w + iw_t] : -FLT_MAX;
                 }
                 float32x4_t vin = vld1q_f32(tmp);
                 vmax = vmaxq_f32(vmax, vin);
@@ -151,7 +151,7 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
 #else
       for (size_t owi = 0; owi < ow; ++owi) {
 #endif
-        float max_val = -INFINITY;
+        float max_val = -FLT_MAX;
         size_t max_idx = 0;
 
         for (size_t kh = 0; kh < kernel_h; ++kh) {

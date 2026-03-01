@@ -8,7 +8,6 @@
 
 #include "st_batchnorm.h"
 
-#include <math.h>
 #include <string.h>
 
 #define UNITY_INCLUDE_FLOAT
