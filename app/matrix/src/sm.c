@@ -89,18 +89,21 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
   }
   memcpy(copy->values, mat->values, rows * cols * sizeof(float));
 
-  // Inline LU elimination (no pivot matrix, just elimination)
+  /* Inline LU elimination (no pivot matrix, just elimination) */
   FloatMatrix *dummy = copy;
   size_t n = (dummy->rows < dummy->cols) ? dummy->rows : dummy->cols;
+  size_t dcols = dummy->cols;
   for (size_t pivot = 0; pivot < n; pivot++) {
-    float pivot_val = dummy->values[pivot * dummy->cols + pivot];
+    float pivot_val = dummy->values[pivot * dcols + pivot];
     if (fabsf(pivot_val) < EPSILON) continue;
+    const float *restrict pivot_row = &dummy->values[pivot * dcols];
+#pragma omp parallel for schedule(static) if (n - pivot > 128)
     for (size_t row = pivot + 1; row < n; row++) {
-      float factor = dummy->values[row * dummy->cols + pivot] / pivot_val;
-      dummy->values[row * dummy->cols + pivot] = 0.0f;
-      for (size_t col = pivot + 1; col < dummy->cols; col++) {
-        dummy->values[row * dummy->cols + col] -=
-            factor * dummy->values[pivot * dummy->cols + col];
+      float factor = dummy->values[row * dcols + pivot] / pivot_val;
+      dummy->values[row * dcols + pivot] = 0.0f;
+#pragma omp simd
+      for (size_t col = pivot + 1; col < dcols; col++) {
+        dummy->values[row * dcols + col] -= factor * pivot_row[col];
       }
     }
   }
@@ -168,7 +171,7 @@ float *sm_to_column_major(const FloatMatrix *mat) {
     return NULL;
   }
 
-#pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2) if (rows * cols > 250000)
   for (size_t j = 0; j < cols; ++j) {
     for (size_t i = 0; i < rows; ++i) {
       col_major[j * rows + i] = mat->values[i * cols + j];
@@ -490,23 +493,58 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
               beta, C->values, (BLASINT)C->cols);
 #else
   size_t k = k_a;
-  float *c = C->values;
-  const float *a = A->values;
-  const float *b = B->values;
+  float *restrict c = C->values;
+  const float *restrict a = A->values;
+  const float *restrict b = B->values;
 
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < m; i++) {
-    for (size_t j = 0; j < n; j++) {
-      float sum = 0.0f;
-#pragma omp simd reduction(+ : sum)
-      for (size_t p = 0; p < k; p++) {
-        float a_ip = (trans_a == SM_TRANSPOSE) ? a[p * A->cols + i]
-                                                : a[i * A->cols + p];
-        float b_pj = (trans_b == SM_TRANSPOSE) ? b[j * B->cols + p]
-                                                : b[p * B->cols + j];
-        sum += a_ip * b_pj;
+  /* --- Initialise C = beta * C --- */
+  if (beta == 0.0f) {
+    memset(c, 0, m * n * sizeof(float));
+  } else if (beta != 1.0f) {
+    for (size_t i = 0; i < m * n; i++) {
+      c[i] *= beta;
+    }
+  }
+
+  /* --- Fast path: NoTrans x NoTrans (i-k-j order with tiling) --- */
+  if (trans_a == SM_NO_TRANSPOSE && trans_b == SM_NO_TRANSPOSE) {
+    enum { TILE = 64 };
+
+#pragma omp parallel for schedule(static)
+    for (size_t ii = 0; ii < m; ii += TILE) {
+      const size_t i_end = (ii + TILE < m) ? ii + TILE : m;
+      for (size_t kk = 0; kk < k; kk += TILE) {
+        const size_t k_end = (kk + TILE < k) ? kk + TILE : k;
+        for (size_t jj = 0; jj < n; jj += TILE) {
+          const size_t j_end = (jj + TILE < n) ? jj + TILE : n;
+          for (size_t i = ii; i < i_end; i++) {
+            for (size_t p = kk; p < k_end; p++) {
+              const float a_ip = alpha * a[i * A->cols + p];
+#pragma omp simd
+              for (size_t j = jj; j < j_end; j++) {
+                c[i * n + j] += a_ip * b[p * B->cols + j];
+              }
+            }
+          }
+        }
       }
-      c[i * n + j] = alpha * sum + beta * c[i * n + j];
+    }
+  } else {
+    /* --- General path for transpose cases --- */
+#pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < m; i++) {
+      for (size_t p = 0; p < k; p++) {
+        const float a_ip =
+            alpha * ((trans_a == SM_TRANSPOSE) ? a[p * A->cols + i]
+                                               : a[i * A->cols + p]);
+#pragma omp simd
+        for (size_t j = 0; j < n; j++) {
+          const float b_pj = (trans_b == SM_TRANSPOSE)
+                                  ? b[j * B->cols + p]
+                                  : b[p * B->cols + j];
+          c[i * n + j] += a_ip * b_pj;
+        }
+      }
     }
   }
 #endif
@@ -585,55 +623,6 @@ FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   return product;
 }
 
-// Cache-efficient matrix multiplication using transposed B and dot products
-// (like mat_mul4)
-FloatMatrix *sm_multiply_4(const FloatMatrix *A, const FloatMatrix *B) {
-  if (!A || !B || A->cols != B->rows) {
-    log_error("Error: invalid matrix dimensions for sm_multiply_4.");
-    return NULL;
-  }
-
-  size_t n_a_rows = A->rows;
-  size_t n_a_cols = A->cols;
-  size_t n_b_cols = B->cols;
-
-  FloatMatrix *product = sm_create(n_a_rows, n_b_cols);
-  if (!product) return NULL;
-
-  FloatMatrix *B_T;
-  if (B->rows == B->cols) {
-    B_T = sm_clone(B);
-    if (!B_T || !sm_inplace_square_transpose(B_T)) {
-      sm_destroy(product);
-      sm_destroy(B_T);
-      return NULL;
-    }
-  } else {
-    B_T = sm_transpose(B);
-  }
-
-  if (!B_T) {
-    sm_destroy(product);
-    return NULL;
-  }
-
-#pragma omp parallel for collapse(2) if (n_a_rows > 500 || n_b_cols > 500)
-  for (size_t i = 0; i < n_a_rows; ++i) {
-    for (size_t j = 0; j < n_b_cols; ++j) {
-      float *row_a = &A->values[i * n_a_cols];
-      float *row_bT = &B_T->values[j * n_a_cols];
-      float sum = 0.0f;
-      for (size_t k = 0; k < n_a_cols; ++k) {
-        sum += row_a[k] * row_bT[k];
-      }
-      product->values[i * n_b_cols + j] = sum;
-    }
-  }
-
-  sm_destroy(B_T);
-  return product;
-}
-
 bool sm_inplace_elementwise_multiply(FloatMatrix *mat1,
                                      const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || !sm_is_equal_size(mat1, mat2)) {
@@ -652,23 +641,20 @@ bool sm_inplace_elementwise_multiply(FloatMatrix *mat1,
   float *a = mat1->values;
   const float *b = mat2->values;
 
+#pragma omp parallel for schedule(static)
+  for (size_t blk = 0; blk < size; blk += 256) {
+    size_t end = (blk + 256 < size) ? blk + 256 : size;
 #ifdef __ARM_NEON
-  size_t i = 0;
-  for (; i + 4 <= size; i += 4) {
-    float32x4_t va = vld1q_f32(&a[i]);
-    float32x4_t vb = vld1q_f32(&b[i]);
-    float32x4_t vc = vmulq_f32(va, vb);
-    vst1q_f32(&a[i], vc);
-  }
-  for (; i < size; i++) {
-    a[i] *= b[i];
-  }
+    size_t i = blk;
+    for (; i + 4 <= end; i += 4) {
+      vst1q_f32(&a[i], vmulq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
+    }
+    for (; i < end; i++) { a[i] *= b[i]; }
 #else
-#pragma omp parallel for
-  for (size_t i = 0; i < size; i++) {
-    a[i] *= b[i];
-  }
+#pragma omp simd
+    for (size_t i = blk; i < end; i++) { a[i] *= b[i]; }
 #endif
+  }
 #endif
 
   return true;
@@ -771,11 +757,13 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
   }
 
   float *restrict dst = b_copy->values;
-  float *restrict src = b_col;
+  const float *restrict src = b_col;
   size_t rows = b_copy->rows;
   size_t cols = b_copy->cols;
 
-#pragma omp parallel for
+  /* Column-major → row-major transpose.  No OMP here: the matrix is
+     typically small (nrhs columns) and Accelerate manages its own
+     thread pool — spawning OMP threads would cause oversubscription. */
   for (size_t i = 0; i < rows; ++i) {
     for (size_t j = 0; j < cols; ++j) {
       dst[i * cols + j] = src[j * rows + i];
@@ -843,26 +831,57 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
       }
     }
   }
-#pragma omp parallel for
+
+  /* Transpose RHS so each column becomes a contiguous row
+     to avoid false sharing when parallelising over columns. */
+  float *restrict rt = (float *)malloc(rhs * n * sizeof(float));
+  if (!rt) {
+    sm_destroy(lu);
+    sm_destroy(x);
+    free(pivot_order);
+    return NULL;
+  }
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t k = 0; k < rhs; ++k) {
+      rt[k * n + i] = x->values[i * rhs + k];
+    }
+  }
+
+  const float *restrict lv = lu->values;
+
+#pragma omp parallel for schedule(static) if (rhs > 1 && n > 128)
   for (size_t k = 0; k < rhs; ++k) {
+    float *restrict r = &rt[k * n];
+
+    /* Forward substitution (L * y = Pb) */
     for (size_t i = 1; i < n; ++i) {
-      float sum = x->values[i * rhs + k];
+      float sum = r[i];
       for (size_t j = 0; j < i; ++j) {
-        sum -= lu->values[i * n + j] * x->values[j * rhs + k];
+        sum -= lv[i * n + j] * r[j];
       }
-      x->values[i * rhs + k] = sum;
+      r[i] = sum;
     }
 
+    /* Back substitution (U * x = y) */
     size_t i = n;
     do {
       --i;
-      float sum = x->values[i * rhs + k];
+      float sum = r[i];
       for (size_t j = i + 1; j < n; ++j) {
-        sum -= lu->values[i * n + j] * x->values[j * rhs + k];
+        sum -= lv[i * n + j] * r[j];
       }
-      x->values[i * rhs + k] = sum / lu->values[i * n + i];
+      r[i] = sum / lv[i * n + i];
     } while (i != 0);
   }
+
+  /* Transpose result back into x */
+  for (size_t k = 0; k < rhs; ++k) {
+    const float *restrict r = &rt[k * n];
+    for (size_t i = 0; i < n; ++i) {
+      x->values[i * rhs + k] = r[i];
+    }
+  }
+  free(rt);
 
   sm_destroy(lu);
   free(pivot_order);
@@ -1033,7 +1052,7 @@ float sm_determinant(const FloatMatrix *mat) {
     int sign = 1;
 
     for (size_t k = 0; k < n; ++k) {
-      // Pivot
+      /* Partial pivoting */
       size_t max_row = k;
       float max_val = fabsf(a[k * n + k]);
       for (size_t i = k + 1; i < n; ++i) {
@@ -1050,7 +1069,7 @@ float sm_determinant(const FloatMatrix *mat) {
       }
 
       if (max_row != k) {
-        for (size_t j = 0; j < n; ++j) {
+        for (size_t j = k; j < n; ++j) {
           float tmp = a[k * n + j];
           a[k * n + j] = a[max_row * n + j];
           a[max_row * n + j] = tmp;
@@ -1058,12 +1077,15 @@ float sm_determinant(const FloatMatrix *mat) {
         sign = -sign;
       }
 
-      float pivot = a[k * n + k];
+      const float pivot = a[k * n + k];
+      const float *restrict pivot_row = &a[k * n];
+#pragma omp parallel for schedule(static) if (n - k > 128)
       for (size_t i = k + 1; i < n; ++i) {
         float factor = a[i * n + k] / pivot;
         a[i * n + k] = 0.0f;
+#pragma omp simd
         for (size_t j = k + 1; j < n; ++j) {
-          a[i * n + j] -= factor * a[k * n + j];
+          a[i * n + j] -= factor * pivot_row[j];
         }
       }
     }
@@ -1174,27 +1196,57 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     }
   }
 
+  /* Transpose RHS so each "column" is a contiguous row → avoids false sharing */
+  float *restrict rhs = (float *)malloc(n * n * sizeof(float));
+  if (!rhs) {
+    free(pivot_order);
+    sm_destroy(copy);
+    sm_destroy(inverse);
+    return NULL;
+  }
+  const float *restrict inv = inverse->values;
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t j = 0; j < n; ++j) {
+      rhs[j * n + i] = inv[i * n + j];  /* transpose: rhs[col][row] */
+    }
+  }
+
+  const float *restrict lu = copy->values;
+
+#pragma omp parallel for schedule(static) if (n > 128)
   for (size_t col = 0; col < n; col++) {
-    // Vorwärtseinsetzen (L * y = e_col)
+    float *restrict r = &rhs[col * n]; /* this "column" is now a contiguous row */
+
+    /* Forward substitution (L * y = e_col) */
     for (size_t i = 1; i < n; i++) {
-      float sum = inverse->values[i * n + col];
+      float sum = r[i];
       for (size_t j = 0; j < i; j++) {
-        sum -= copy->values[i * n + j] * inverse->values[j * n + col];
+        sum -= lu[i * n + j] * r[j];
       }
-      inverse->values[i * n + col] = sum;
+      r[i] = sum;
     }
 
-    // Rückwärtseinsetzen (U * x = y)
+    /* Back substitution (U * x = y) */
     size_t i = n;
     do {
       --i;
-      float sum = inverse->values[i * n + col];
+      float sum = r[i];
       for (size_t j = i + 1; j < n; j++) {
-        sum -= copy->values[i * n + j] * inverse->values[j * n + col];
+        sum -= lu[i * n + j] * r[j];
       }
-      inverse->values[i * n + col] = sum / copy->values[i * n + i];
+      r[i] = sum / lu[i * n + i];
     } while (i != 0);
   }
+
+  /* Transpose result back */
+  float *restrict dst = inverse->values;
+  for (size_t col = 0; col < n; ++col) {
+    const float *restrict r = &rhs[col * n];
+    for (size_t i = 0; i < n; ++i) {
+      dst[i * n + col] = r[i];
+    }
+  }
+  free(rhs);
 
   free(pivot_order);
   sm_destroy(copy);
@@ -1455,23 +1507,23 @@ bool sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
               mat1->values, 1);
 #else
+  size_t total = mat1->rows * mat1->cols;
+  float *restrict a = mat1->values;
+  const float *restrict b = mat2->values;
+#pragma omp parallel for schedule(static)
+  for (size_t blk = 0; blk < total; blk += 256) {
+    size_t end = (blk + 256 < total) ? blk + 256 : total;
 #ifdef __ARM_NEON
-  size_t n = mat1->rows * mat1->cols;
-  size_t i = 0;
-  for (; i + 4 <= n; i += 4) {
-    float32x4_t a = vld1q_f32(&mat1->values[i]);
-    float32x4_t b = vld1q_f32(&mat2->values[i]);
-    vst1q_f32(&mat1->values[i], vaddq_f32(a, b));
-  }
-  for (; i < n; i++) {
-    mat1->values[i] += mat2->values[i];
-  }
+    size_t i = blk;
+    for (; i + 4 <= end; i += 4) {
+      vst1q_f32(&a[i], vaddq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
+    }
+    for (; i < end; i++) { a[i] += b[i]; }
 #else
-#pragma omp parallel for
-  for (size_t i = 0; i < mat1->rows * mat1->cols; i++) {
-    mat1->values[i] += mat2->values[i];
-  }
+#pragma omp simd
+    for (size_t i = blk; i < end; i++) { a[i] += b[i]; }
 #endif
+  }
 #endif
 
   return true;
@@ -1494,23 +1546,23 @@ bool sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
               mat1->values, 1);
 #else
+  size_t total = mat1->rows * mat1->cols;
+  float *restrict a = mat1->values;
+  const float *restrict b = mat2->values;
+#pragma omp parallel for schedule(static)
+  for (size_t blk = 0; blk < total; blk += 256) {
+    size_t end = (blk + 256 < total) ? blk + 256 : total;
 #ifdef __ARM_NEON
-  size_t n = mat1->rows * mat1->cols;
-  size_t i = 0;
-  for (; i + 4 <= n; i += 4) {
-    float32x4_t a = vld1q_f32(&mat1->values[i]);
-    float32x4_t b = vld1q_f32(&mat2->values[i]);
-    vst1q_f32(&mat1->values[i], vsubq_f32(a, b));
-  }
-  for (; i < n; i++) {
-    mat1->values[i] -= mat2->values[i];
-  }
+    size_t i = blk;
+    for (; i + 4 <= end; i += 4) {
+      vst1q_f32(&a[i], vsubq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
+    }
+    for (; i < end; i++) { a[i] -= b[i]; }
 #else
-#pragma omp parallel for
-  for (size_t i = 0; i < mat1->rows * mat1->cols; i++) {
-    mat1->values[i] -= mat2->values[i];
-  }
+#pragma omp simd
+    for (size_t i = blk; i < end; i++) { a[i] -= b[i]; }
 #endif
+  }
 #endif
 
   return true;
@@ -1552,23 +1604,23 @@ bool sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
     defined(USE_ACCELERATE_MPS)
   cblas_sscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
 #else
+  size_t total = mat->rows * mat->cols;
+  float *restrict a = mat->values;
+#pragma omp parallel for schedule(static)
+  for (size_t blk = 0; blk < total; blk += 256) {
+    size_t end = (blk + 256 < total) ? blk + 256 : total;
 #ifdef __ARM_NEON
-  size_t n = mat->rows * mat->cols;
-  size_t i = 0;
-  float32x4_t s = vdupq_n_f32(scalar);
-  for (; i + 4 <= n; i += 4) {
-    float32x4_t v = vld1q_f32(&mat->values[i]);
-    vst1q_f32(&mat->values[i], vmulq_f32(v, s));
-  }
-  for (; i < n; ++i) {
-    mat->values[i] *= scalar;
-  }
+    float32x4_t s = vdupq_n_f32(scalar);
+    size_t i = blk;
+    for (; i + 4 <= end; i += 4) {
+      vst1q_f32(&a[i], vmulq_f32(vld1q_f32(&a[i]), s));
+    }
+    for (; i < end; ++i) { a[i] *= scalar; }
 #else
-#pragma omp parallel for simd
-  for (size_t i = 0; i < mat->rows * mat->cols; i++) {
-    mat->values[i] *= scalar;
-  }
+#pragma omp simd
+    for (size_t i = blk; i < end; i++) { a[i] *= scalar; }
 #endif
+  }
 #endif
 
   return true;
@@ -1590,23 +1642,20 @@ bool sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
   vDSP_vdiv(b, 1, a, 1, a, 1, size);
 #else
 
+#pragma omp parallel for schedule(static)
+  for (size_t blk = 0; blk < size; blk += 256) {
+    size_t end = (blk + 256 < size) ? blk + 256 : size;
 #ifdef __ARM_NEON
-  size_t i = 0;
-  for (; i + 4 <= size; i += 4) {
-    float32x4_t va = vld1q_f32(&a[i]);
-    float32x4_t vb = vld1q_f32(&b[i]);
-    float32x4_t vc = vdivq_f32(va, vb);
-    vst1q_f32(&a[i], vc);
-  }
-  for (; i < size; i++) {
-    a[i] /= b[i];
-  }
+    size_t i = blk;
+    for (; i + 4 <= end; i += 4) {
+      vst1q_f32(&a[i], vdivq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
+    }
+    for (; i < end; i++) { a[i] /= b[i]; }
 #else
-#pragma omp parallel for
-  for (size_t i = 0; i < size; i++) {
-    a[i] /= b[i];
-  }
+#pragma omp simd
+    for (size_t i = blk; i < end; i++) { a[i] /= b[i]; }
 #endif
+  }
 #endif
 
   return true;

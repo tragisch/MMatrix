@@ -48,7 +48,6 @@ extern "C" {
     pub fn sm_add(mat1: *const FloatMatrix, mat2: *const FloatMatrix) -> *mut FloatMatrix;
     pub fn sm_diff(mat1: *const FloatMatrix, mat2: *const FloatMatrix) -> *mut FloatMatrix;
     pub fn sm_multiply(mat1: *const FloatMatrix, mat2: *const FloatMatrix) -> *mut FloatMatrix;
-    pub fn sm_multiply_4(A: *const FloatMatrix, B: *const FloatMatrix) -> *mut FloatMatrix;
     pub fn sm_elementwise_multiply(
         mat1: *const FloatMatrix,
         mat2: *const FloatMatrix,

@@ -72,7 +72,6 @@ default_copts = [
     "-Wpedantic",
     "-Wconversion",
     "-Wsign-conversion",
-    "-Xpreprocessor",
 ]
 
 perf_copts = select({
@@ -117,13 +116,23 @@ package_copts = select({
     "//conditions:default": [],
 })
 
-openmp_copts = []  #"-fopenmp"
+openmp_copts = select({
+    ":macos_arm64": [
+        "-Xpreprocessor",
+        "-fopenmp",
+    ],
+    ":linux_x86_64": ["-fopenmp"],
+    "//conditions:default": [],
+})
 
 #############################
 # Linker options (separat!)
 #############################
 
-openmp_linkopts = []
+openmp_linkopts = select({
+    ":linux_x86_64": ["-fopenmp"],
+    "//conditions:default": [],
+})
 
 accelerate_linkopts = select({
     ":use_accelerate": [
