@@ -6,3 +6,18 @@ CompileFlags:
     - "-Ibazel-out/darwin_arm64-fastbuild/bin/external/+http_archive+matio/src"
     - "-Iexternal/+http_archive+matio"
     - "-Iexternal/+http_archive+matio/src"
+    # matrix public headers
+    - "-Iapp/matrix/include"
+    # third-party benchmark dependencies used by share/google_benchmark
+    - "-Ithird_party/matmul/include"
+    - "-Ithird_party/mm_offloading"
+    # bazel external repo symlink for google benchmark headers
+    - "-Iexternal/google_benchmark+/include"
+
+---
+If:
+  PathMatch: ^share/google_benchmark/benchmarks/legacy/.*
+Diagnostics:
+  Suppress:
+    - pp_file_not_found
+    - unused-includes
