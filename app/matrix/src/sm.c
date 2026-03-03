@@ -145,6 +145,54 @@ const char *sm_active_library(void) {
 // Block size used for cache-optimized transpose operations
 #define BLOCK_SIZE 64
 
+/* ---- Elementwise loop macros (NEON / OMP+SIMD) ---- */
+
+// Binary: a[i] = neon_op(a[i], b[i])  /  a[i] scalar_op b[i]
+#ifdef __ARM_NEON
+#define SM_APPLY_BINOP(a, b, size, neon_op, scalar_op)                         \
+  _Pragma("omp parallel for schedule(static)")                                 \
+  for (size_t blk_ = 0; blk_ < (size); blk_ += 256) {                         \
+    size_t end_ = (blk_ + 256 < (size)) ? blk_ + 256 : (size);               \
+    size_t i_ = blk_;                                                          \
+    for (; i_ + 4 <= end_; i_ += 4) {                                         \
+      vst1q_f32(&(a)[i_], neon_op(vld1q_f32(&(a)[i_]),                        \
+                                   vld1q_f32(&(b)[i_])));                      \
+    }                                                                          \
+    for (; i_ < end_; i_++) { (a)[i_] scalar_op (b)[i_]; }                    \
+  }
+#else
+#define SM_APPLY_BINOP(a, b, size, neon_op, scalar_op)                         \
+  _Pragma("omp parallel for schedule(static)")                                 \
+  for (size_t blk_ = 0; blk_ < (size); blk_ += 256) {                         \
+    size_t end_ = (blk_ + 256 < (size)) ? blk_ + 256 : (size);               \
+    _Pragma("omp simd")                                                        \
+    for (size_t i_ = blk_; i_ < end_; i_++) { (a)[i_] scalar_op (b)[i_]; }   \
+  }
+#endif
+
+// Scalar: a[i] = neon_op(a[i], broadcast(s))  /  a[i] scalar_op s
+#ifdef __ARM_NEON
+#define SM_APPLY_SCALAR_OP(a, size, s, neon_op, scalar_op)                     \
+  _Pragma("omp parallel for schedule(static)")                                 \
+  for (size_t blk_ = 0; blk_ < (size); blk_ += 256) {                         \
+    size_t end_ = (blk_ + 256 < (size)) ? blk_ + 256 : (size);               \
+    float32x4_t sv_ = vdupq_n_f32(s);                                         \
+    size_t i_ = blk_;                                                          \
+    for (; i_ + 4 <= end_; i_ += 4) {                                         \
+      vst1q_f32(&(a)[i_], neon_op(vld1q_f32(&(a)[i_]), sv_));                 \
+    }                                                                          \
+    for (; i_ < end_; i_++) { (a)[i_] scalar_op (s); }                        \
+  }
+#else
+#define SM_APPLY_SCALAR_OP(a, size, s, neon_op, scalar_op)                     \
+  _Pragma("omp parallel for schedule(static)")                                 \
+  for (size_t blk_ = 0; blk_ < (size); blk_ += 256) {                         \
+    size_t end_ = (blk_ + 256 < (size)) ? blk_ + 256 : (size);               \
+    _Pragma("omp simd")                                                        \
+    for (size_t i_ = blk_; i_ < end_; i_++) { (a)[i_] scalar_op (s); }       \
+  }
+#endif
+
 /*******************************/
 /*       Private Functions     */
 /*******************************/
@@ -152,28 +200,25 @@ const char *sm_active_library(void) {
 size_t sm_rank_euler(const FloatMatrix *mat) {
   size_t rows = mat->rows;
   size_t cols = mat->cols;
-  FloatMatrix *copy = sm_create(rows, cols);
+  FloatMatrix *copy = sm_clone(mat);
   if (!copy) {
     log_error("Error: Memory allocation for matrix copy failed.\n");
     return 0;
   }
-  memcpy(copy->values, mat->values, rows * cols * sizeof(float));
 
-  /* Inline LU elimination (no pivot matrix, just elimination) */
-  FloatMatrix *dummy = copy;
-  size_t n = (dummy->rows < dummy->cols) ? dummy->rows : dummy->cols;
-  size_t dcols = dummy->cols;
+  /* Gaussian elimination (no pivoting — sufficient for rank estimation) */
+  size_t n = (rows < cols) ? rows : cols;
   for (size_t pivot = 0; pivot < n; pivot++) {
-    float pivot_val = dummy->values[pivot * dcols + pivot];
+    float pivot_val = copy->values[pivot * cols + pivot];
     if (fabsf(pivot_val) < EPSILON) continue;
-    const float *restrict pivot_row = &dummy->values[pivot * dcols];
+    const float *restrict pivot_row = &copy->values[pivot * cols];
 #pragma omp parallel for schedule(static) if (n - pivot > 128)
     for (size_t row = pivot + 1; row < n; row++) {
-      float factor = dummy->values[row * dcols + pivot] / pivot_val;
-      dummy->values[row * dcols + pivot] = 0.0f;
+      float factor = copy->values[row * cols + pivot] / pivot_val;
+      copy->values[row * cols + pivot] = 0.0f;
 #pragma omp simd
-      for (size_t col = pivot + 1; col < dcols; col++) {
-        dummy->values[row * dcols + col] -= factor * pivot_row[col];
+      for (size_t col = pivot + 1; col < cols; col++) {
+        copy->values[row * cols + col] -= factor * pivot_row[col];
       }
     }
   }
@@ -192,6 +237,74 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
 
   sm_destroy(copy);
   return rank;
+}
+
+/*
+ * Solve LU * X = RHS after LU decomposition + pivot permutation.
+ * rhs_values: row-major matrix (n x nrhs), modified in-place to contain X.
+ * lu_values:  row-major LU factors (n x n) from sm_lu_decompose.
+ * pivot_order: pivot permutation from sm_lu_decompose.
+ */
+static bool sm_lu_forward_back_sub(float *restrict rhs_values,
+                                   const float *restrict lu_values,
+                                   const size_t *pivot_order, size_t n,
+                                   size_t nrhs) {
+  /* Apply pivot permutation to RHS rows */
+  for (size_t i = 0; i < n; ++i) {
+    if (pivot_order[i] != i) {
+      for (size_t j = 0; j < nrhs; ++j) {
+        float tmp = rhs_values[i * nrhs + j];
+        rhs_values[i * nrhs + j] = rhs_values[pivot_order[i] * nrhs + j];
+        rhs_values[pivot_order[i] * nrhs + j] = tmp;
+      }
+    }
+  }
+
+  /* Transpose RHS so each column becomes a contiguous row
+     to avoid false sharing when parallelising over columns. */
+  float *restrict rt = (float *)malloc(nrhs * n * sizeof(float));
+  if (!rt) return false;
+
+  for (size_t i = 0; i < n; ++i) {
+    for (size_t k = 0; k < nrhs; ++k) {
+      rt[k * n + i] = rhs_values[i * nrhs + k];
+    }
+  }
+
+#pragma omp parallel for schedule(static) if (nrhs > 1 && n > 128)
+  for (size_t k = 0; k < nrhs; ++k) {
+    float *restrict r = &rt[k * n];
+
+    /* Forward substitution (L * y = Pb) */
+    for (size_t i = 1; i < n; ++i) {
+      float sum = r[i];
+      for (size_t j = 0; j < i; ++j) {
+        sum -= lu_values[i * n + j] * r[j];
+      }
+      r[i] = sum;
+    }
+
+    /* Back substitution (U * x = y) */
+    size_t i = n;
+    do {
+      --i;
+      float sum = r[i];
+      for (size_t j = i + 1; j < n; ++j) {
+        sum -= lu_values[i * n + j] * r[j];
+      }
+      r[i] = sum / lu_values[i * n + i];
+    } while (i != 0);
+  }
+
+  /* Transpose result back */
+  for (size_t k = 0; k < nrhs; ++k) {
+    const float *restrict r = &rt[k * n];
+    for (size_t i = 0; i < n; ++i) {
+      rhs_values[i * nrhs + k] = r[i];
+    }
+  }
+  free(rt);
+  return true;
 }
 
 static uint64_t sm_mix64(uint64_t x) {
@@ -272,25 +385,7 @@ FloatMatrix *sm_create_empty(void) {
 }
 
 FloatMatrix *sm_create_zeros(size_t rows, size_t cols) {
-  if (rows < 1 || cols < 1) {
-    log_error("Error: invalid matrix dimensions.\n");
-    return NULL;
-  }
-  FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
-  if (!matrix) {
-    log_error("Error: could not allocate FloatMatrix struct.\n");
-    return NULL;
-  }
-  matrix->rows = rows;
-  matrix->cols = cols;
-  matrix->capacity = rows * cols;
-  matrix->values = (float *)calloc(rows * cols, sizeof(float));
-  if (!matrix->values) {
-    free(matrix);
-    log_error("Error: could not allocate values array.\n");
-    return NULL;
-  }
-  return matrix;
+  return sm_create(rows, cols);
 }
 
 FloatMatrix *sm_create_with_values(size_t rows, size_t cols, float *values) {
@@ -364,31 +459,28 @@ FloatMatrix *sm_create_random(size_t rows, size_t cols) {
   return sm_create_random_seeded(rows, cols, 0);
 }
 
-// He initialization (He-et-al.) random matrix creation
-FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
+// Helper: create matrix filled with Box-Muller normal random values
+static FloatMatrix *sm_create_random_normal(size_t rows, size_t cols,
+                                            float stddev, uint64_t stream_u1,
+                                            uint64_t stream_u2) {
   if (cols != 0 && rows > SIZE_MAX / cols) {
     log_error("Overflow detected in matrix allocation.");
-    return NULL;
-  }
-  if (fan_in == 0) {
-    log_error("Error: fan_in must be greater than zero.");
     return NULL;
   }
 
   FloatMatrix *mat = sm_create(rows, cols);
   if (!mat) return NULL;
 
-  float stddev = sqrtf(2.0f / (float)fan_in);
   size_t size = rows * cols;
   uint64_t base_seed = sm_resolve_seed(0);
 
 #pragma omp parallel for
   for (size_t i = 0; i < size; ++i) {
-    float u1 = sm_uniform01(base_seed, 2, (uint64_t)i);
+    float u1 = sm_uniform01(base_seed, stream_u1, (uint64_t)i);
     if (u1 < 1e-12f) {
       u1 = 1e-12f;
     }
-    float u2 = sm_uniform01(base_seed, 3, (uint64_t)i);
+    float u2 = sm_uniform01(base_seed, stream_u2, (uint64_t)i);
     float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
     mat->values[i] = z * stddev;
   }
@@ -396,37 +488,24 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
   return mat;
 }
 
+// He initialization (He-et-al.) random matrix creation
+FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
+  if (fan_in == 0) {
+    log_error("Error: fan_in must be greater than zero.");
+    return NULL;
+  }
+  return sm_create_random_normal(rows, cols, sqrtf(2.0f / (float)fan_in), 2, 3);
+}
+
 // Xavier (Glorot) initialization: Normal distribution
 FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
                                      size_t fan_out) {
-  if (cols != 0 && rows > SIZE_MAX / cols) {
-    log_error("Overflow detected in matrix allocation.");
-    return NULL;
-  }
   if (fan_in == 0 || fan_out == 0) {
     log_error("Error: fan_in and fan_out must be greater than zero.");
     return NULL;
   }
-
-  FloatMatrix *mat = sm_create(rows, cols);
-  if (!mat) return NULL;
-
-  float stddev = sqrtf(2.0f / (float)(fan_in + fan_out));
-  size_t size = rows * cols;
-  uint64_t base_seed = sm_resolve_seed(0);
-
-#pragma omp parallel for
-  for (size_t i = 0; i < size; ++i) {
-    float u1 = sm_uniform01(base_seed, 4, (uint64_t)i);
-    if (u1 < 1e-12f) {
-      u1 = 1e-12f;
-    }
-    float u2 = sm_uniform01(base_seed, 5, (uint64_t)i);
-    float z = sqrtf(-2.0f * logf(u1)) * cosf(2.0f * (float)M_PI * u2);
-    mat->values[i] = z * stddev;
-  }
-
-  return mat;
+  return sm_create_random_normal(rows, cols,
+                                 sqrtf(2.0f / (float)(fan_in + fan_out)), 4, 5);
 }
 
 FloatMatrix *sm_from_array_ptrs(size_t rows, size_t cols, float **array) {
@@ -474,18 +553,14 @@ float *sm_to_array(FloatMatrix *matrix) {
     return NULL;
   }
 
-  float *array = (float *)malloc(matrix->rows * matrix->cols * sizeof(float));
+  size_t size = matrix->rows * matrix->cols;
+  float *array = (float *)malloc(size * sizeof(float));
   if (!array) {
     log_error("Error: could not allocate array.\n");
     return NULL;
   }
 
-#pragma omp parallel for collapse(2)
-  for (size_t i = 0; i < matrix->rows; ++i) {
-    for (size_t j = 0; j < matrix->cols; ++j) {
-      array[i * matrix->cols + j] = (float)matrix->values[i * matrix->cols + j];
-    }
-  }
+  memcpy(array, matrix->values, size * sizeof(float));
   return array;
 }
 
@@ -712,21 +787,7 @@ bool sm_inplace_elementwise_multiply(FloatMatrix *mat1,
 
   float *a = mat1->values;
   const float *b = mat2->values;
-
-#pragma omp parallel for schedule(static)
-  for (size_t blk = 0; blk < size; blk += 256) {
-    size_t end = (blk + 256 < size) ? blk + 256 : size;
-#ifdef __ARM_NEON
-    size_t i = blk;
-    for (; i + 4 <= end; i += 4) {
-      vst1q_f32(&a[i], vmulq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
-    }
-    for (; i < end; i++) { a[i] *= b[i]; }
-#else
-#pragma omp simd
-    for (size_t i = blk; i < end; i++) { a[i] *= b[i]; }
-#endif
-  }
+  SM_APPLY_BINOP(a, b, size, vmulq_f32, *=);
 #endif
 
   return true;
@@ -929,66 +990,12 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
     return NULL;
   }
 
-  for (size_t i = 0; i < n; ++i) {
-    if (pivot_order[i] != i) {
-      for (size_t j = 0; j < rhs; ++j) {
-        float tmp = x->values[i * rhs + j];
-        x->values[i * rhs + j] = x->values[pivot_order[i] * rhs + j];
-        x->values[pivot_order[i] * rhs + j] = tmp;
-      }
-    }
-  }
-
-  /* Transpose RHS so each column becomes a contiguous row
-     to avoid false sharing when parallelising over columns. */
-  float *restrict rt = (float *)malloc(rhs * n * sizeof(float));
-  if (!rt) {
+  if (!sm_lu_forward_back_sub(x->values, lu->values, pivot_order, n, rhs)) {
     sm_destroy(lu);
     sm_destroy(x);
     free(pivot_order);
     return NULL;
   }
-  for (size_t i = 0; i < n; ++i) {
-    for (size_t k = 0; k < rhs; ++k) {
-      rt[k * n + i] = x->values[i * rhs + k];
-    }
-  }
-
-  const float *restrict lv = lu->values;
-
-#pragma omp parallel for schedule(static) if (rhs > 1 && n > 128)
-  for (size_t k = 0; k < rhs; ++k) {
-    float *restrict r = &rt[k * n];
-
-    /* Forward substitution (L * y = Pb) */
-    for (size_t i = 1; i < n; ++i) {
-      float sum = r[i];
-      for (size_t j = 0; j < i; ++j) {
-        sum -= lv[i * n + j] * r[j];
-      }
-      r[i] = sum;
-    }
-
-    /* Back substitution (U * x = y) */
-    size_t i = n;
-    do {
-      --i;
-      float sum = r[i];
-      for (size_t j = i + 1; j < n; ++j) {
-        sum -= lv[i * n + j] * r[j];
-      }
-      r[i] = sum / lv[i * n + i];
-    } while (i != 0);
-  }
-
-  /* Transpose result back into x */
-  for (size_t k = 0; k < rhs; ++k) {
-    const float *restrict r = &rt[k * n];
-    for (size_t i = 0; i < n; ++i) {
-      x->values[i * rhs + k] = r[i];
-    }
-  }
-  free(rt);
 
   sm_destroy(lu);
   free(pivot_order);
@@ -1160,54 +1167,28 @@ float sm_determinant(const FloatMatrix *mat) {
     if (!copy) return 0.0f;
 
     size_t n = mat->rows;
-    float *a = copy->values;
+    size_t *pivot_order = (size_t *)malloc(n * sizeof(size_t));
+    if (!pivot_order) {
+      sm_destroy(copy);
+      return 0.0f;
+    }
+
+    if (!sm_lu_decompose(copy, pivot_order)) {
+      free(pivot_order);
+      sm_destroy(copy);
+      return 0.0f;  /* singular */
+    }
+
+    float det = 1.0f;
     int sign = 1;
-
-    for (size_t k = 0; k < n; ++k) {
-      /* Partial pivoting */
-      size_t max_row = k;
-      float max_val = fabsf(a[k * n + k]);
-      for (size_t i = k + 1; i < n; ++i) {
-        float val = fabsf(a[i * n + k]);
-        if (val > max_val) {
-          max_val = val;
-          max_row = i;
-        }
-      }
-
-      if (max_val < 1e-6f) {
-        sm_destroy(copy);
-        return 0.0f;
-      }
-
-      if (max_row != k) {
-        for (size_t j = k; j < n; ++j) {
-          float tmp = a[k * n + j];
-          a[k * n + j] = a[max_row * n + j];
-          a[max_row * n + j] = tmp;
-        }
-        sign = -sign;
-      }
-
-      const float pivot = a[k * n + k];
-      const float *restrict pivot_row = &a[k * n];
-#pragma omp parallel for schedule(static) if (n - k > 128)
-      for (size_t i = k + 1; i < n; ++i) {
-        float factor = a[i * n + k] / pivot;
-        a[i * n + k] = 0.0f;
-#pragma omp simd
-        for (size_t j = k + 1; j < n; ++j) {
-          a[i * n + j] -= factor * pivot_row[j];
-        }
-      }
-    }
-
-    float det = (float)sign;
     for (size_t i = 0; i < n; ++i) {
-      det *= a[i * n + i];
+      det *= copy->values[i * n + i];
+      if (pivot_order[i] != i) sign = -sign;
     }
 
+    free(pivot_order);
     sm_destroy(copy);
+    det *= (float)sign;
 #endif
     return det;
   }
@@ -1302,68 +1283,13 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     return NULL;
   }
 
-  // Apply pivot permutation to the identity matrix (right-hand side)
-  for (size_t i = 0; i < n; ++i) {
-    if (pivot_order[i] != i) {
-      for (size_t j = 0; j < n; ++j) {
-        float tmp = inverse->values[i * n + j];
-        inverse->values[i * n + j] = inverse->values[pivot_order[i] * n + j];
-        inverse->values[pivot_order[i] * n + j] = tmp;
-      }
-    }
-  }
-
-  /* Transpose RHS so each "column" is a contiguous row → avoids false sharing */
-  float *restrict rhs = (float *)malloc(n * n * sizeof(float));
-  if (!rhs) {
+  if (!sm_lu_forward_back_sub(inverse->values, copy->values, pivot_order, n,
+                               n)) {
     free(pivot_order);
     sm_destroy(copy);
     sm_destroy(inverse);
     return NULL;
   }
-  const float *restrict inv = inverse->values;
-  for (size_t i = 0; i < n; ++i) {
-    for (size_t j = 0; j < n; ++j) {
-      rhs[j * n + i] = inv[i * n + j];  /* transpose: rhs[col][row] */
-    }
-  }
-
-  const float *restrict lu = copy->values;
-
-#pragma omp parallel for schedule(static) if (n > 128)
-  for (size_t col = 0; col < n; col++) {
-    float *restrict r = &rhs[col * n]; /* this "column" is now a contiguous row */
-
-    /* Forward substitution (L * y = e_col) */
-    for (size_t i = 1; i < n; i++) {
-      float sum = r[i];
-      for (size_t j = 0; j < i; j++) {
-        sum -= lu[i * n + j] * r[j];
-      }
-      r[i] = sum;
-    }
-
-    /* Back substitution (U * x = y) */
-    size_t i = n;
-    do {
-      --i;
-      float sum = r[i];
-      for (size_t j = i + 1; j < n; j++) {
-        sum -= lu[i * n + j] * r[j];
-      }
-      r[i] = sum / lu[i * n + i];
-    } while (i != 0);
-  }
-
-  /* Transpose result back */
-  float *restrict dst = inverse->values;
-  for (size_t col = 0; col < n; ++col) {
-    const float *restrict r = &rhs[col * n];
-    for (size_t i = 0; i < n; ++i) {
-      dst[i * n + col] = r[i];
-    }
-  }
-  free(rhs);
 
   free(pivot_order);
   sm_destroy(copy);
@@ -1424,23 +1350,7 @@ FloatMatrix *sm_slice_rows(const FloatMatrix *mat, size_t start, size_t end) {
 
   float *dst = slice->values;
   const float *src = mat->values + start * cols;
-
-#if defined(__ARM_NEON)
-  size_t total = num_rows * cols;
-  size_t i = 0;
-  for (; i + 4 <= total; i += 4) {
-    vst1q_f32(&dst[i], vld1q_f32(&src[i]));
-  }
-  for (; i < total; ++i) {
-    dst[i] = src[i];
-  }
-
-#else
-#pragma omp parallel for
-  for (size_t i = 0; i < num_rows; ++i) {
-    memcpy(&dst[i * cols], &src[i * cols], cols * sizeof(float));
-  }
-#endif
+  memcpy(dst, src, num_rows * cols * sizeof(float));
 
   return slice;
 }
@@ -1624,20 +1534,7 @@ bool sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
   size_t total = mat1->rows * mat1->cols;
   float *restrict a = mat1->values;
   const float *restrict b = mat2->values;
-#pragma omp parallel for schedule(static)
-  for (size_t blk = 0; blk < total; blk += 256) {
-    size_t end = (blk + 256 < total) ? blk + 256 : total;
-#ifdef __ARM_NEON
-    size_t i = blk;
-    for (; i + 4 <= end; i += 4) {
-      vst1q_f32(&a[i], vaddq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
-    }
-    for (; i < end; i++) { a[i] += b[i]; }
-#else
-#pragma omp simd
-    for (size_t i = blk; i < end; i++) { a[i] += b[i]; }
-#endif
-  }
+  SM_APPLY_BINOP(a, b, total, vaddq_f32, +=);
 #endif
 
   return true;
@@ -1662,20 +1559,7 @@ bool sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
   size_t total = mat1->rows * mat1->cols;
   float *restrict a = mat1->values;
   const float *restrict b = mat2->values;
-#pragma omp parallel for schedule(static)
-  for (size_t blk = 0; blk < total; blk += 256) {
-    size_t end = (blk + 256 < total) ? blk + 256 : total;
-#ifdef __ARM_NEON
-    size_t i = blk;
-    for (; i + 4 <= end; i += 4) {
-      vst1q_f32(&a[i], vsubq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
-    }
-    for (; i < end; i++) { a[i] -= b[i]; }
-#else
-#pragma omp simd
-    for (size_t i = blk; i < end; i++) { a[i] -= b[i]; }
-#endif
-  }
+  SM_APPLY_BINOP(a, b, total, vsubq_f32, -=);
 #endif
 
   return true;
@@ -1718,21 +1602,7 @@ bool sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
 #else
   size_t total = mat->rows * mat->cols;
   float *restrict a = mat->values;
-#pragma omp parallel for schedule(static)
-  for (size_t blk = 0; blk < total; blk += 256) {
-    size_t end = (blk + 256 < total) ? blk + 256 : total;
-#ifdef __ARM_NEON
-    float32x4_t s = vdupq_n_f32(scalar);
-    size_t i = blk;
-    for (; i + 4 <= end; i += 4) {
-      vst1q_f32(&a[i], vmulq_f32(vld1q_f32(&a[i]), s));
-    }
-    for (; i < end; ++i) { a[i] *= scalar; }
-#else
-#pragma omp simd
-    for (size_t i = blk; i < end; i++) { a[i] *= scalar; }
-#endif
-  }
+  SM_APPLY_SCALAR_OP(a, total, scalar, vmulq_f32, *=);
 #endif
 
   return true;
@@ -1753,21 +1623,7 @@ bool sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
 #if defined(USE_ACCELERATE)
   vDSP_vdiv(b, 1, a, 1, a, 1, size);
 #else
-
-#pragma omp parallel for schedule(static)
-  for (size_t blk = 0; blk < size; blk += 256) {
-    size_t end = (blk + 256 < size) ? blk + 256 : size;
-#ifdef __ARM_NEON
-    size_t i = blk;
-    for (; i + 4 <= end; i += 4) {
-      vst1q_f32(&a[i], vdivq_f32(vld1q_f32(&a[i]), vld1q_f32(&b[i])));
-    }
-    for (; i < end; i++) { a[i] /= b[i]; }
-#else
-#pragma omp simd
-    for (size_t i = blk; i < end; i++) { a[i] /= b[i]; }
-#endif
-  }
+  SM_APPLY_BINOP(a, b, size, vdivq_f32, /=);
 #endif
 
   return true;

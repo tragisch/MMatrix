@@ -114,12 +114,12 @@ git_repository(
     remote = "https://github.com/imneme/pcg-c.git",
 )
 
-git_repository(
-    name = "openblas",
-    build_file = "@//:third_party/openblas.BUILD",
-    commit = "02267d86f541fb82e3feae6647a0cbb4625f48df",  # 29.05.2025
-    remote = "https://github.com/OpenMathLib/OpenBLAS.git",
-)
+# git_repository(
+#     name = "openblas",
+#     build_file = "@//:third_party/openblas.BUILD",
+#     commit = "02267d86f541fb82e3feae6647a0cbb4625f48df",  # 29.05.2025
+#     remote = "https://github.com/OpenMathLib/OpenBLAS.git",
+# )
 
 #############################
 # Hombrew Local Libraries (MacOS)
@@ -155,11 +155,11 @@ new_local_repository(
 )
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
-# new_local_repository(
-#     name = "openblas",
-#     build_file = "@//:third_party/openblas.BUILD",
-#     path = "/opt/homebrew/opt/openblas/",
-# )
+new_local_repository(
+    name = "openblas",
+    build_file = "@//:third_party/openblas.BUILD",
+    path = "/opt/homebrew/opt/openblas/",
+)
 
 # suite-sparse is a collection of sparse matrix libraries
 new_local_repository(
