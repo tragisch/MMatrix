@@ -57,11 +57,6 @@ config_setting(
     values = {"define": "USE_OPENBLAS=1"},
 )
 
-config_setting(
-    name = "use_accelerate_mps",
-    values = {"define": "USE_ACCELERATE_MPS=1"},
-)
-
 #############################
 # Compiler options
 #############################
@@ -105,11 +100,6 @@ package_copts = select({
         "-DUSE_ACCELERATE",
         "-DACCELERATE_NEW_LAPACK",
     ],
-    ":use_accelerate_mps": [
-        "-DUSE_ACCELERATE_MPS",
-        "-DACCELERATE_NEW_LAPACK",
-        "-fobjc-arc",
-    ],
     ":use_openblas": [
         "-DUSE_OPENBLAS",
     ],
@@ -143,12 +133,10 @@ accelerate_linkopts = select({
 })
 
 mps_linkopts = select({
-    ":use_accelerate_mps": [
-        "-framework Accelerate",
+    ":use_accelerate": [
         "-framework Metal",
         "-framework MetalPerformanceShaders",
         "-framework MetalPerformanceShadersGraph",
-        "-lc++abi",
     ],
     "//conditions:default": [],
 })
@@ -238,7 +226,7 @@ cc_library(
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + select({
-        ":use_accelerate_mps": [":sm_mps_objc"],
+        ":use_accelerate": [":sm_mps_objc"],
         ":use_openblas": ["@openblas"],
         "//conditions:default": [],
     }),
@@ -263,7 +251,7 @@ cc_library(
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + [":sm"] + select({
-        ":use_accelerate_mps": [
+        ":use_accelerate": [
             ":sm_mps_objc",
             ":st_mps_objc",
         ],
@@ -281,7 +269,7 @@ objc_library(
     ],
     includes = ["src"],
     target_compatible_with = select({
-        ":use_accelerate_mps": ["@platforms//os:macos"],
+        ":use_accelerate": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
 )
@@ -296,7 +284,7 @@ objc_library(
     ],
     includes = ["src"],
     target_compatible_with = select({
-        ":use_accelerate_mps": ["@platforms//os:macos"],
+        ":use_accelerate": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     deps = [":sm_mps_objc"],

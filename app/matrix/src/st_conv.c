@@ -9,11 +9,11 @@
 #include "st_conv.h"
 #include "sm.h"
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
 #endif
 
-#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
 #include "sm_mps.h"
 #endif
 
@@ -528,7 +528,7 @@ static bool st_conv2d_mps_nchw(const FloatTensor *input,
                                const FloatTensor *bias,
                                const StConv2dParams *params,
                                FloatTensor *output) {
-#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
   return mps_conv2d_nchw(
       input->values, input->shape[0],
       input->shape[1], input->shape[2], input->shape[3],
@@ -577,6 +577,9 @@ static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
 static bool st_conv2d_should_use_mps(size_t n, size_t c_in, size_t c_out,
                                      size_t out_h, size_t out_w, size_t k_h,
                                      size_t k_w) {
+  /* Only dispatch to MPS in AUTO mode when runtime backend is MPS. */
+  if (sm_get_backend() != SM_BACKEND_MPS) return false;
+
   st_conv_init_mps_thresholds_once();
 
   const double macs = (double)n * (double)c_out * (double)out_h *
@@ -1598,7 +1601,7 @@ bool st_conv2d_backward_bias(const FloatTensor *grad_output,
       const float *plane =
           grad_output->values + (ni * c_out + co) * out_spatial;
       float sum = 0.0f;
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
       vDSP_sve(plane, 1, &sum, (vDSP_Length)out_spatial);
 #else
       for (size_t i = 0; i < out_spatial; ++i) {

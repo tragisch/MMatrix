@@ -25,6 +25,26 @@
 #endif
 
 /**************************************/
+/*       Compute Backend Selection    */
+/**************************************/
+
+// Available compute backends (runtime selection, requires USE_ACCELERATE build).
+typedef enum SmBackend {
+  SM_BACKEND_DEFAULT = 0,     // best available: Accelerate > OpenBLAS > OpenMP
+  SM_BACKEND_ACCELERATE = 1,  // Apple Accelerate (AMX)
+  SM_BACKEND_MPS = 2,         // Metal Performance Shaders (GPU)
+  SM_BACKEND_OPENBLAS = 3,    // OpenBLAS
+  SM_BACKEND_OPENMP = 4,      // OpenMP / ARM NEON (no BLAS)
+} SmBackend;
+
+// Set the active compute backend for GEMM and other dispatched operations.
+// Returns false if the requested backend is not available in this build.
+bool sm_set_backend(SmBackend backend);
+
+// Get the currently active compute backend.
+SmBackend sm_get_backend(void);
+
+/**************************************/
 /*         Float Matrix Type          */
 /**************************************/
 
@@ -199,6 +219,9 @@ void sm_print(const FloatMatrix *matrix);
 
 // Return active compute backend name.
 const char *sm_active_library(void);
+
+// Return true if MPS backend is available in this build.
+bool sm_mps_available(void);
 
 /**************************************/
 /*         Memory Management          */

@@ -19,7 +19,7 @@ The wrapper relies on the existing C targets. Ensure the desired feature flags (
 Accelerate, OpenBLAS, etc.) are provided the same way you build the C library, e.g.
 
 ```bash
-bazel test //app/rmatrix:rmatrix_tests --define=USE_ACCELERATE_MPS=1
+bazel test //app/rmatrix:rmatrix_tests --define=USE_ACCELERATE=1
 ```
 
 ### Toolchain Configuration

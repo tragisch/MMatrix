@@ -74,14 +74,12 @@ You can enable optional BLAS backends via Bazel defines:
   ```
 
 - **macOS**:
-  - Use Accelerate framework:
+  - Use Accelerate framework (includes MPS support):
     ```bash
     bazel build //app/matrix --define=USE_ACCELERATE=1
     ```
-  - Use Accelerate + Metal (MPS):
-    ```bash
-    bazel build //app/matrix --define=USE_ACCELERATE_MPS=1
-    ```
+    MPS (Metal Performance Shaders) is built in automatically on macOS.
+    To activate MPS at runtime, call `sm_set_backend(SM_BACKEND_MPS)` in your code.
 
 ---
 ## Installation

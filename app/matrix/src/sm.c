@@ -43,34 +43,104 @@ static bool sm_seed_initialized = false;
 /*******************************/
 
 #if defined(USE_ACCELERATE)
-#define ACTIVE_LIB "Apple Accelerate"
-#elif defined(USE_ACCELERATE_MPS)
-#define ACTIVE_LIB "Metal Performance Shaders"
-#elif defined(USE_OPENBLAS)
-#define ACTIVE_LIB "OpenBLAS"
-#else
-#if defined(__ARM_NEON)
-#define ACTIVE_LIB "OpenMP or ARM NEON"
-#else
-#define ACTIVE_LIB "OpenMP"
-#endif
-#endif
-
-#if defined(USE_ACCELERATE)
-#define BLASINT int
-#include <Accelerate/Accelerate.h>
-#elif defined(USE_ACCELERATE_MPS)
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
 
+#ifdef __APPLE__
 #include "sm_mps.h"
+#define SM_HAS_MPS 1
+#endif
+
 #elif defined(USE_OPENBLAS)
 #define BLASINT int
 #include <cblas.h>
 #include <lapacke.h>
 #else
-// nothing
+// nothing — OpenMP / ARM NEON fallback
 #endif
+
+/* ---- Runtime backend state ---- */
+static SmBackend sm_current_backend = SM_BACKEND_DEFAULT;
+
+bool sm_set_backend(SmBackend backend) {
+  switch (backend) {
+    case SM_BACKEND_DEFAULT:
+    case SM_BACKEND_OPENMP:
+      sm_current_backend = backend;
+      return true;
+    case SM_BACKEND_ACCELERATE:
+#if defined(USE_ACCELERATE)
+      sm_current_backend = backend;
+      return true;
+#else
+      return false;
+#endif
+    case SM_BACKEND_MPS:
+#if defined(SM_HAS_MPS)
+      sm_current_backend = backend;
+      return true;
+#else
+      return false;
+#endif
+    case SM_BACKEND_OPENBLAS:
+#if defined(USE_OPENBLAS)
+      sm_current_backend = backend;
+      return true;
+#else
+      return false;
+#endif
+  }
+  return false;
+}
+
+SmBackend sm_get_backend(void) { return sm_current_backend; }
+
+bool sm_mps_available(void) {
+#if defined(SM_HAS_MPS)
+  return true;
+#else
+  return false;
+#endif
+}
+
+const char *sm_active_library(void) {
+  switch (sm_current_backend) {
+    case SM_BACKEND_MPS:
+#if defined(SM_HAS_MPS)
+      return "Metal Performance Shaders";
+#endif
+      break;
+    case SM_BACKEND_ACCELERATE:
+#if defined(USE_ACCELERATE)
+      return "Apple Accelerate";
+#endif
+      break;
+    case SM_BACKEND_OPENBLAS:
+#if defined(USE_OPENBLAS)
+      return "OpenBLAS";
+#endif
+      break;
+    case SM_BACKEND_OPENMP:
+#if defined(__ARM_NEON)
+      return "OpenMP or ARM NEON";
+#else
+      return "OpenMP";
+#endif
+    case SM_BACKEND_DEFAULT:
+    default:
+      break;
+  }
+  /* DEFAULT: return build-time best */
+#if defined(USE_ACCELERATE)
+  return "Apple Accelerate";
+#elif defined(USE_OPENBLAS)
+  return "OpenBLAS";
+#elif defined(__ARM_NEON)
+  return "OpenMP or ARM NEON";
+#else
+  return "OpenMP";
+#endif
+}
 
 // Block size used for cache-optimized transpose operations
 #define BLOCK_SIZE 64
@@ -183,8 +253,6 @@ float *sm_to_column_major(const FloatMatrix *mat) {
 /*******************************/
 /*      Public Functions      */
 /*******************************/
-
-const char *sm_active_library(void) { return ACTIVE_LIB; }
 
 FloatMatrix *sm_create_empty(void) {
   FloatMatrix *matrix = (FloatMatrix *)malloc(sizeof(FloatMatrix));
@@ -460,29 +528,21 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
     return false;
   }
 
-#if defined(USE_ACCELERATE_MPS)
-  const size_t mps_break_even = 3072;
-  const bool use_mps = (m >= mps_break_even) && (n >= mps_break_even) &&
-                       (k_a >= mps_break_even);
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
-  if (use_mps) {
+#if defined(SM_HAS_MPS)
+  /* Runtime MPS dispatch: only when backend explicitly set to MPS */
+  if (sm_current_backend == SM_BACKEND_MPS) {
     if (mps_matrix_multiply_ex(A->values, A->rows, A->cols,
                                trans_a == SM_TRANSPOSE, B->values, B->rows,
                                B->cols, trans_b == SM_TRANSPOSE, alpha, beta,
                                C->values, C->rows, C->cols)) {
       return true;
     }
+    /* MPS failed — fall through to cblas */
   }
+#endif
 
-  enum CBLAS_TRANSPOSE op_a =
-      (trans_a == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
-  enum CBLAS_TRANSPOSE op_b =
-      (trans_b == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
-
-  cblas_sgemm(CblasRowMajor, op_a, op_b, (BLASINT)m, (BLASINT)n,
-              (BLASINT)k_a, alpha, A->values, (BLASINT)A->cols, B->values,
-              (BLASINT)B->cols, beta, C->values, (BLASINT)C->cols);
-#elif defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   enum CBLAS_TRANSPOSE op_a =
       (trans_a == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;
   enum CBLAS_TRANSPOSE op_b =
@@ -632,7 +692,7 @@ bool sm_inplace_elementwise_multiply(FloatMatrix *mat1,
 
   size_t size = mat1->rows * mat1->cols;
 
-#if defined(USE_ACCELERATE_MPS) || defined(USE_ACCELERATE)
+#if defined(USE_ACCELERATE)
 
   vDSP_vmul(mat1->values, 1, mat2->values, 1, mat1->values, 1, size);
   return true;
@@ -727,7 +787,7 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
     log_error("Error: invalid matrix dimensions for solve.\n");
     return NULL;
   }
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
   int n = (int)A->rows;
   int nrhs = (int)b->cols;
   int lda = n;
@@ -1019,8 +1079,7 @@ float sm_determinant(const FloatMatrix *mat) {
                 a[2] * (a[3] * a[7] - a[4] * a[6]);
     return det;
   } else {
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
 
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
     FloatMatrix *lu = sm_clone(mat);
@@ -1106,8 +1165,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
     log_error("the Matrix has to be square!");
     return NULL;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   FloatMatrix *inverse = sm_clone(mat);
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
   if (ipiv == NULL) {
@@ -1357,8 +1415,7 @@ float sm_trace(const FloatMatrix *mat) {
 }
 
 float sm_norm(const FloatMatrix *mat) {
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   return cblas_snrm2((BLASINT)(mat->rows * mat->cols), mat->values, 1);
 #else
 #ifdef __ARM_NEON
@@ -1393,8 +1450,7 @@ size_t sm_rank(const FloatMatrix *mat) {
     return 0;  // No matrix, no rank
   }
   size_t rank = 0;
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   // Work on a copy to avoid modifying the const input
   FloatMatrix *qr_copy = sm_clone(mat);
   if (!qr_copy) return 0;
@@ -1502,8 +1558,7 @@ bool sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2) {
     log_error("Error: invalid matrix dimensions.\n");
     return false;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), 1.0, mat2->values, 1,
               mat1->values, 1);
 #else
@@ -1540,8 +1595,7 @@ bool sm_inplace_diff(FloatMatrix *mat1, const FloatMatrix *mat2) {
     log_error("Error: invalid matrix dimensions.\n");
     return false;
   }
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   // Using Apple's Accelerate framework (= BLAS)
   cblas_saxpy((BLASINT)(mat1->rows * mat1->cols), -1.0, mat2->values, 1,
               mat1->values, 1);
@@ -1600,8 +1654,7 @@ bool sm_inplace_multiply_by_number(FloatMatrix *mat, const float scalar) {
     return false;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   cblas_sscal((BLASINT)(mat->rows * mat->cols), scalar, mat->values, 1);
 #else
   size_t total = mat->rows * mat->cols;
@@ -1638,7 +1691,7 @@ bool sm_inplace_div(FloatMatrix *mat1, const FloatMatrix *mat2) {
   float *a = mat1->values;
   float *b = mat2->values;
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
   vDSP_vdiv(b, 1, a, 1, a, 1, size);
 #else
 
@@ -1685,7 +1738,7 @@ bool sm_inplace_normalize_rows(FloatMatrix *mat) {
   size_t rows = mat->rows;
   size_t cols = mat->cols;
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
   for (size_t i = 0; i < rows; ++i) {
     float *row = &mat->values[i * cols];
     float norm;
@@ -1725,7 +1778,7 @@ bool sm_inplace_normalize_cols(FloatMatrix *mat) {
   size_t rows = mat->rows;
   size_t cols = mat->cols;
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
   for (size_t j = 0; j < cols; ++j) {
     float norm;
     vDSP_svesq(&mat->values[j], (vDSP_Stride)cols, &norm, (vDSP_Length)rows);

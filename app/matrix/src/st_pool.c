@@ -7,13 +7,14 @@
  */
 
 #include "st_pool.h"
+#include "sm.h"
 
 #include <log.h>
 #include <float.h>
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
 #endif
 
@@ -21,7 +22,7 @@
 #include <arm_neon.h>
 #endif
 
-#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
 #include "st_mps.h"
 #define ST_POOL_MPS_THRESHOLD 4096  /* numel threshold for MPS dispatch */
 #endif
@@ -92,9 +93,10 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
-#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
   /* MPS dispatch for large tensors (indices not supported on MPS path). */
-  if (!indices && input->numel >= ST_POOL_MPS_THRESHOLD) {
+  if (!indices && sm_get_backend() == SM_BACKEND_MPS &&
+      input->numel >= ST_POOL_MPS_THRESHOLD) {
     bool ok = st_maxpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
                                stride_h, stride_w, pad_h, pad_w,
                                output->values, oh, ow);
@@ -212,9 +214,10 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
-#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
   /* MPS dispatch for large tensors. */
-  if (input->numel >= ST_POOL_MPS_THRESHOLD) {
+  if (sm_get_backend() == SM_BACKEND_MPS &&
+      input->numel >= ST_POOL_MPS_THRESHOLD) {
     bool ok = st_avgpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
                                stride_h, stride_w, pad_h, pad_w,
                                output->values, oh, ow);
@@ -458,7 +461,7 @@ bool st_global_avgpool2d_nchw(const FloatTensor *input, FloatTensor *output) {
     const size_t ci = nci % c;
     const float *plane = input->values + (ni * c + ci) * spatial;
     float sum = 0.0f;
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
     vDSP_sve(plane, 1, &sum, (vDSP_Length)spatial);
 #else
     for (size_t i = 0; i < spatial; ++i) {

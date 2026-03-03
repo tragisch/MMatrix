@@ -7,17 +7,18 @@
  */
 
 #include "st_batchnorm.h"
+#include "sm.h"
 
 #include <log.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
 #endif
 
-#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
 #include "st_mps.h"
 #define ST_BN_MPS_THRESHOLD 4096 /* numel threshold for MPS dispatch */
 #endif
@@ -75,9 +76,10 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
     return false;
   }
 
-#if defined(USE_ACCELERATE_MPS) && defined(__APPLE__)
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
   /* MPS dispatch for large tensors. */
-  if (input->numel >= ST_BN_MPS_THRESHOLD) {
+  if (sm_get_backend() == SM_BACKEND_MPS &&
+      input->numel >= ST_BN_MPS_THRESHOLD) {
     bool ok = st_batchnorm2d_forward_mps(
         input->values, n, c, h, w,
         gamma ? gamma->values : NULL,
@@ -95,7 +97,7 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
   for (size_t ni = 0; ni < n; ++ni) {
     for (size_t ci = 0; ci < c; ++ci) {
       const float *plane = input->values + (ni * c + ci) * spatial;
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
       float plane_sum = 0.0f;
       vDSP_sve(plane, 1, &plane_sum, (vDSP_Length)spatial);
       mean->values[ci] += plane_sum;
@@ -349,7 +351,7 @@ bool st_batchnorm2d_forward_relu(const FloatTensor *input,
   for (size_t ni = 0; ni < n; ++ni) {
     for (size_t ci = 0; ci < c; ++ci) {
       const float *plane = input->values + (ni * c + ci) * spatial;
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
       float plane_sum = 0.0f;
       vDSP_sve(plane, 1, &plane_sum, (vDSP_Length)spatial);
       mean->values[ci] += plane_sum;

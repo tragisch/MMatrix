@@ -14,7 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
 #elif defined(USE_OPENBLAS)
@@ -358,8 +358,7 @@ bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {
     return false;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   cblas_saxpy((BLASINT)a->numel, 1.0f, b->values, 1, a->values, 1);
 #else
 #pragma omp parallel for schedule(static) if (a->numel > 10000)
@@ -383,8 +382,7 @@ bool st_inplace_sub(FloatTensor *a, const FloatTensor *b) {
     return false;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   cblas_saxpy((BLASINT)a->numel, -1.0f, b->values, 1, a->values, 1);
 #else
 #pragma omp parallel for schedule(static) if (a->numel > 10000)
@@ -404,9 +402,7 @@ bool st_inplace_scale(FloatTensor *t, float scalar) {
     return false;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
-  cblas_sscal((BLASINT)t->numel, scalar, t->values, 1);
-#elif defined(USE_OPENBLAS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   cblas_sscal((BLASINT)t->numel, scalar, t->values, 1);
 #else
 #pragma omp parallel for schedule(static) if (t->numel > 10000)
@@ -431,7 +427,7 @@ bool st_inplace_elementwise_multiply(FloatTensor *a, const FloatTensor *b) {
     return false;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
   vDSP_vmul(a->values, 1, b->values, 1, a->values, 1,
             (vDSP_Length)a->numel);
 #else
@@ -455,7 +451,7 @@ bool st_fill(FloatTensor *t, float value) {
   if (value == 0.0f) {
     memset(t->values, 0, t->numel * sizeof(float));
   } else {
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
     vDSP_vfill(&value, t->values, 1, (vDSP_Length)t->numel);
 #else
     for (size_t i = 0; i < t->numel; ++i) {
@@ -477,7 +473,7 @@ bool st_apply_relu(FloatTensor *t) {
     return false;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
   /* vDSP_vthr: t[i] = max(t[i], threshold) */
   float zero = 0.0f;
   vDSP_vthr(t->values, 1, &zero, t->values, 1, (vDSP_Length)t->numel);
@@ -579,7 +575,7 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
       float sum = 0.0f;
       for (size_t ni = 0; ni < n; ++ni) {
         const float *plane = t->values + (ni * c + ci) * spatial;
-#if defined(USE_ACCELERATE) || defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE)
         float plane_sum = 0.0f;
         vDSP_sve(plane, 1, &plane_sum, (vDSP_Length)spatial);
         sum += plane_sum;
@@ -600,8 +596,7 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
     const size_t cols = t->shape[1];
     for (size_t r = 0; r < rows; ++r) {
       const float *row = t->values + r * cols;
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS) || \
-    defined(USE_ACCELERATE_MPS)
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
       cblas_saxpy((BLASINT)cols, 1.0f, row, 1, result->values, 1);
 #else
       for (size_t j = 0; j < cols; ++j) {

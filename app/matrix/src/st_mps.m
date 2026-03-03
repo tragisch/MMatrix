@@ -224,9 +224,13 @@ bool st_batchnorm2d_forward_mps(const float *input, size_t n, size_t c,
                        secondaryTensor:epsT
                                   name:@"var_eps"];
 
+  MPSGraphTensor *sqrtVarT =
+      [graph squareRootWithTensor:varPlusEpsT
+                             name:@"sqrt_var"];
+
   MPSGraphTensor *invStdT =
-      [graph reciprocalOfSquareRootWithTensor:varPlusEpsT
-                                         name:@"inv_std"];
+      [graph reciprocalWithTensor:sqrtVarT
+                             name:@"inv_std"];
 
   MPSGraphTensor *normedT =
       [graph multiplicationWithPrimaryTensor:diffT
