@@ -100,6 +100,39 @@ void test_sm_active_library_should_return_non_null(void) {
   TEST_ASSERT_NOT_NULL(lib);
 }
 
+void test_sm_set_backend_should_follow_build_capabilities(void) {
+  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_DEFAULT));
+  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_DEFAULT, (int)sm_get_backend());
+
+#if defined(USE_ACCELERATE)
+  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_ACCELERATE));
+  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_ACCELERATE, (int)sm_get_backend());
+#else
+  TEST_ASSERT_FALSE(sm_set_backend(SM_BACKEND_ACCELERATE));
+#endif
+
+#if defined(USE_OPENBLAS)
+  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_OPENBLAS));
+  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENBLAS, (int)sm_get_backend());
+#else
+  TEST_ASSERT_FALSE(sm_set_backend(SM_BACKEND_OPENBLAS));
+#endif
+
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
+  TEST_ASSERT_TRUE(sm_mps_available());
+  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_MPS));
+  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_MPS, (int)sm_get_backend());
+#else
+  TEST_ASSERT_FALSE(sm_mps_available());
+  TEST_ASSERT_FALSE(sm_set_backend(SM_BACKEND_MPS));
+#endif
+
+  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_OPENMP));
+  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENMP, (int)sm_get_backend());
+
+  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_DEFAULT));
+}
+
 void test_sm_create(void) {
   // Test case 1: Create a matrix with valid dimensions
   size_t rows = 3;
@@ -418,6 +451,21 @@ void test_sm_random_he_distribution(void) {
                            stddev);  // Varianz wie erwartet
 
   sm_destroy(mat);
+}
+
+void test_sm_random_he_should_fail_for_zero_fan_in(void) {
+  FloatMatrix *mat = sm_create_random_he(4, 4, 0);
+  TEST_ASSERT_TRUE(mat == NULL);
+}
+
+void test_sm_random_xavier_should_fail_for_zero_fan_in_or_fan_out(void) {
+  FloatMatrix *fan_in_zero = sm_create_random_xavier(4, 4, 0, 8);
+  FloatMatrix *fan_out_zero = sm_create_random_xavier(4, 4, 8, 0);
+  FloatMatrix *both_zero = sm_create_random_xavier(4, 4, 0, 0);
+
+  TEST_ASSERT_TRUE(fan_in_zero == NULL);
+  TEST_ASSERT_TRUE(fan_out_zero == NULL);
+  TEST_ASSERT_TRUE(both_zero == NULL);
 }
 
 void test_sm_multiply(void) {

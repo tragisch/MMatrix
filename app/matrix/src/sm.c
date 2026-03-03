@@ -233,6 +233,10 @@ uint64_t sm_get_random_seed(void) {
 }
 
 float *sm_to_column_major(const FloatMatrix *mat) {
+  if (!mat || !mat->values) {
+    log_error("Failed to convert NULL matrix to column-major buffer");
+    return NULL;
+  }
   size_t rows = mat->rows;
   size_t cols = mat->cols;
   float *col_major = malloc(rows * cols * sizeof(float));
@@ -366,6 +370,10 @@ FloatMatrix *sm_create_random_he(size_t rows, size_t cols, size_t fan_in) {
     log_error("Overflow detected in matrix allocation.");
     return NULL;
   }
+  if (fan_in == 0) {
+    log_error("Error: fan_in must be greater than zero.");
+    return NULL;
+  }
 
   FloatMatrix *mat = sm_create(rows, cols);
   if (!mat) return NULL;
@@ -393,6 +401,10 @@ FloatMatrix *sm_create_random_xavier(size_t rows, size_t cols, size_t fan_in,
                                      size_t fan_out) {
   if (cols != 0 && rows > SIZE_MAX / cols) {
     log_error("Overflow detected in matrix allocation.");
+    return NULL;
+  }
+  if (fan_in == 0 || fan_out == 0) {
+    log_error("Error: fan_in and fan_out must be greater than zero.");
     return NULL;
   }
 
@@ -795,11 +807,34 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
 
   FloatMatrix *a_copy = sm_clone(A);
   FloatMatrix *b_copy = sm_clone(b);
+  if (!a_copy || !b_copy) {
+    log_error("Error: Memory allocation for solve-system copies failed.\n");
+    sm_destroy(a_copy);
+    sm_destroy(b_copy);
+    return NULL;
+  }
 
   float *a_col = sm_to_column_major(a_copy);
   float *b_col = sm_to_column_major(b_copy);
+  if (!a_col || !b_col) {
+    log_error(
+        "Error: Memory allocation for solve-system column-major buffers failed.\n");
+    free(a_col);
+    free(b_col);
+    sm_destroy(a_copy);
+    sm_destroy(b_copy);
+    return NULL;
+  }
 
-  int *ipiv = malloc((size_t)n * sizeof(int));
+  int *ipiv = (int *)malloc((size_t)n * sizeof(int));
+  if (!ipiv) {
+    log_error("Error: Memory allocation for pivot indices failed.\n");
+    free(a_col);
+    free(b_col);
+    sm_destroy(a_copy);
+    sm_destroy(b_copy);
+    return NULL;
+  }
   int info;
 
   // Solve AX = B using LAPACK
@@ -842,8 +877,20 @@ FloatMatrix *sm_solve_system(const FloatMatrix *A, const FloatMatrix *b) {
 
   FloatMatrix *a_copy = sm_clone(A);
   FloatMatrix *b_copy = sm_clone(b);
+  if (!a_copy || !b_copy) {
+    log_error("Error: Memory allocation for solve-system copies failed.\n");
+    sm_destroy(a_copy);
+    sm_destroy(b_copy);
+    return NULL;
+  }
 
-  int *ipiv = malloc((size_t)n * sizeof(int));
+  int *ipiv = (int *)malloc((size_t)n * sizeof(int));
+  if (!ipiv) {
+    log_error("Error: Memory allocation for pivot indices failed.\n");
+    sm_destroy(a_copy);
+    sm_destroy(b_copy);
+    return NULL;
+  }
   int info;
 
   info = LAPACKE_sgesv(LAPACK_ROW_MAJOR,
@@ -1083,6 +1130,12 @@ float sm_determinant(const FloatMatrix *mat) {
 
     BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
     FloatMatrix *lu = sm_clone(mat);
+    if (!ipiv || !lu) {
+      log_error("Error: Memory allocation for determinant failed.\n");
+      free(ipiv);
+      sm_destroy(lu);
+      return 0.0f;
+    }
     BLASINT info = 0;
     BLASINT cols = (BLASINT)lu->cols;
     BLASINT rows = (BLASINT)lu->rows;
@@ -1167,10 +1220,13 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   }
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
   FloatMatrix *inverse = sm_clone(mat);
+  if (inverse == NULL) {
+    log_error("Error: Memory allocation for inverse copy failed.\n");
+    return NULL;
+  }
   BLASINT *ipiv = (BLASINT *)malloc(mat->cols * sizeof(BLASINT));
   if (ipiv == NULL) {
-    free(inverse->values);
-    free(inverse);
+    sm_destroy(inverse);
     log_error("Error: Memory allocation for ipiv failed.\n");
     return NULL;
   }
@@ -1180,8 +1236,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   sgetrf_(&n, &n, inverse->values, &n, ipiv, &info);
   if (info != 0) {
     free(ipiv);
-    free(inverse->values);
-    free(inverse);
+    sm_destroy(inverse);
     log_error("Error: dgetrf failed.\n");
     return NULL;
   }
@@ -1189,13 +1244,18 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   BLASINT lwork = -1;
   float work_opt;
   sgetri_(&n, inverse->values, &n, ipiv, &work_opt, &lwork, &info);
+  if (info != 0 || work_opt <= 0.0f) {
+    free(ipiv);
+    sm_destroy(inverse);
+    log_error("Error: dgetri workspace query failed.\n");
+    return NULL;
+  }
 
   lwork = (BLASINT)work_opt;
   float *work = (float *)malloc((size_t)lwork * sizeof(float));
   if (work == NULL) {
     free(ipiv);
-    free(inverse->values);
-    free(inverse);
+    sm_destroy(inverse);
     log_error("Error: Memory allocation for work array failed.\n");
     return NULL;
   }
@@ -1204,8 +1264,7 @@ FloatMatrix *sm_inverse(const FloatMatrix *mat) {
   free(work);
   free(ipiv);
   if (info != 0) {
-    free(inverse->values);
-    free(inverse);
+    sm_destroy(inverse);
     log_error("Error: dgetri failed.\n");
     return NULL;
   }
