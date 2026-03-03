@@ -127,8 +127,12 @@ void test_sm_set_backend_should_follow_build_capabilities(void) {
     TEST_ASSERT_TRUE(accel_ok);
   }
 
-  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_OPENMP));
-  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENMP, (int)sm_get_backend());
+  bool openmp_ok = sm_set_backend(SM_BACKEND_OPENMP);
+  bool expect_openmp = !(accel_ok || openblas_ok);
+  TEST_ASSERT_EQUAL_INT((int)expect_openmp, (int)openmp_ok);
+  if (openmp_ok) {
+    TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENMP, (int)sm_get_backend());
+  }
 
   TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_DEFAULT));
 }

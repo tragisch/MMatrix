@@ -10,7 +10,14 @@
 
 #include <log.h>
 #include <math.h>
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpedantic"
+#endif
 #include <omp.h>
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include <stdint.h>
 #include <time.h>
 
@@ -65,9 +72,15 @@ static SmBackend sm_current_backend = SM_BACKEND_DEFAULT;
 bool sm_set_backend(SmBackend backend) {
   switch (backend) {
     case SM_BACKEND_DEFAULT:
-    case SM_BACKEND_OPENMP:
       sm_current_backend = backend;
       return true;
+    case SM_BACKEND_OPENMP:
+#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+      return false;
+#else
+      sm_current_backend = backend;
+      return true;
+#endif
     case SM_BACKEND_ACCELERATE:
 #if defined(USE_ACCELERATE)
       sm_current_backend = backend;
@@ -245,6 +258,7 @@ size_t sm_rank_euler(const FloatMatrix *mat) {
  * lu_values:  row-major LU factors (n x n) from sm_lu_decompose.
  * pivot_order: pivot permutation from sm_lu_decompose.
  */
+#if !defined(USE_ACCELERATE) && !defined(USE_OPENBLAS)
 static bool sm_lu_forward_back_sub(float *restrict rhs_values,
                                    const float *restrict lu_values,
                                    const size_t *pivot_order, size_t n,
@@ -306,6 +320,7 @@ static bool sm_lu_forward_back_sub(float *restrict rhs_values,
   free(rt);
   return true;
 }
+#endif
 
 static uint64_t sm_mix64(uint64_t x) {
   x += 0x9E3779B97F4A7C15ull;
