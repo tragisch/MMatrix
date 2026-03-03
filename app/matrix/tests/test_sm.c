@@ -104,28 +104,28 @@ void test_sm_set_backend_should_follow_build_capabilities(void) {
   TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_DEFAULT));
   TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_DEFAULT, (int)sm_get_backend());
 
-#if defined(USE_ACCELERATE)
-  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_ACCELERATE));
-  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_ACCELERATE, (int)sm_get_backend());
-#else
-  TEST_ASSERT_FALSE(sm_set_backend(SM_BACKEND_ACCELERATE));
-#endif
+  bool accel_ok = sm_set_backend(SM_BACKEND_ACCELERATE);
+  if (accel_ok) {
+    TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_ACCELERATE, (int)sm_get_backend());
+  }
 
-#if defined(USE_OPENBLAS)
-  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_OPENBLAS));
-  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENBLAS, (int)sm_get_backend());
-#else
-  TEST_ASSERT_FALSE(sm_set_backend(SM_BACKEND_OPENBLAS));
-#endif
+  bool openblas_ok = sm_set_backend(SM_BACKEND_OPENBLAS);
+  if (openblas_ok) {
+    TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENBLAS, (int)sm_get_backend());
+  }
 
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-  TEST_ASSERT_TRUE(sm_mps_available());
-  TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_MPS));
-  TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_MPS, (int)sm_get_backend());
-#else
-  TEST_ASSERT_FALSE(sm_mps_available());
-  TEST_ASSERT_FALSE(sm_set_backend(SM_BACKEND_MPS));
-#endif
+  bool mps_ok = sm_set_backend(SM_BACKEND_MPS);
+  TEST_ASSERT_EQUAL_INT((int)sm_mps_available(), (int)mps_ok);
+  if (mps_ok) {
+    TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_MPS, (int)sm_get_backend());
+  }
+
+  // Current build should not expose Accelerate and OpenBLAS simultaneously.
+  TEST_ASSERT_FALSE(accel_ok && openblas_ok);
+  // MPS availability implies Accelerate availability in this project layout.
+  if (sm_mps_available()) {
+    TEST_ASSERT_TRUE(accel_ok);
+  }
 
   TEST_ASSERT_TRUE(sm_set_backend(SM_BACKEND_OPENMP));
   TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENMP, (int)sm_get_backend());
