@@ -34,9 +34,8 @@ typedef struct cs_di_sparse cs;
 #endif
 
 // Sparse COO matrix stored as (row, col, value) triples.
-// Public operations maintain row-major (row, col) ordering; internal builder
-// paths may defer sorting temporarily and restore it before binary-search-based
-// access or CSparse conversion.
+// COO is the builder format; a CSC cache is built lazily for CSparse-backed
+// compute paths and invalidated whenever the COO data changes.
 typedef struct DoubleSparseMatrix {
   size_t rows;
   size_t cols;
@@ -45,6 +44,8 @@ typedef struct DoubleSparseMatrix {
   size_t *row_indices;
   size_t *col_indices;
   double *values;
+  cs *csc_cache;
+  bool csc_valid;
 } DoubleSparseMatrix;
 
 // Create empty sparse matrix metadata (nnz = 0, arrays NULL).

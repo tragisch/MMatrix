@@ -6,7 +6,7 @@
  * See the LICENSE file in the root directory for details.
  */
 
-#include "../include/dms.h"
+#include "dms.h"
 
 #if defined(__has_include)
 #if __has_include(<cs.h>) && __has_include(<omp.h>) && \
@@ -100,6 +100,17 @@ static void dms_matrix_set_sorted(DoubleSparseMatrix *mat, bool is_sorted) {
     return;
   }
   storage->is_sorted = is_sorted;
+}
+
+static void dms_invalidate_csc_cache(DoubleSparseMatrix *mat) {
+  if (!mat) {
+    return;
+  }
+  if (mat->csc_cache) {
+    cs_spfree(mat->csc_cache);
+    mat->csc_cache = NULL;
+  }
+  mat->csc_valid = false;
 }
 
 static bool dms_allocate_storage(DoubleSparseMatrix *mat, size_t capacity,
@@ -287,6 +298,7 @@ static bool dms_append_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
   matrix->values[matrix->nnz] = value;
   matrix->nnz++;
 
+  dms_invalidate_csc_cache(matrix);
   dms_matrix_set_sorted(matrix, keeps_sorted);
   return true;
 }
@@ -326,6 +338,7 @@ static bool dms_insert_element_sorted(DoubleSparseMatrix *matrix, size_t i,
   matrix->values[position] = value;
   matrix->nnz++;
 
+  dms_invalidate_csc_cache(matrix);
   dms_matrix_set_sorted(matrix, true);
   return true;
 }
@@ -445,6 +458,26 @@ static bool dms_ensure_sorted(DoubleSparseMatrix *mat) {
   return true;
 }
 
+// COO remains the builder/storage format. This helper materializes and retains
+// the CSC compute representation lazily, then reuses it until a mutation
+// invalidates the cache.
+static cs *dms_get_csc(DoubleSparseMatrix *mat) {
+  if (!mat) {
+    return NULL;
+  }
+  if (mat->csc_valid && mat->csc_cache) {
+    return mat->csc_cache;
+  }
+
+  dms_invalidate_csc_cache(mat);
+  mat->csc_cache = dms_to_cs(mat);
+  if (!mat->csc_cache) {
+    return NULL;
+  }
+  mat->csc_valid = true;
+  return mat->csc_cache;
+}
+
 static void dms_build_row_offsets(const DoubleSparseMatrix *mat,
                                   size_t *row_offsets) {
   size_t k = 0;
@@ -557,6 +590,8 @@ DoubleSparseMatrix *dms_create_empty(void) {
   mat->row_indices = NULL;
   mat->col_indices = NULL;
   mat->values = NULL;
+  mat->csc_cache = NULL;
+  mat->csc_valid = false;
 
   return mat;
 }
@@ -586,6 +621,8 @@ DoubleSparseMatrix *dms_create(size_t rows, size_t cols, size_t capacity) {
   mat->row_indices = NULL;
   mat->col_indices = NULL;
   mat->values = NULL;
+  mat->csc_cache = NULL;
+  mat->csc_valid = false;
 
   if (!dms_allocate_storage(mat, capacity, true, true)) {
     free(mat);
@@ -625,6 +662,8 @@ DoubleSparseMatrix *dms_clone(const DoubleSparseMatrix *m) {
     memcpy(copy->col_indices, m->col_indices, m->nnz * sizeof(size_t));
     memcpy(copy->values, m->values, m->nnz * sizeof(double));
   }
+  copy->csc_cache = NULL;
+  copy->csc_valid = false;
   dms_matrix_set_state(copy, dms_matrix_is_sorted(m),
                        dms_matrix_builder_mode(m));
 
@@ -654,6 +693,8 @@ DoubleSparseMatrix *dms_create_identity(size_t n) {
     mat->values[i] = 1.0;
   }
   mat->nnz = n;
+  mat->csc_cache = NULL;
+  mat->csc_valid = false;
   dms_matrix_set_state(mat, true, true);
 
   return mat;
@@ -805,6 +846,7 @@ DoubleSparseMatrix *dms_create_random_seeded(size_t rows, size_t cols,
 
   // Random generation intentionally leaves COO entries unsorted so builder mode
   // can defer the repair cost until a binary-search-based access is needed.
+  dms_invalidate_csc_cache(mat);
   dms_matrix_set_state(mat, false, true);
   return mat;
 }
@@ -1009,19 +1051,15 @@ DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
     return NULL;
   }
 
-  A = dms_to_cs(mat1);
-  B = dms_to_cs(mat2);
+  A = dms_get_csc((DoubleSparseMatrix *)mat1);
+  B = dms_get_csc((DoubleSparseMatrix *)mat2);
   if (!A || !B) {
-    cs_spfree(A);
-    cs_spfree(B);
     return NULL;
   }
 
   C = cs_multiply(A, B);
   result = C ? dms_from_cs(C) : NULL;
 
-  cs_spfree(A);
-  cs_spfree(B);
   cs_spfree(C);
 
   return result;
@@ -1065,7 +1103,7 @@ DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
     return dms_create(mat->cols, mat->rows, 1);
   }
 
-  A = dms_to_cs(mat);
+  A = dms_get_csc((DoubleSparseMatrix *)mat);
   if (!A) {
     return NULL;
   }
@@ -1073,7 +1111,6 @@ DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
   AT = cs_transpose(A, 1);
   result = AT ? dms_from_cs(AT) : NULL;
 
-  cs_spfree(A);
   cs_spfree(AT);
 
   return result;
@@ -1130,6 +1167,7 @@ bool dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
       }
       if (tail_cmp == 0) {
         matrix->values[last] = value;
+        dms_invalidate_csc_cache(matrix);
         return true;
       }
 
@@ -1137,6 +1175,7 @@ bool dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
       if (position < matrix->nnz && matrix->row_indices[position] == i &&
           matrix->col_indices[position] == j) {
         matrix->values[position] = value;
+        dms_invalidate_csc_cache(matrix);
         return true;
       }
 
@@ -1149,6 +1188,7 @@ bool dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
       size_t position = 0;
       if (dms_linear_find(matrix, i, j, &position)) {
         matrix->values[position] = value;
+        dms_invalidate_csc_cache(matrix);
         return true;
       }
     }
@@ -1164,6 +1204,7 @@ bool dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
     if (position < matrix->nnz && matrix->row_indices[position] == i &&
         matrix->col_indices[position] == j) {
       matrix->values[position] = value;
+      dms_invalidate_csc_cache(matrix);
       return true;
     }
     return dms_insert_element_sorted(matrix, i, j, value, position);
@@ -1224,6 +1265,7 @@ bool dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity) {
   mat->col_indices = new_indices->data + new_capacity;
   mat->values = new_values;
   mat->capacity = new_capacity;
+  dms_invalidate_csc_cache(mat);
 
   return true;
 }
@@ -1269,6 +1311,7 @@ void dms_destroy(DoubleSparseMatrix *mat) {
   if (!mat) {
     return;
   }
+  dms_invalidate_csc_cache(mat);
   dms_free_storage(mat);
   free(mat);
 }
