@@ -389,13 +389,12 @@ static void dms_sort_indices(size_t *idx, size_t *scratch, size_t left,
 // Sorting restores the public COO invariant after builder-mode appends and
 // after conversions that materialize data in a different traversal order.
 static bool dms_sort_coo(DoubleSparseMatrix *mat) {
-  size_t *sort_buffers = NULL;
-  size_t *tmp_indices = NULL;
-  double *tmp_values = NULL;
+  char *workspace = NULL;
   size_t *idx = NULL;
   size_t *scratch = NULL;
   size_t *tmp_rows = NULL;
   size_t *tmp_cols = NULL;
+  double *tmp_values = NULL;
   dms_sort_context ctx;
 
   if (!mat || mat->nnz <= 1) {
@@ -403,20 +402,21 @@ static bool dms_sort_coo(DoubleSparseMatrix *mat) {
     return true;
   }
 
-  sort_buffers = malloc(mat->nnz * 2 * sizeof(size_t));
-  tmp_indices = malloc(mat->nnz * 2 * sizeof(size_t));
-  tmp_values = malloc(mat->nnz * sizeof(double));
-  if (!sort_buffers || !tmp_indices || !tmp_values) {
-    free(sort_buffers);
-    free(tmp_indices);
-    free(tmp_values);
-    return false;
+  /* Single allocation for all temporary sort buffers. */
+  {
+    size_t idx_bytes = mat->nnz * 4 * sizeof(size_t);
+    size_t val_bytes = mat->nnz * sizeof(double);
+    workspace = malloc(idx_bytes + val_bytes);
+    if (!workspace) {
+      return false;
+    }
   }
 
-  idx = sort_buffers;
-  scratch = sort_buffers + mat->nnz;
-  tmp_rows = tmp_indices;
-  tmp_cols = tmp_indices + mat->nnz;
+  idx = (size_t *)workspace;
+  scratch = idx + mat->nnz;
+  tmp_rows = scratch + mat->nnz;
+  tmp_cols = tmp_rows + mat->nnz;
+  tmp_values = (double *)(tmp_cols + mat->nnz);
 
   for (size_t k = 0; k < mat->nnz; ++k) {
     idx[k] = k;
@@ -436,11 +436,30 @@ static bool dms_sort_coo(DoubleSparseMatrix *mat) {
   memcpy(mat->col_indices, tmp_cols, mat->nnz * sizeof(size_t));
   memcpy(mat->values, tmp_values, mat->nnz * sizeof(double));
 
-  dms_matrix_set_sorted(mat, true);
+  free(workspace);
 
-  free(sort_buffers);
-  free(tmp_indices);
-  free(tmp_values);
+  /* Deduplicate: for consecutive entries sharing the same (row, col),
+     keep only the last one (last-write-wins; the stable merge sort
+     preserves insertion order among equal keys). */
+  {
+    size_t write = 0;
+    for (size_t k = 0; k < mat->nnz; ++k) {
+      if (k + 1 < mat->nnz &&
+          mat->row_indices[k] == mat->row_indices[k + 1] &&
+          mat->col_indices[k] == mat->col_indices[k + 1]) {
+        continue;
+      }
+      if (write != k) {
+        mat->row_indices[write] = mat->row_indices[k];
+        mat->col_indices[write] = mat->col_indices[k];
+        mat->values[write] = mat->values[k];
+      }
+      write++;
+    }
+    mat->nnz = write;
+  }
+
+  dms_matrix_set_sorted(mat, true);
   return true;
 }
 
@@ -492,8 +511,6 @@ static void dms_build_row_offsets(const DoubleSparseMatrix *mat,
 }
 
 bool dms_spmv(const DoubleSparseMatrix *mat, const double *x, double *y) {
-  size_t *row_offsets = NULL;
-
   if (!mat || !x || !y) {
     return false;
   }
@@ -501,23 +518,35 @@ bool dms_spmv(const DoubleSparseMatrix *mat, const double *x, double *y) {
     return false;
   }
 
-  row_offsets = calloc(mat->rows + 1, sizeof(size_t));
-  if (!row_offsets) {
-    return false;
-  }
-
-  dms_build_row_offsets(mat, row_offsets);
-
-#pragma omp parallel for if(mat->rows > 64)
-  for (size_t row = 0; row < mat->rows; ++row) {
-    double sum = 0.0;
-    for (size_t k = row_offsets[row]; k < row_offsets[row + 1]; ++k) {
-      sum += mat->values[k] * x[mat->col_indices[k]];
+  /* Fast path for small/sparse matrices: direct scatter avoids the
+     row_offsets heap allocation. */
+  if (mat->rows <= 4096 || mat->nnz < 8192) {
+    memset(y, 0, mat->rows * sizeof(double));
+    for (size_t k = 0; k < mat->nnz; ++k) {
+      y[mat->row_indices[k]] += mat->values[k] * x[mat->col_indices[k]];
     }
-    y[row] = sum;
+    return true;
   }
 
-  free(row_offsets);
+  {
+    size_t *row_offsets = calloc(mat->rows + 1, sizeof(size_t));
+    if (!row_offsets) {
+      return false;
+    }
+
+    dms_build_row_offsets(mat, row_offsets);
+
+#pragma omp parallel for
+    for (size_t row = 0; row < mat->rows; ++row) {
+      double sum = 0.0;
+      for (size_t k = row_offsets[row]; k < row_offsets[row + 1]; ++k) {
+        sum += mat->values[k] * x[mat->col_indices[k]];
+      }
+      y[row] = sum;
+    }
+
+    free(row_offsets);
+  }
   return true;
 }
 
@@ -987,8 +1016,8 @@ DoubleSparseMatrix *dms_get_last_row(const DoubleSparseMatrix *mat) {
 
 DoubleSparseMatrix *dms_get_col(const DoubleSparseMatrix *mat, size_t j) {
   DoubleSparseMatrix *col = NULL;
+  cs *A = NULL;
   size_t count = 0;
-  size_t out = 0;
 
   if (!mat) {
     log_error("Error: invalid sparse matrix input.\n");
@@ -998,30 +1027,28 @@ DoubleSparseMatrix *dms_get_col(const DoubleSparseMatrix *mat, size_t j) {
     log_error("Error: invalid column index.\n");
     return NULL;
   }
-  if (!dms_ensure_sorted((DoubleSparseMatrix *)mat)) {
+
+  /* Use the CSC cache for O(nnz_col) column extraction instead of
+     scanning all nnz entries. */
+  A = dms_get_csc((DoubleSparseMatrix *)mat);
+  if (!A) {
     return NULL;
   }
 
-  for (size_t k = 0; k < mat->nnz; ++k) {
-    if (mat->col_indices[k] == j) {
-      count++;
-    }
-  }
+  count = (size_t)(A->p[j + 1] - A->p[j]);
 
   col = dms_create(mat->rows, 1, count > 0 ? count : 1);
   if (!col) {
     return NULL;
   }
 
-  for (size_t k = 0; k < mat->nnz; ++k) {
-    if (mat->col_indices[k] == j) {
-      col->row_indices[out] = mat->row_indices[k];
-      col->col_indices[out] = 0;
-      col->values[out] = mat->values[k];
-      out++;
-    }
+  for (size_t k = 0; k < count; ++k) {
+    size_t pos = (size_t)A->p[j] + k;
+    col->row_indices[k] = (size_t)A->i[pos];
+    col->col_indices[k] = 0;
+    col->values[k] = A->x[pos];
   }
-  col->nnz = out;
+  col->nnz = count;
   dms_matrix_set_state(col, true, true);
 
   return col;
@@ -1073,14 +1100,29 @@ DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
     return NULL;
   }
 
-  result = dms_clone(mat);
+  /* Edge case: uninitialised storage. */
+  if (!mat->row_indices || !mat->col_indices || !mat->values ||
+      mat->capacity == 0) {
+    return dms_clone(mat);
+  }
+
+  /* Fused copy + scale: allocate once, copy indices, multiply values
+     in a single pass instead of clone + separate scaling loop. */
+  result = dms_create(mat->rows, mat->cols, mat->capacity);
   if (!result) {
     return NULL;
   }
 
-  for (size_t i = 0; i < mat->nnz; i++) {
-    result->values[i] *= number;
+  result->nnz = mat->nnz;
+  if (mat->nnz > 0) {
+    memcpy(result->row_indices, mat->row_indices, mat->nnz * sizeof(size_t));
+    memcpy(result->col_indices, mat->col_indices, mat->nnz * sizeof(size_t));
+    for (size_t i = 0; i < mat->nnz; i++) {
+      result->values[i] = mat->values[i] * number;
+    }
   }
+  dms_matrix_set_state(result, dms_matrix_is_sorted(mat),
+                       dms_matrix_builder_mode(mat));
 
   return result;
 }
@@ -1184,14 +1226,8 @@ bool dms_set(DoubleSparseMatrix *matrix, size_t i, size_t j, double value) {
       return dms_append_element(matrix, i, j, value, false);
     }
 
-    {
-      size_t position = 0;
-      if (dms_linear_find(matrix, i, j, &position)) {
-        matrix->values[position] = value;
-        dms_invalidate_csc_cache(matrix);
-        return true;
-      }
-    }
+    // Builder mode (unsorted): blind append without duplicate check.
+    // Duplicates are resolved (last-write-wins) during dms_sort_coo().
     return dms_append_element(matrix, i, j, value, false);
   }
 
