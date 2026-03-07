@@ -33,7 +33,8 @@
 typedef struct cs_di_sparse cs;
 #endif
 
-// Sparse COO matrix; duplicates are allowed and summed in dms_get().
+// Sparse COO matrix stored as sorted COO triples in row-major (row, col) order.
+// Duplicate coordinates should be avoided once the data has been sorted.
 typedef struct DoubleSparseMatrix {
   size_t rows;
   size_t cols;
@@ -47,7 +48,7 @@ typedef struct DoubleSparseMatrix {
 // Create empty sparse matrix metadata (nnz = 0, arrays NULL).
 DoubleSparseMatrix *dms_create_empty(void);
 
-// Create matrix from external COO arrays (no copy, caller manages arrays lifetime).
+// Create matrix from external COO arrays by copying the data.
 DoubleSparseMatrix *dms_create_with_values(size_t rows, size_t cols, size_t nnz,
                                            size_t *row_indices,
                                            size_t *col_indices, double *values);
@@ -92,10 +93,10 @@ MMATRIX_DEPRECATED("Use dms_from_array_static instead")
 DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
                                              double array[rows][cols]);
 
-// Append COO triple (i, j, value); duplicates are allowed and summed in dms_get().
+// Insert or update COO triple (i, j, value) while preserving sorted (row, col) order.
 bool dms_set(DoubleSparseMatrix *mat, size_t i, size_t j, double value);
 
-// Read value at (i, j) as sum of matching COO triples (O(nnz) worst case).
+// Read the value at the first matching (i, j) position; sorted COO data is required.
 double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j);
 
 // Return row i as new sparse matrix.

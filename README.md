@@ -94,6 +94,21 @@ i.e.
 ```bash
 bazel run //:matrix_installer -- $(PWD)/lib/matrix
 ```
+The installer supports two modes:
+
+- `standard` (default): installs `libmatrix.a` plus dependency libs and headers.
+- `bundle`: creates and installs one combined static archive `libmatrix_full.a` (fat static lib) and installs headers.
+
+Examples:
+
+```bash
+# Default mode
+bazel run //:matrix_installer -- --mode=standard $(PWD)/lib/matrix
+
+# Bundle mode (single static archive)
+bazel run //:matrix_installer -- --mode=bundle $(PWD)/lib/matrix_bundle
+```
+
 To also create symbolic links into system-wide directories (e.g., `/usr/local/include`, `/usr/local/lib`), you can enable system integration in BUILD - File:
 
 ```bash
@@ -103,6 +118,13 @@ installer(
         "//app/matrix",        # the target to be installed
         "//app/matrix:matrix_header", # collected in a Bazel filegroup with all public headers
         "//:LICENSE.txt",      # if available
+        "@libomp//:install_files",
+        "@log",
+        "@matio",
+        "@openblas//:install_files",
+        "@pcg",
+        "@suitesparse//:install_files",
+        "@zlib",
         ],
     system_integration = False, # set "True" symlinks into /usr/local/lib and /usr/local/include
 )

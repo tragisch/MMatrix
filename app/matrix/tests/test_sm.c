@@ -7,6 +7,7 @@
  */
 
 #include "sm.h"
+#include <math.h>
 
 /******************************
  ** Test preconditions:

@@ -15,3 +15,9 @@ cc_library(
     ],
     visibility = ["//visibility:public"],
 )
+
+filegroup(
+    name = "install_files",
+    srcs = glob(["lib/*.a"]) + glob(["include/suitesparse/*.h"]),
+    visibility = ["//visibility:public"],
+)

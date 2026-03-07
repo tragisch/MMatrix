@@ -44,13 +44,14 @@ double dms_max_double(double a, double b) { return a > b ? a : b; }
 double dms_min_double(double a, double b) { return a < b ? a : b; }
 int dms_max_int(int a, int b) { return a > b ? a : b; }
 
+// Binary search requires COO triples sorted by (row, col) in row-major order.
 static size_t dms_binary_search(const DoubleSparseMatrix *matrix, size_t i,
-                                  size_t j) {
+                                size_t j) {
   size_t low = 0;
   size_t high = matrix->nnz;
 
   while (low < high) {
-    size_t mid = (low + high) / 2;
+    size_t mid = low + ((high - low) >> 1);
 
     if (matrix->row_indices[mid] == i && matrix->col_indices[mid] == j) {
       return mid;  // Element found at position (i, j)
@@ -97,47 +98,120 @@ static bool dms_insert_element(DoubleSparseMatrix *matrix, size_t i, size_t j,
   return true;
 }
 
-// Comparator for qsort: sort COO triples by (row, col) in row-major order.
-// Uses an index array to sort all three arrays consistently.
-static size_t *dms_sort_rows;
-static size_t *dms_sort_cols;
+typedef struct dms_sort_context {
+  const size_t *rows;
+  const size_t *cols;
+} dms_sort_context;
 
-static int dms_coo_compare(const void *a, const void *b) {
-  size_t ia = *(const size_t *)a;
-  size_t ib = *(const size_t *)b;
-  if (dms_sort_rows[ia] != dms_sort_rows[ib])
-    return (dms_sort_rows[ia] < dms_sort_rows[ib]) ? -1 : 1;
-  if (dms_sort_cols[ia] != dms_sort_cols[ib])
-    return (dms_sort_cols[ia] < dms_sort_cols[ib]) ? -1 : 1;
+static int dms_compare_indices(size_t ia, size_t ib,
+                               const dms_sort_context *ctx) {
+  if (ctx->rows[ia] != ctx->rows[ib]) {
+    return (ctx->rows[ia] < ctx->rows[ib]) ? -1 : 1;
+  }
+  if (ctx->cols[ia] != ctx->cols[ib]) {
+    return (ctx->cols[ia] < ctx->cols[ib]) ? -1 : 1;
+  }
   return 0;
 }
 
-// Sort COO triples in-place by (row, col) row-major order.
+static void dms_merge_sorted_indices(size_t *idx, size_t *scratch, size_t left,
+                                     size_t mid, size_t right,
+                                     const dms_sort_context *ctx) {
+  size_t i = left;
+  size_t j = mid;
+  size_t k = left;
+
+  while (i < mid && j < right) {
+    if (dms_compare_indices(idx[i], idx[j], ctx) <= 0) {
+      scratch[k++] = idx[i++];
+    } else {
+      scratch[k++] = idx[j++];
+    }
+  }
+
+  while (i < mid) {
+    scratch[k++] = idx[i++];
+  }
+  while (j < right) {
+    scratch[k++] = idx[j++];
+  }
+
+  memcpy(&idx[left], &scratch[left], (right - left) * sizeof(size_t));
+}
+
+static void dms_sort_indices(size_t *idx, size_t *scratch, size_t left,
+                             size_t right, const dms_sort_context *ctx) {
+  if (right - left <= 1) {
+    return;
+  }
+
+  size_t mid = left + ((right - left) >> 1);
+  dms_sort_indices(idx, scratch, left, mid, ctx);
+  dms_sort_indices(idx, scratch, mid, right, ctx);
+  dms_merge_sorted_indices(idx, scratch, left, mid, right, ctx);
+}
+
+static size_t *dms_copy_size_t_buffer(const size_t *src, size_t count,
+                                      size_t new_capacity) {
+  size_t *dst = malloc(new_capacity * sizeof(size_t));
+  if (!dst) {
+    return NULL;
+  }
+  if (count > 0) {
+    memcpy(dst, src, count * sizeof(size_t));
+  }
+  return dst;
+}
+
+static double *dms_copy_double_buffer(const double *src, size_t count,
+                                      size_t new_capacity) {
+  double *dst = malloc(new_capacity * sizeof(double));
+  if (!dst) {
+    return NULL;
+  }
+  if (count > 0) {
+    memcpy(dst, src, count * sizeof(double));
+  }
+  return dst;
+}
+
+// Sort COO triples in-place by (row, col) row-major order without touching the
+// matrix unless all temporary allocations succeed.
 static void dms_sort_coo(DoubleSparseMatrix *mat) {
-  if (mat->nnz <= 1) return;
+  if (!mat || mat->nnz <= 1) return;
 
   size_t *idx = malloc(mat->nnz * sizeof(size_t));
-  if (!idx) return;
-  for (size_t i = 0; i < mat->nnz; i++) idx[i] = i;
-
-  dms_sort_rows = mat->row_indices;
-  dms_sort_cols = mat->col_indices;
-  qsort(idx, mat->nnz, sizeof(size_t), dms_coo_compare);
-
-  // Apply permutation using temporary arrays
+  size_t *scratch = malloc(mat->nnz * sizeof(size_t));
   size_t *tmp_row = malloc(mat->nnz * sizeof(size_t));
   size_t *tmp_col = malloc(mat->nnz * sizeof(size_t));
   double *tmp_val = malloc(mat->nnz * sizeof(double));
-  if (tmp_row && tmp_col && tmp_val) {
-    for (size_t i = 0; i < mat->nnz; i++) {
-      tmp_row[i] = mat->row_indices[idx[i]];
-      tmp_col[i] = mat->col_indices[idx[i]];
-      tmp_val[i] = mat->values[idx[i]];
-    }
-    memcpy(mat->row_indices, tmp_row, mat->nnz * sizeof(size_t));
-    memcpy(mat->col_indices, tmp_col, mat->nnz * sizeof(size_t));
-    memcpy(mat->values, tmp_val, mat->nnz * sizeof(double));
+  if (!idx || !scratch || !tmp_row || !tmp_col || !tmp_val) {
+    free(idx);
+    free(scratch);
+    free(tmp_row);
+    free(tmp_col);
+    free(tmp_val);
+    return;
   }
+
+  for (size_t i = 0; i < mat->nnz; i++) idx[i] = i;
+
+  dms_sort_context ctx = {
+      .rows = mat->row_indices,
+      .cols = mat->col_indices,
+  };
+  dms_sort_indices(idx, scratch, 0, mat->nnz, &ctx);
+
+  for (size_t i = 0; i < mat->nnz; i++) {
+    tmp_row[i] = mat->row_indices[idx[i]];
+    tmp_col[i] = mat->col_indices[idx[i]];
+    tmp_val[i] = mat->values[idx[i]];
+  }
+  memcpy(mat->row_indices, tmp_row, mat->nnz * sizeof(size_t));
+  memcpy(mat->col_indices, tmp_col, mat->nnz * sizeof(size_t));
+  memcpy(mat->values, tmp_val, mat->nnz * sizeof(double));
+
+  free(scratch);
   free(tmp_row);
   free(tmp_col);
   free(tmp_val);
@@ -361,7 +435,7 @@ DoubleSparseMatrix *dms_from_cs(const cs *A) {
   }
   coo->nnz = nnz_index;
 
-  // Sort COO triples into row-major order for binary search in dms_get
+  // Restore the COO invariant after CSparse conversion: sorted by (row, col).
   dms_sort_coo(coo);
 
   return coo;
@@ -400,7 +474,7 @@ DoubleSparseMatrix *dms_create_random_seeded(size_t rows, size_t cols,
 
   mat->nnz = nnz;
 
-  // Sort COO triples into row-major order for binary search in dms_get
+  // Random generation is unsorted; restore the COO invariant for binary search.
   dms_sort_coo(mat);
 
   return mat;
@@ -467,6 +541,10 @@ DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
 }
 
 DoubleSparseMatrix *dms_get_row(const DoubleSparseMatrix *mat, size_t i) {
+  if (!mat) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return NULL;
+  }
   if (i >= mat->rows) {
     log_error("Error: invalid row index.\n");
     return NULL;
@@ -495,14 +573,35 @@ DoubleSparseMatrix *dms_get_row(const DoubleSparseMatrix *mat, size_t i) {
 }
 
 DoubleSparseMatrix *dms_get_last_row(const DoubleSparseMatrix *mat) {
+  if (!mat || mat->rows == 0) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return NULL;
+  }
   return dms_get_row(mat, mat->rows - 1);
 }
 
 DoubleSparseMatrix *dms_get_col(const DoubleSparseMatrix *mat, size_t j) {
-  DoubleSparseMatrix *col = dms_create(mat->rows, 1, mat->rows);
+  if (!mat) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return NULL;
+  }
+  if (j >= mat->cols) {
+    log_error("Error: invalid column index.\n");
+    return NULL;
+  }
+
+  size_t init_cap = 8;
+  DoubleSparseMatrix *col = dms_create(mat->rows, 1, init_cap);
+  if (!col) return NULL;
   size_t k = 0;
   for (size_t i = 0; i < mat->nnz; i++) {
     if (mat->col_indices[i] == j) {
+      if (k == col->capacity) {
+        if (!dms_realloc(col, col->capacity * 2)) {
+          dms_destroy(col);
+          return NULL;
+        }
+      }
       col->row_indices[k] = mat->row_indices[i];
       col->col_indices[k] = 0;
       col->values[k] = mat->values[i];
@@ -514,11 +613,19 @@ DoubleSparseMatrix *dms_get_col(const DoubleSparseMatrix *mat, size_t j) {
 }
 
 DoubleSparseMatrix *dms_get_last_col(const DoubleSparseMatrix *mat) {
+  if (!mat || mat->cols == 0) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return NULL;
+  }
   return dms_get_col(mat, mat->cols - 1);
 }
 
 DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
                                  const DoubleSparseMatrix *mat2) {
+  if (!mat1 || !mat2) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return NULL;
+  }
   if (mat1->cols != mat2->rows) {
     log_error("Error: invalid matrix dimensions.\n");
     return NULL;
@@ -526,8 +633,13 @@ DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
   // use cs_multiply from csparse
   cs *A = dms_to_cs(mat1);
   cs *B = dms_to_cs(mat2);
+  if (!A || !B) {
+    cs_spfree(A);
+    cs_spfree(B);
+    return NULL;
+  }
   cs *C = cs_multiply(A, B);
-  DoubleSparseMatrix *result = dms_from_cs(C);
+  DoubleSparseMatrix *result = C ? dms_from_cs(C) : NULL;
 
   cs_spfree(A);
   cs_spfree(B);
@@ -546,6 +658,10 @@ DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
 }
 
 DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
+  if (!mat) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return NULL;
+  }
   if (mat->col_indices == NULL || mat->row_indices == NULL ||
       mat->values == NULL) {
     log_error("Error: matrix is empty.\n");
@@ -557,19 +673,26 @@ DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
   }
   // use cs_transpose from csparse
   cs *A = dms_to_cs(mat);
+  if (!A) {
+    return NULL;
+  }
   cs *AT = cs_transpose(A, 1);
-  DoubleSparseMatrix *result = dms_from_cs(AT);
+  DoubleSparseMatrix *result = AT ? dms_from_cs(AT) : NULL;
   cs_spfree(A);
   cs_spfree(AT);
   return result;
 }
 
 double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j) {
+  if (!mat) {
+    log_error("Error: invalid sparse matrix input.\n");
+    return 0.0;
+  }
   if (i >= mat->rows || j >= mat->cols) {
     log_error("Error: matrix index out of bounds.\n");
     return 0.0;
   }
-  // Use binary search when data is sorted (after dms_set usage)
+  // Use binary search on the sorted COO triples.
   size_t pos = dms_binary_search(mat, i, j);
   if (pos < mat->nnz && mat->row_indices[pos] == i &&
       mat->col_indices[pos] == j) {
@@ -613,29 +736,33 @@ bool dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity) {
     return false;
   }
 
-  // resize matrix stepwise to keep struct consistent on failure
   size_t *row_indices =
-      (size_t *)realloc(mat->row_indices, (new_capacity) * sizeof(size_t));
+      dms_copy_size_t_buffer(mat->row_indices, mat->nnz, new_capacity);
   if (row_indices == NULL) {
     log_error("Error allocating row indices for sparse matrix resize!\n");
     return false;
   }
-  mat->row_indices = row_indices;
-
   size_t *col_indices =
-      (size_t *)realloc(mat->col_indices, (new_capacity) * sizeof(size_t));
+      dms_copy_size_t_buffer(mat->col_indices, mat->nnz, new_capacity);
   if (col_indices == NULL) {
     log_error("Error allocating column indices for sparse matrix resize!\n");
+    free(row_indices);
     return false;
   }
-  mat->col_indices = col_indices;
-
-  double *values =
-      (double *)realloc(mat->values, (new_capacity) * sizeof(double));
+  double *values = dms_copy_double_buffer(mat->values, mat->nnz, new_capacity);
   if (values == NULL) {
     log_error("Error allocating values for sparse matrix resize!\n");
+    free(row_indices);
+    free(col_indices);
     return false;
   }
+
+  free(mat->row_indices);
+  free(mat->col_indices);
+  free(mat->values);
+
+  mat->row_indices = row_indices;
+  mat->col_indices = col_indices;
   mat->values = values;
   mat->capacity = new_capacity;
 

@@ -18,3 +18,14 @@ cc_library(
         "//visibility:public",
     ],
 )
+
+filegroup(
+    name = "install_files",
+    srcs = [
+        "lib/libomp.a",
+        "include/omp.h",
+        "include/omp-tools.h",
+        "include/ompt.h",
+    ],
+    visibility = ["//visibility:public"],
+)

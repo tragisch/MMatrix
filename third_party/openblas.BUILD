@@ -13,6 +13,12 @@ cc_library(
     visibility = ["//visibility:public"],
 )
 
+filegroup(
+    name = "install_files",
+    srcs = ["lib/libopenblas.a"] + glob(["include/*.h"]),
+    visibility = ["//visibility:public"],
+)
+
 # load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
 #
 # config_setting(
