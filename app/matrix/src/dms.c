@@ -682,7 +682,7 @@ DoubleSparseMatrix *dms_create_identity(size_t n) {
     return NULL;
   }
 
-  mat = dms_create(n, n, n);
+  mat = dms_create(n, n, n + 1);
   if (!mat) {
     return NULL;
   }
@@ -911,7 +911,7 @@ DoubleSparseMatrix *dms_from_array_static(size_t rows, size_t cols,
     }
   }
 
-  mat = dms_create(rows, cols, nnz > 0 ? nnz : 1);
+  mat = dms_create(rows, cols, nnz > 0 ? (nnz + 1) : 1);
   if (!mat) {
     return NULL;
   }
