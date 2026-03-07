@@ -550,6 +550,383 @@ bool dms_spmv(const DoubleSparseMatrix *mat, const double *x, double *y) {
   return true;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Native COO transpose — avoids the COO→CSC→transpose→CSC→COO      */
+/*  round-trip through CSparse.  O(nnz + rows) with a single pass.    */
+/* ------------------------------------------------------------------ */
+static DoubleSparseMatrix *dms_transpose_native(const DoubleSparseMatrix *mat) {
+  DoubleSparseMatrix *out = NULL;
+
+  if (!mat) {
+    return NULL;
+  }
+  if (!mat->row_indices || !mat->col_indices || !mat->values) {
+    return NULL;
+  }
+  if (mat->nnz == 0) {
+    return dms_create(mat->cols, mat->rows, 1);
+  }
+  if (!dms_ensure_sorted((DoubleSparseMatrix *)mat)) {
+    return NULL;
+  }
+
+  out = dms_create(mat->cols, mat->rows, mat->nnz);
+  if (!out) {
+    return NULL;
+  }
+
+  /* Counting-sort by column (which becomes the new row). */
+  {
+    size_t *counts = calloc(mat->cols + 1, sizeof(size_t));
+    if (!counts) {
+      dms_destroy(out);
+      return NULL;
+    }
+
+    for (size_t k = 0; k < mat->nnz; ++k) {
+      counts[mat->col_indices[k] + 1]++;
+    }
+    for (size_t c = 0; c < mat->cols; ++c) {
+      counts[c + 1] += counts[c];
+    }
+
+    for (size_t k = 0; k < mat->nnz; ++k) {
+      size_t dest = counts[mat->col_indices[k]]++;
+      out->row_indices[dest] = mat->col_indices[k];
+      out->col_indices[dest] = mat->row_indices[k];
+      out->values[dest] = mat->values[k];
+    }
+
+    free(counts);
+  }
+
+  out->nnz = mat->nnz;
+  dms_matrix_set_state(out, true, true);
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Native SpGEMM  C = A * B  —  Gustavson row-by-row CSR×CSR         */
+/*                                                                     */
+/*  Small matrices  → serial single-pass  (low overhead)               */
+/*  Large matrices  → parallel two-pass with OpenMP:                   */
+/*    Pass 1 (symbolic): count nnz per row  (marker only, no acc)      */
+/*    Prefix-sum:        compute exact output offsets  → one malloc     */
+/*    Pass 2 (numeric):  scatter / gather into pre-allocated output     */
+/* ------------------------------------------------------------------ */
+
+/* Helper: reallocate COO triple arrays (row, col, val) to new_cap.
+   Unlike the public dms_realloc this works on raw pointers so we can
+   use it for intermediate buffers that aren't yet inside a DMS.       */
+static bool dms_grow_coo(size_t **rows_p, size_t **cols_p, double **vals_p,
+                         size_t nnz, size_t *cap, size_t need) {
+  size_t new_cap = *cap;
+  while (new_cap < need) {
+    new_cap = new_cap > 0 ? new_cap * 2 : 256;
+  }
+  size_t *nr = realloc(*rows_p, new_cap * sizeof(size_t));
+  size_t *nc = realloc(*cols_p, new_cap * sizeof(size_t));
+  double *nv = realloc(*vals_p, new_cap * sizeof(double));
+  if (!nr || !nc || !nv) {
+    if (nr) *rows_p = nr;
+    if (nc) *cols_p = nc;
+    if (nv) *vals_p = nv;
+    return false;
+  }
+  *rows_p = nr;
+  *cols_p = nc;
+  *vals_p = nv;
+  *cap = new_cap;
+  return true;
+}
+
+/* -------- serial single-pass (small matrices) --------------------- */
+static DoubleSparseMatrix *dms_multiply_serial(
+    const DoubleSparseMatrix *A, const DoubleSparseMatrix *B,
+    const size_t *rA, const size_t *rB, size_t m, size_t n) {
+
+  size_t avg_B_row = B->nnz / (m > 0 ? m : 1);
+  size_t est = A->nnz * (avg_B_row > 0 ? avg_B_row : 1);
+  if (est > m * n) est = m * n;
+  if (est == 0) est = 1;
+
+  double *acc      = calloc(n, sizeof(double));
+  int    *marker   = malloc(n * sizeof(int));
+  size_t *col_list = malloc(n * sizeof(size_t));
+  size_t *out_rows = malloc(est * sizeof(size_t));
+  size_t *out_cols = malloc(est * sizeof(size_t));
+  double *out_vals = malloc(est * sizeof(double));
+  size_t  out_cap  = est, out_nnz = 0;
+
+  if (!acc || !marker || !col_list ||
+      !out_rows || !out_cols || !out_vals) {
+    free(acc); free(marker); free(col_list);
+    free(out_rows); free(out_cols); free(out_vals);
+    return NULL;
+  }
+  memset(marker, -1, n * sizeof(int));
+
+  for (size_t i = 0; i < m; ++i) {
+    size_t row_cnt = 0;
+
+    for (size_t pa = rA[i]; pa < rA[i + 1]; ++pa) {
+      double a_val = A->values[pa];
+      size_t ka    = A->col_indices[pa];
+      for (size_t pb = rB[ka]; pb < rB[ka + 1]; ++pb) {
+        size_t jb = B->col_indices[pb];
+        acc[jb] += a_val * B->values[pb];
+        if (marker[jb] != (int)i) {
+          marker[jb] = (int)i;
+          col_list[row_cnt++] = jb;
+        }
+      }
+    }
+    if (row_cnt == 0) continue;
+
+    if (out_nnz + row_cnt > out_cap) {
+      if (!dms_grow_coo(&out_rows, &out_cols, &out_vals,
+                        out_nnz, &out_cap, out_nnz + row_cnt)) {
+        free(acc); free(marker); free(col_list);
+        free(out_rows); free(out_cols); free(out_vals);
+        return NULL;
+      }
+    }
+
+    /* Hybrid gather: dense scan for heavy rows, shell sort for sparse. */
+    if (row_cnt > n / 8) {
+      for (size_t j = 0; j < n; ++j) {
+        if (marker[j] == (int)i) {
+          out_rows[out_nnz] = i;
+          out_cols[out_nnz] = j;
+          out_vals[out_nnz] = acc[j];
+          acc[j] = 0.0;
+          out_nnz++;
+        }
+      }
+    } else {
+      for (size_t gap = row_cnt / 2; gap > 0; gap /= 2)
+        for (size_t a = gap; a < row_cnt; ++a) {
+          size_t key = col_list[a]; size_t b = a;
+          while (b >= gap && col_list[b - gap] > key) {
+            col_list[b] = col_list[b - gap]; b -= gap;
+          }
+          col_list[b] = key;
+        }
+      for (size_t c = 0; c < row_cnt; ++c) {
+        size_t jb = col_list[c];
+        out_rows[out_nnz] = i;
+        out_cols[out_nnz] = jb;
+        out_vals[out_nnz] = acc[jb];
+        acc[jb] = 0.0;
+        out_nnz++;
+      }
+    }
+  }
+
+  free(acc); free(marker); free(col_list);
+
+  DoubleSparseMatrix *R = dms_create(m, n, out_nnz > 0 ? out_nnz : 1);
+  if (!R) { free(out_rows); free(out_cols); free(out_vals); return NULL; }
+  if (out_nnz > 0) {
+    memcpy(R->row_indices, out_rows, out_nnz * sizeof(size_t));
+    memcpy(R->col_indices, out_cols, out_nnz * sizeof(size_t));
+    memcpy(R->values,      out_vals, out_nnz * sizeof(double));
+  }
+  R->nnz = out_nnz;
+  dms_matrix_set_state(R, true, true);
+  free(out_rows); free(out_cols); free(out_vals);
+  return R;
+}
+
+/* -------- parallel single-pass (large matrices) ------------------- */
+/*  Each thread processes a contiguous chunk of rows (schedule(static))
+    into a thread-local buffer.  After the parallel region the per-thread
+    buffers are concatenated in order — guaranteeing row-sorted output
+    without any inter-thread synchronization during computation.        */
+static DoubleSparseMatrix *dms_multiply_parallel(
+    const DoubleSparseMatrix *A, const DoubleSparseMatrix *B,
+    const size_t *rA, const size_t *rB, size_t m, size_t n) {
+
+  int nthreads = 1;
+  #pragma omp parallel
+  {
+    #pragma omp single
+    nthreads = omp_get_num_threads();
+  }
+
+  /* Per-thread output buffers. */
+  size_t  nt = (size_t)nthreads;
+  size_t  *thr_nnz = calloc(nt, sizeof(size_t));
+  size_t  *thr_cap = malloc(nt * sizeof(size_t));
+  size_t **thr_row = calloc(nt, sizeof(size_t *));
+  size_t **thr_col = calloc(nt, sizeof(size_t *));
+  double **thr_val = calloc(nt, sizeof(double *));
+  if (!thr_nnz || !thr_cap || !thr_row || !thr_col || !thr_val) {
+    free(thr_nnz); free(thr_cap); free(thr_row);
+    free(thr_col); free(thr_val);
+    return NULL;
+  }
+
+  /* Better estimate: nnz_C ≈ nnz_A × avg_nnz_per_row_B. */
+  size_t avg_B_row = B->nnz / (m > 0 ? m : 1);
+  size_t est_total = A->nnz * (avg_B_row > 0 ? avg_B_row : 1);
+  if (est_total > m * n) est_total = m * n;  /* clamp to dense */
+  size_t est_per = est_total / nt + 256;
+  for (size_t t = 0; t < nt; ++t) {
+    thr_cap[t] = est_per;
+    thr_row[t] = malloc(est_per * sizeof(size_t));
+    thr_col[t] = malloc(est_per * sizeof(size_t));
+    thr_val[t] = malloc(est_per * sizeof(double));
+  }
+
+  bool par_ok = true;
+
+  #pragma omp parallel
+  {
+    int tid = omp_get_thread_num();
+    /* Per-thread work arrays: acc[n] (zero-init) + marker[n] (-1 init).
+       Allocated per-thread for proper first-touch on cache lines. */
+    size_t work_sz = n * sizeof(double) + n * sizeof(int);
+    char *work = (char *)malloc(work_sz);
+    double *local_acc = NULL;
+    int    *local_mk  = NULL;
+    if (!work || !thr_row[tid] || !thr_col[tid] || !thr_val[tid]) {
+      par_ok = false;
+    } else {
+      local_acc = (double *)work;
+      local_mk  = (int *)(work + n * sizeof(double));
+      memset(local_acc, 0, n * sizeof(double));
+      memset(local_mk, -1, n * sizeof(int));
+    }
+
+    size_t lnnz = 0;
+
+    /* static schedule → thread t gets contiguous rows → row order. */
+    #pragma omp for schedule(static)
+    for (size_t i = 0; i < m; ++i) {
+      if (!par_ok) continue;
+      size_t row_cnt = 0;
+
+      /* Scatter */
+      for (size_t pa = rA[i]; pa < rA[i + 1]; ++pa) {
+        double a_val = A->values[pa];
+        size_t ka    = A->col_indices[pa];
+        for (size_t pb = rB[ka]; pb < rB[ka + 1]; ++pb) {
+          size_t jb = B->col_indices[pb];
+          local_acc[jb] += a_val * B->values[pb];
+          if (local_mk[jb] != (int)i) {
+            local_mk[jb] = (int)i;
+            row_cnt++;
+          }
+        }
+      }
+      if (row_cnt == 0) continue;
+
+      /* Ensure thread-local buffer has room. */
+      if (lnnz + row_cnt > thr_cap[tid]) {
+        if (!dms_grow_coo(&thr_row[tid], &thr_col[tid], &thr_val[tid],
+                          lnnz, &thr_cap[tid], lnnz + row_cnt)) {
+          par_ok = false; continue;
+        }
+      }
+
+      /* Gather — always dense scan in the parallel path.
+         The marker array fits in L1 (n*4 bytes) and sequential
+         access is faster than shell-sort with random accesses.
+         Scan produces sorted output naturally (column order 0..n-1). */
+      {
+        size_t pos = 0;
+        for (size_t j = 0; j < n; ++j) {
+          if (local_mk[j] == (int)i) {
+            thr_row[tid][lnnz + pos] = i;
+            thr_col[tid][lnnz + pos] = j;
+            thr_val[tid][lnnz + pos] = local_acc[j];
+            local_acc[j] = 0.0;
+            pos++;
+          }
+        }
+        lnnz += pos;
+      }
+    }
+
+    thr_nnz[tid] = lnnz;
+    free(work);
+  }
+
+  if (!par_ok) {
+    for (int t = 0; t < nthreads; ++t) {
+      free(thr_row[t]); free(thr_col[t]); free(thr_val[t]);
+    }
+    free(thr_nnz); free(thr_cap); free(thr_row);
+    free(thr_col); free(thr_val);
+    return NULL;
+  }
+
+  /* Prefix sum for concatenation offsets. */
+  size_t total_nnz = 0;
+  for (int t = 0; t < nthreads; ++t) total_nnz += thr_nnz[t];
+
+  /* Build result directly — no intermediate copy when possible. */
+  DoubleSparseMatrix *R = dms_create(m, n, total_nnz > 0 ? total_nnz : 1);
+  if (R && total_nnz > 0) {
+    size_t off = 0;
+    for (int t = 0; t < nthreads; ++t) {
+      if (thr_nnz[t] > 0) {
+        memcpy(R->row_indices + off, thr_row[t], thr_nnz[t] * sizeof(size_t));
+        memcpy(R->col_indices + off, thr_col[t], thr_nnz[t] * sizeof(size_t));
+        memcpy(R->values      + off, thr_val[t], thr_nnz[t] * sizeof(double));
+        off += thr_nnz[t];
+      }
+    }
+    R->nnz = total_nnz;
+    dms_matrix_set_state(R, true, true);
+  } else if (R) {
+    R->nnz = 0;
+    dms_matrix_set_state(R, true, true);
+  }
+
+  for (int t = 0; t < nthreads; ++t) {
+    free(thr_row[t]); free(thr_col[t]); free(thr_val[t]);
+  }
+  free(thr_nnz); free(thr_cap); free(thr_row);
+  free(thr_col); free(thr_val);
+  return R;
+}
+
+/* -------- dispatch ------------------------------------------------ */
+static DoubleSparseMatrix *dms_multiply_native(const DoubleSparseMatrix *mat1,
+                                               const DoubleSparseMatrix *mat2) {
+  if (!mat1 || !mat2) return NULL;
+  if (mat1->cols != mat2->rows) return NULL;
+
+  size_t m = mat1->rows;
+  size_t n = mat2->cols;
+
+  /* Ensure both matrices are sorted (row-major COO ≈ CSR). */
+  if (!dms_ensure_sorted((DoubleSparseMatrix *)mat1)) return NULL;
+  if (!dms_ensure_sorted((DoubleSparseMatrix *)mat2)) return NULL;
+
+  /* Build CSR row pointers for A and B. */
+  size_t *rA = calloc(m + 1, sizeof(size_t));
+  size_t *rB = calloc(mat2->rows + 1, sizeof(size_t));
+  if (!rA || !rB) { free(rA); free(rB); return NULL; }
+  dms_build_row_offsets(mat1, rA);
+  dms_build_row_offsets(mat2, rB);
+
+  /* Heuristic: use parallel path for large matrices. */
+  DoubleSparseMatrix *result;
+  size_t total_nnz = mat1->nnz + mat2->nnz;
+  if (m >= 128 && total_nnz >= 4096) {
+    result = dms_multiply_parallel(mat1, mat2, rA, rB, m, n);
+  } else {
+    result = dms_multiply_serial(mat1, mat2, rA, rB, m, n);
+  }
+
+  free(rA);
+  free(rB);
+  return result;
+}
+
 static uint64_t dms_mix64(uint64_t x) {
   x += 0x9E3779B97F4A7C15ull;
   x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
@@ -1064,11 +1441,6 @@ DoubleSparseMatrix *dms_get_last_col(const DoubleSparseMatrix *mat) {
 
 DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
                                  const DoubleSparseMatrix *mat2) {
-  DoubleSparseMatrix *result = NULL;
-  cs *A = NULL;
-  cs *B = NULL;
-  cs *C = NULL;
-
   if (!mat1 || !mat2) {
     log_error("Error: invalid sparse matrix input.\n");
     return NULL;
@@ -1078,18 +1450,7 @@ DoubleSparseMatrix *dms_multiply(const DoubleSparseMatrix *mat1,
     return NULL;
   }
 
-  A = dms_get_csc((DoubleSparseMatrix *)mat1);
-  B = dms_get_csc((DoubleSparseMatrix *)mat2);
-  if (!A || !B) {
-    return NULL;
-  }
-
-  C = cs_multiply(A, B);
-  result = C ? dms_from_cs(C) : NULL;
-
-  cs_spfree(C);
-
-  return result;
+  return dms_multiply_native(mat1, mat2);
 }
 
 DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
@@ -1128,10 +1489,6 @@ DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
 }
 
 DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
-  DoubleSparseMatrix *result = NULL;
-  cs *A = NULL;
-  cs *AT = NULL;
-
   if (!mat) {
     log_error("Error: invalid sparse matrix input.\n");
     return NULL;
@@ -1145,17 +1502,7 @@ DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat) {
     return dms_create(mat->cols, mat->rows, 1);
   }
 
-  A = dms_get_csc((DoubleSparseMatrix *)mat);
-  if (!A) {
-    return NULL;
-  }
-
-  AT = cs_transpose(A, 1);
-  result = AT ? dms_from_cs(AT) : NULL;
-
-  cs_spfree(AT);
-
-  return result;
+  return dms_transpose_native(mat);
 }
 
 double dms_get(const DoubleSparseMatrix *mat, size_t i, size_t j) {
