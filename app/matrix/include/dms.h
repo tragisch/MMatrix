@@ -33,8 +33,10 @@
 typedef struct cs_di_sparse cs;
 #endif
 
-// Sparse COO matrix stored as sorted COO triples in row-major (row, col) order.
-// Duplicate coordinates should be avoided once the data has been sorted.
+// Sparse COO matrix stored as (row, col, value) triples.
+// Public operations maintain row-major (row, col) ordering; internal builder
+// paths may defer sorting temporarily and restore it before binary-search-based
+// access or CSparse conversion.
 typedef struct DoubleSparseMatrix {
   size_t rows;
   size_t cols;
@@ -64,14 +66,16 @@ DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m);
 // Create sparse n x n identity matrix.
 DoubleSparseMatrix *dms_create_identity(size_t n);
 
-// Create sparse random matrix using global RNG state (not thread-safe).
+// Create sparse random matrix using shared global RNG state.
+// Concurrent callers must synchronize externally.
 DoubleSparseMatrix *dms_create_random(size_t rows, size_t cols, double density);
 
 // Create deterministic sparse random matrix from explicit seed.
 DoubleSparseMatrix *dms_create_random_seeded(size_t rows, size_t cols,
                                               double density, uint64_t seed);
 
-// Set global RNG seed used by non-seeded random creators (not thread-safe).
+// Set shared global RNG seed used by non-seeded random creators.
+// Concurrent callers must synchronize externally.
 void dms_set_random_seed(uint64_t seed);
 
 // Get current global RNG seed.
@@ -93,7 +97,9 @@ MMATRIX_DEPRECATED("Use dms_from_array_static instead")
 DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
                                              double array[rows][cols]);
 
-// Insert or update COO triple (i, j, value) while preserving sorted (row, col) order.
+// Insert or update COO triple (i, j, value).
+// Implementation may defer internal reordering, but sorted COO order is
+// restored before binary-search-based access or CSparse conversion.
 bool dms_set(DoubleSparseMatrix *mat, size_t i, size_t j, double value);
 
 // Read the value at the first matching (i, j) position; sorted COO data is required.
