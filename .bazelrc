@@ -4,6 +4,9 @@
 common --color=yes
 common --curses=yes
 
+# registries:
+common --registry=https://raw.githubusercontent.com/tragisch/bazel-registry/main
+common --registry=https://bcr.bazel.build
 
 ###############################
 # cache                        #

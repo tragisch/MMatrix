@@ -479,3 +479,138 @@ void test_dms_get(void) {
   TEST_ASSERT_EQUAL(1, value);
   dms_destroy(m);
 }
+
+// /******************************
+//  ** Regression tests for native SpGEMM / builder / zero-pruning:
+//  *******************************/
+
+// Test: multiply with identity should return the original matrix.
+void test_dms_multiply_identity(void) {
+  double A[3][3] = {{1.0, 0.0, 3.0}, {0.0, 5.0, 0.0}, {7.0, 0.0, 9.0}};
+  DoubleSparseMatrix *mA = dms_from_array_static(3, 3, A);
+  DoubleSparseMatrix *mI = dms_create_identity(3);
+
+  // A × I == A
+  DoubleSparseMatrix *r1 = dms_multiply(mA, mI);
+  TEST_ASSERT_NOT_NULL(r1);
+  TEST_ASSERT_EQUAL(3, r1->rows);
+  TEST_ASSERT_EQUAL(3, r1->cols);
+  for (size_t i = 0; i < 3; i++) {
+    for (size_t j = 0; j < 3; j++) {
+      TEST_ASSERT_DOUBLE_WITHIN(1e-12, A[i][j], dms_get(r1, i, j));
+    }
+  }
+
+  // I × A == A
+  DoubleSparseMatrix *r2 = dms_multiply(mI, mA);
+  TEST_ASSERT_NOT_NULL(r2);
+  for (size_t i = 0; i < 3; i++) {
+    for (size_t j = 0; j < 3; j++) {
+      TEST_ASSERT_DOUBLE_WITHIN(1e-12, A[i][j], dms_get(r2, i, j));
+    }
+  }
+
+  dms_destroy(mA);
+  dms_destroy(mI);
+  dms_destroy(r1);
+  dms_destroy(r2);
+}
+
+// Test: zero-pruning — values that cancel out must not appear in nnz.
+// A = [[1,1],[0,0]], B = [[1,0],[-1,0]]  →  C = [[0,0],[0,0]]  →  nnz == 0.
+void test_dms_multiply_zero_pruning(void) {
+  double A[2][2] = {{1.0, 1.0}, {0.0, 0.0}};
+  double B[2][2] = {{1.0, 0.0}, {-1.0, 0.0}};
+  DoubleSparseMatrix *mA = dms_from_array_static(2, 2, A);
+  DoubleSparseMatrix *mB = dms_from_array_static(2, 2, B);
+
+  DoubleSparseMatrix *r = dms_multiply(mA, mB);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL(2, r->rows);
+  TEST_ASSERT_EQUAL(2, r->cols);
+  // All entries cancel → no stored nonzeros.
+  TEST_ASSERT_EQUAL(0, r->nnz);
+
+  dms_destroy(mA);
+  dms_destroy(mB);
+  dms_destroy(r);
+}
+
+// Test: builder mode dedup — setting the same position twice keeps last value.
+void test_dms_set_builder_dedup(void) {
+  DoubleSparseMatrix *m = dms_create(4, 4, 10);
+
+  // Write several entries, overwrite (1,1) three times.
+  dms_set(m, 0, 0, 1.0);
+  dms_set(m, 1, 1, 2.0);
+  dms_set(m, 1, 1, 3.0);
+  dms_set(m, 1, 1, 4.0);
+  dms_set(m, 2, 2, 5.0);
+
+  // After dedup the value at (1,1) must be the last one written.
+  TEST_ASSERT_DOUBLE_WITHIN(1e-12, 4.0, dms_get(m, 1, 1));
+
+  // Total stored nonzeros must be exactly 3 (no duplicates).
+  TEST_ASSERT_EQUAL(3, m->nnz);
+
+  dms_destroy(m);
+}
+
+// Test: larger random multiply (triggers the parallel path m>=128, nnz>=4096).
+// Verifies A × I == A for a 256×256 random matrix.
+void test_dms_multiply_parallel_path(void) {
+  const size_t n = 256;
+  const double density = 0.08; // ~5243 nnz → above 4096 threshold
+
+  dms_set_random_seed(42);
+  DoubleSparseMatrix *mA = dms_create_random(n, n, density);
+  DoubleSparseMatrix *mI = dms_create_identity(n);
+
+  DoubleSparseMatrix *r = dms_multiply(mA, mI);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL(n, r->rows);
+  TEST_ASSERT_EQUAL(n, r->cols);
+  TEST_ASSERT_EQUAL(mA->nnz, r->nnz);
+
+  // Spot-check all nonzero values of A appear in the result.
+  for (size_t k = 0; k < mA->nnz; k++) {
+    size_t i = mA->row_indices[k];
+    size_t j = mA->col_indices[k];
+    double expected = mA->values[k];
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, expected, dms_get(r, i, j));
+  }
+
+  dms_destroy(mA);
+  dms_destroy(mI);
+  dms_destroy(r);
+}
+
+// Test: multiply two non-trivial random matrices and verify against naive O(n³).
+void test_dms_multiply_random_correctness(void) {
+  const size_t m = 32, k = 48, n = 24;
+  const double density = 0.15;
+
+  dms_set_random_seed(123);
+  DoubleSparseMatrix *mA = dms_create_random(m, k, density);
+  DoubleSparseMatrix *mB = dms_create_random(k, n, density);
+
+  DoubleSparseMatrix *r = dms_multiply(mA, mB);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL(m, r->rows);
+  TEST_ASSERT_EQUAL(n, r->cols);
+
+  // Naive dense multiply for reference.
+  for (size_t i = 0; i < m; i++) {
+    for (size_t j = 0; j < n; j++) {
+      double sum = 0.0;
+      for (size_t p = 0; p < k; p++) {
+        sum += dms_get(mA, i, p) * dms_get(mB, p, j);
+      }
+      TEST_ASSERT_DOUBLE_WITHIN(1e-9, sum, dms_get(r, i, j));
+    }
+  }
+
+  dms_destroy(mA);
+  dms_destroy(mB);
+  dms_destroy(r);
+}
