@@ -33,6 +33,24 @@ overhead.
 
 ---
 
+## Choosing the Right Matrix Format
+
+| Scenario                                       | Recommended               | Reason                                                                                   |
+| ---------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------- |
+| Dense or moderately sparse matrix, N ≤ 10k     | **`sm.h`** / **`dm.h`**   | BLAS/Accelerate kernels are hard to beat; memory fits easily on a laptop                 |
+| Sparse matrix (density < 1%), N up to ~20k     | **`dms.h`**               | COO + CSparse keeps overhead low; native SpGEMM with OpenMP scales well                  |
+| Very large sparse matrices (N > 50k, nnz > 1M) | **SuiteSparse:GraphBLAS** | Parallel CSC kernels, semiring algebra, and optimized memory management pay off at scale |
+
+**Rule of thumb:** For graphs with fewer than ~20k nodes, `dms.h` combined with
+CSparse provides an excellent balance of simplicity and performance.  For dense
+or high-density graphs under 10k nodes, prefer `sm.h` (float) or `dm.h`
+(double) — the BLAS-accelerated dense path is faster and the memory footprint is
+still manageable.  For truly large-scale sparse problems (100k+ nodes, millions
+of non-zeros), consider [SuiteSparse:GraphBLAS](https://github.com/DrTimothyAldenDavis/GraphBLAS),
+which is available as a Bazel dependency in this project (`@graphblas`).
+
+---
+
 ## Documentation
 
 - Overview and API style: [`docs/Overview.md`](docs/Overview.md)
