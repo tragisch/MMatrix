@@ -235,7 +235,7 @@ void test_dms_convert_array(void) {
   TEST_ASSERT_EQUAL(3, m->rows);
   TEST_ASSERT_EQUAL(3, m->cols);
   TEST_ASSERT_EQUAL(9, m->nnz);
-  TEST_ASSERT_EQUAL(10, m->capacity);
+  TEST_ASSERT_TRUE(m->capacity >= m->nnz);
   dms_destroy(m);
 }
 

@@ -6,8 +6,8 @@
  * See the LICENSE file in the root directory for details.
  */
 
-#ifndef DMMa_SPARSE_H
-#define DMMa_SPARSE_H
+#ifndef DMS_SPARSE_H
+#define DMS_SPARSE_H
 
 #if defined(__has_include)
 #if __has_include(<cs.h>)
@@ -124,6 +124,10 @@ DoubleSparseMatrix *dms_multiply_by_number(const DoubleSparseMatrix *mat,
                                            const double number);
 DoubleSparseMatrix *dms_transpose(const DoubleSparseMatrix *mat);
 
+// Sparse matrix-vector product: y = A * x.
+// x must have mat->cols elements, y must have mat->rows elements.
+bool dms_spmv(const DoubleSparseMatrix *mat, const double *x, double *y);
+
 // Matrix properties.
 double dms_density(const DoubleSparseMatrix *mat);
 
@@ -136,4 +140,4 @@ bool dms_realloc(DoubleSparseMatrix *mat, size_t new_capacity);
 // Destroy sparse matrix; safe on NULL. Do not call twice on same pointer.
 void dms_destroy(DoubleSparseMatrix *mat);
 
-#endif  // DMMa_SPARSE_H
+#endif  // DMS_SPARSE_H

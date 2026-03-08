@@ -9,8 +9,7 @@
 #include "dms.h"
 
 #if defined(__has_include)
-#if __has_include(<cs.h>) && __has_include(<omp.h>) && \
-    __has_include(<pcg_variants.h>)
+#if __has_include(<cs.h>) && __has_include(<omp.h>)
 #define DMS_HAS_FULL_DEPS 1
 #endif
 #endif
@@ -31,10 +30,6 @@
 #ifndef INIT_CAPACITY
 #define INIT_CAPACITY 100
 #endif
-#ifndef EPSILON
-#define EPSILON 1e-9
-#endif
-
 // Shared RNG state used by non-seeded creators. Access is intentionally simple
 // and remains process-global, so callers must provide external synchronization
 // when reading or writing this state from multiple threads.
@@ -56,10 +51,6 @@ typedef struct dms_sort_context {
 /*******************************/
 /*       Private Functions     */
 /*******************************/
-
-double dms_max_double(double a, double b) { return a > b ? a : b; }
-double dms_min_double(double a, double b) { return a < b ? a : b; }
-int dms_max_int(int a, int b) { return a > b ? a : b; }
 
 static dms_index_storage *dms_index_storage_from_rows(
     const size_t *row_indices) {
@@ -203,24 +194,6 @@ static bool dms_size_t_to_int(size_t value, int *out) {
   }
   *out = (int)value;
   return true;
-}
-
-static bool dms_linear_find(const DoubleSparseMatrix *matrix, size_t i,
-                            size_t j, size_t *position) {
-  if (!matrix) {
-    return false;
-  }
-
-  for (size_t k = 0; k < matrix->nnz; ++k) {
-    if (matrix->row_indices[k] == i && matrix->col_indices[k] == j) {
-      if (position) {
-        *position = k;
-      }
-      return true;
-    }
-  }
-
-  return false;
 }
 
 // Binary search requires COO triples sorted by (row, col) in row-major order.
@@ -645,15 +618,30 @@ static bool dms_grow_coo(size_t **rows_p, size_t **cols_p, double **vals_p,
   while (new_cap < need) {
     new_cap = new_cap > 0 ? new_cap * 2 : 256;
   }
-  size_t *nr = realloc(*rows_p, new_cap * sizeof(size_t));
-  size_t *nc = realloc(*cols_p, new_cap * sizeof(size_t));
-  double *nv = realloc(*vals_p, new_cap * sizeof(double));
+
+  /* Use malloc + memcpy + free instead of realloc so that all three
+     original pointers remain valid on partial allocation failure. */
+  size_t *nr = malloc(new_cap * sizeof(size_t));
+  size_t *nc = malloc(new_cap * sizeof(size_t));
+  double *nv = malloc(new_cap * sizeof(double));
+
   if (!nr || !nc || !nv) {
-    if (nr) *rows_p = nr;
-    if (nc) *cols_p = nc;
-    if (nv) *vals_p = nv;
+    free(nr);
+    free(nc);
+    free(nv);
     return false;
   }
+
+  if (nnz > 0) {
+    memcpy(nr, *rows_p, nnz * sizeof(size_t));
+    memcpy(nc, *cols_p, nnz * sizeof(size_t));
+    memcpy(nv, *vals_p, nnz * sizeof(double));
+  }
+
+  free(*rows_p);
+  free(*cols_p);
+  free(*vals_p);
+
   *rows_p = nr;
   *cols_p = nc;
   *vals_p = nv;
@@ -1173,12 +1161,12 @@ DoubleSparseMatrix *dms_create_clone(const DoubleSparseMatrix *m) {
 DoubleSparseMatrix *dms_create_identity(size_t n) {
   DoubleSparseMatrix *mat = NULL;
 
-  if (n < 1) {
+  if (n == 0) {
     log_error("Error: invalid identity dimensions.\n");
     return NULL;
   }
 
-  mat = dms_create(n, n, n + 1);
+  mat = dms_create(n, n, n);
   if (!mat) {
     return NULL;
   }
@@ -1189,10 +1177,6 @@ DoubleSparseMatrix *dms_create_identity(size_t n) {
     mat->values[i] = 1.0;
   }
   mat->nnz = n;
-  mat->csc_cache = NULL;
-  mat->csc_valid = false;
-  mat->csr_cache = NULL;
-  mat->csr_valid = false;
   dms_matrix_set_state(mat, true, true);
 
   return mat;
@@ -1409,7 +1393,7 @@ DoubleSparseMatrix *dms_from_array_static(size_t rows, size_t cols,
     }
   }
 
-  mat = dms_create(rows, cols, nnz > 0 ? (nnz + 1) : 1);
+  mat = dms_create(rows, cols, nnz > 0 ? nnz : 1);
   if (!mat) {
     return NULL;
   }
