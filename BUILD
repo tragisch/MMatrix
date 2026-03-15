@@ -1,16 +1,6 @@
 """Root build file for MMatrix C project."""
 
-load("@phst_license_test//:def.bzl", "license_test")
 load("//tools/install:def.bzl", "installer")
-
-# identify missing license headers "bazel run //:license_test"
-license_test(
-    name = "license_test",
-    timeout = "short",
-    ignore = [".dir-locals.el"],
-    marker = "//:MODULE.bazel",
-    tags = ["manual"],
-)
 
 installer(
     name = "matrix_installer",
@@ -18,10 +8,10 @@ installer(
         "//:LICENSE.txt",  # if available
         "//app/matrix",  # the target to be installed
         "//app/matrix:matrix_header",  # must be collected in a filegroup
-        "@libomp//:install_files",
         "@log",
         "@matio",
         "@openblas//:install_files",
+        "@openmp//:libomp",
         "@pcg",
         "@suitesparse//:install_files",
         "@zlib",

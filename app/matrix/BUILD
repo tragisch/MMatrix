@@ -149,7 +149,7 @@ openblas_linkopts = []
 
 default_deps = [
     "@matio",
-    "@libomp",
+    "@openmp//:libomp",
     "@pcg",
     "@log",
 ]
