@@ -120,7 +120,11 @@ openmp_copts = select({
 #############################
 
 openmp_linkopts = select({
-    ":linux_x86_64": ["-fopenmp"],
+    # On Linux we already link the OpenMP runtime through @openmp//:libomp.
+    # Passing -fopenmp again at link time makes clang inject -lomp, which
+    # bypasses Bazel's external dependency wiring and fails if libomp is not in
+    # the system linker search path.
+    ":linux_x86_64": [],
     "//conditions:default": [],
 })
 
