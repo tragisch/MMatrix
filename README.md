@@ -76,28 +76,38 @@ Then build using Bazel on macOS:
 ```bash
 bazel build //app/matrix
 ```
-On Linux use '--config=linux_llvm' to use the LLVM toolchain installed by Homebrew:
+On Linux the default host config automatically uses Homebrew LLVM plus OpenBLAS:
 
 ```bash
-bazel build //app/matrix --config=linux_llvm
+bazel build //app/matrix
 ```
 
 ### Options
 
-You can enable optional BLAS backends via Bazel defines:
+`bazel build //app/matrix` now picks the default backend automatically:
 
-- **Linux** and **macOS**:
+- **macOS**: OpenMP + Accelerate
+- **Linux**: OpenMP + OpenBLAS
+
+You can still override the backend explicitly when needed:
+
+- **Force Accelerate**:
   ```bash
-  bazel build //app/matrix --define=USE_OPENBLAS=1
+  bazel build //app/matrix --config=accelerate
   ```
 
-- **macOS**:
-  - Use Accelerate framework (includes MPS support):
-    ```bash
-    bazel build //app/matrix --define=USE_ACCELERATE=1
-    ```
-    MPS (Metal Performance Shaders) is built in automatically on macOS.
-    To activate MPS at runtime, call `sm_set_backend(SM_BACKEND_MPS)` in your code.
+- **Force OpenBLAS**:
+  ```bash
+  bazel build //app/matrix --config=openblas
+  ```
+
+- **Force plain OpenMP fallback**:
+  ```bash
+  bazel build //app/matrix --config=openmp_only
+  ```
+
+MPS (Metal Performance Shaders) is still built in automatically for Accelerate builds on macOS.
+To activate MPS at runtime, call `sm_set_backend(SM_BACKEND_MPS)` in your code.
 
 ---
 ## Installation

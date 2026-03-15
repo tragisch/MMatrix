@@ -70,6 +70,8 @@ bazel_dep(name = "wolfd_bazel_compile_commands", version = "0.5.2", dev_dependen
 # Load external non-Bazel libraries
 #############################
 
+host_local_library = use_repo_rule("//tools:host_local_library.bzl", "host_local_library")
+
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
@@ -140,17 +142,29 @@ new_local_repository(
 # See bazel_dep(name = "openmp", ...) above.
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
-new_local_repository(
+host_local_library(
     name = "openblas",
     build_file = "@//:third_party/openblas.BUILD",
-    path = "/opt/homebrew/opt/openblas/",
+    env_var = "OPENBLAS_ROOT",
+    linux_path = "/home/linuxbrew/.linuxbrew/opt/openblas",
+    macos_path = "/opt/homebrew/opt/openblas",
+    required_subdirs = [
+        "include",
+        "lib",
+    ],
 )
 
 # suite-sparse is a collection of sparse matrix libraries
-new_local_repository(
+host_local_library(
     name = "suitesparse",
     build_file = "@//:third_party/suitesparse.BUILD",
-    path = "/opt/homebrew/opt/suite-sparse/",
+    env_var = "SUITESPARSE_ROOT",
+    linux_path = "/home/linuxbrew/.linuxbrew/opt/suite-sparse",
+    macos_path = "/opt/homebrew/opt/suite-sparse",
+    required_subdirs = [
+        "include",
+        "lib",
+    ],
 )
 
 #############################

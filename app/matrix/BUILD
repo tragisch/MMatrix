@@ -48,13 +48,13 @@ genrule(
 #############################
 
 config_setting(
-    name = "use_accelerate",
-    values = {"define": "USE_ACCELERATE=1"},
+    name = "backend_accelerate",
+    values = {"define": "MATRIX_BACKEND=accelerate"},
 )
 
 config_setting(
-    name = "use_openblas",
-    values = {"define": "USE_OPENBLAS=1"},
+    name = "backend_openblas",
+    values = {"define": "MATRIX_BACKEND=openblas"},
 )
 
 #############################
@@ -96,11 +96,11 @@ perf_copts = select({
 })
 
 package_copts = select({
-    ":use_accelerate": [
+    ":backend_accelerate": [
         "-DUSE_ACCELERATE",
         "-DACCELERATE_NEW_LAPACK",
     ],
-    ":use_openblas": [
+    ":backend_openblas": [
         "-DUSE_OPENBLAS",
     ],
     "//conditions:default": [],
@@ -125,7 +125,7 @@ openmp_linkopts = select({
 })
 
 accelerate_linkopts = select({
-    ":use_accelerate": [
+    ":backend_accelerate": [
         "-framework Accelerate",
         "-lc++abi",
     ],
@@ -133,7 +133,7 @@ accelerate_linkopts = select({
 })
 
 mps_linkopts = select({
-    ":use_accelerate": [
+    ":backend_accelerate": [
         "-framework Metal",
         "-framework MetalPerformanceShaders",
         "-framework MetalPerformanceShadersGraph",
@@ -171,10 +171,7 @@ filegroup(
 cc_binary(
     name = "matrix_example",
     srcs = ["matrix_example.c"],
-    deps = [
-        ":sm",
-        "@openblas",
-    ],
+    deps = [":sm"],
 )
 
 #############################
@@ -212,7 +209,7 @@ cc_library(
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + select({
-        ":use_openblas": ["@openblas"],
+        ":backend_openblas": ["@openblas"],
         "//conditions:default": [],
     }),
 )
@@ -226,8 +223,8 @@ cc_library(
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + select({
-        ":use_accelerate": [":sm_mps_objc"],
-        ":use_openblas": ["@openblas"],
+        ":backend_accelerate": [":sm_mps_objc"],
+        ":backend_openblas": ["@openblas"],
         "//conditions:default": [],
     }),
 )
@@ -251,7 +248,7 @@ cc_library(
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
     visibility = ["//visibility:public"],
     deps = default_deps + [":sm"] + select({
-        ":use_accelerate": [
+        ":backend_accelerate": [
             ":sm_mps_objc",
             ":st_mps_objc",
         ],
@@ -269,7 +266,7 @@ objc_library(
     ],
     includes = ["src"],
     target_compatible_with = select({
-        ":use_accelerate": ["@platforms//os:macos"],
+        ":backend_accelerate": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
 )
@@ -284,7 +281,7 @@ objc_library(
     ],
     includes = ["src"],
     target_compatible_with = select({
-        ":use_accelerate": ["@platforms//os:macos"],
+        ":backend_accelerate": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     deps = [":sm_mps_objc"],

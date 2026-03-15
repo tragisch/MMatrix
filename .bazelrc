@@ -3,6 +3,7 @@
 # Enable colored output for better visibility
 common --color=yes
 common --curses=yes
+common --enable_platform_specific_config
 
 # registries:
 common --registry=https://raw.githubusercontent.com/tragisch/bazel-registry/main
@@ -117,6 +118,29 @@ coverage --experimental_use_llvm_covmap
 coverage --experimental_generate_llvm_lcov
 coverage --copt=-fcoverage-compilation-dir=.
 
+###############################
+# Host platform defaults       #
+###############################
+
+# Backend aliases. Platform-specific configs below select one of these by
+# default, but they can still be overridden explicitly via --config=...
+build:accelerate --define=MATRIX_BACKEND=accelerate
+
+build:openblas --define=MATRIX_BACKEND=openblas
+
+build:openmp_only --define=MATRIX_BACKEND=openmp
+
+# macOS defaults: OpenMP + Accelerate. MPS stays available as an optional
+# runtime backend via sm_set_backend(SM_BACKEND_MPS).
+build:macos --config=accelerate
+build:macos --repo_env=OPENBLAS_ROOT=/opt/homebrew/opt/openblas
+build:macos --repo_env=SUITESPARSE_ROOT=/opt/homebrew/opt/suite-sparse
+
+# Linux defaults: OpenMP + OpenBLAS.
+build:linux --config=openblas
+build:linux --repo_env=OPENBLAS_ROOT=/home/linuxbrew/.linuxbrew/opt/openblas
+build:linux --repo_env=SUITESPARSE_ROOT=/home/linuxbrew/.linuxbrew/opt/suite-sparse
+
 
 ###############################
 # Linux Toolchain (LLVM)      #
@@ -133,3 +157,5 @@ test:linux_llvm --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
 test:linux_llvm --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
 test:linux_llvm --cxxopt=-stdlib=libc++  # optional
 test:linux_llvm --linkopt=-fuse-ld=lld
+
+build:linux --config=linux_llvm
