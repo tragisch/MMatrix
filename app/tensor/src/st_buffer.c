@@ -8,6 +8,8 @@
 #include "st_buffer.h"
 
 #include <log.h>
+#include <stdatomic.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -18,6 +20,17 @@
 /* ------------------------------------------------------------------ */
 /*  CPU allocation                                                     */
 /* ------------------------------------------------------------------ */
+
+static bool st_buffer_num_floats_to_bytes(size_t num_floats,
+                                          size_t *out_bytes) {
+  if (out_bytes == NULL || num_floats == 0 ||
+      num_floats > SIZE_MAX / sizeof(float)) {
+    return false;
+  }
+
+  *out_bytes = num_floats * sizeof(float);
+  return true;
+}
 
 StBuffer *st_buffer_alloc_cpu(size_t num_floats) {
   if (num_floats == 0) {
@@ -31,15 +44,24 @@ StBuffer *st_buffer_alloc_cpu(size_t num_floats) {
     return NULL;
   }
 
-  buf->data = (float *)calloc(num_floats, sizeof(float));
-  if (!buf->data) {
-    log_error("Error: st_buffer_alloc_cpu data allocation failed.");
+  size_t alloc_bytes = 0;
+  if (!st_buffer_num_floats_to_bytes(num_floats, &alloc_bytes)) {
+    log_error("Error: st_buffer_alloc_cpu size overflow.");
     free(buf);
     return NULL;
   }
 
+  void *raw = NULL;
+  if (posix_memalign(&raw, 64, alloc_bytes) != 0 || !raw) {
+    log_error("Error: st_buffer_alloc_cpu data allocation failed.");
+    free(buf);
+    return NULL;
+  }
+  memset(raw, 0, alloc_bytes);
+  buf->data = (float *)raw;
+
   buf->type = ST_BUFFER_CPU;
-  buf->size_bytes = num_floats * sizeof(float);
+  buf->size_bytes = alloc_bytes;
   buf->capacity = num_floats;
   buf->refcount = 1;
   buf->owns_data = true;
@@ -92,9 +114,16 @@ StBuffer *st_buffer_from_ptr(float *data, size_t num_floats,
     return NULL;
   }
 
+  size_t alloc_bytes = 0;
+  if (!st_buffer_num_floats_to_bytes(num_floats, &alloc_bytes)) {
+    log_error("Error: st_buffer_from_ptr size overflow.");
+    free(buf);
+    return NULL;
+  }
+
   buf->type = ST_BUFFER_CPU;
   buf->data = data;
-  buf->size_bytes = num_floats * sizeof(float);
+  buf->size_bytes = alloc_bytes;
   buf->capacity = num_floats;
   buf->refcount = 1;
   buf->owns_data = take_ownership;
@@ -109,7 +138,7 @@ StBuffer *st_buffer_from_ptr(float *data, size_t num_floats,
 
 StBuffer *st_buffer_retain(StBuffer *buf) {
   if (buf) {
-    buf->refcount++;
+    atomic_fetch_add(&buf->refcount, 1);
   }
   return buf;
 }
@@ -119,8 +148,7 @@ void st_buffer_release(StBuffer *buf) {
     return;
   }
 
-  buf->refcount--;
-  if (buf->refcount > 0) {
+  if (atomic_fetch_sub(&buf->refcount, 1) > 1) {
     return;
   }
 

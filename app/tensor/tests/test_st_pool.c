@@ -201,6 +201,77 @@ void test_st_maxpool2d_backward_nchw_should_scatter_gradient(void) {
   st_destroy(input);
 }
 
+void test_st_maxpool2d_backward_nchw_should_fallback_to_float_indices(void) {
+  FloatTensor *grad_output = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *indices = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *grad_input = create_tensor_4d(1, 1, 4, 4);
+  TEST_ASSERT_NOT_NULL(grad_output);
+  TEST_ASSERT_NOT_NULL(indices);
+  TEST_ASSERT_NOT_NULL(grad_input);
+
+  for (size_t i = 0; i < 4; ++i) {
+    grad_output->values[i] = 1.0f;
+  }
+
+  indices->values[0] = 5.0f;
+  indices->values[1] = 7.0f;
+  indices->values[2] = 13.0f;
+  indices->values[3] = 15.0f;
+
+  bool ok =
+      st_maxpool2d_backward_nchw(grad_output, indices, 4, 4, grad_input);
+  TEST_ASSERT_TRUE(ok);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[5]);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[7]);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[13]);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[15]);
+
+  st_destroy(grad_input);
+  st_destroy(indices);
+  st_destroy(grad_output);
+}
+
+void test_st_maxpool2d_backward_nchw_should_use_precise_index_metadata(void) {
+  FloatTensor *input = create_tensor_4d(1, 1, 4, 4);
+  TEST_ASSERT_NOT_NULL(input);
+  for (size_t i = 0; i < 16; ++i) {
+    input->values[i] = (float)(i + 1);
+  }
+
+  FloatTensor *output = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *indices = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *grad_output = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *grad_input = create_tensor_4d(1, 1, 4, 4);
+  TEST_ASSERT_NOT_NULL(output);
+  TEST_ASSERT_NOT_NULL(indices);
+  TEST_ASSERT_NOT_NULL(grad_output);
+  TEST_ASSERT_NOT_NULL(grad_input);
+
+  bool ok = st_maxpool2d_nchw(input, 2, 2, 2, 2, 0, 0, output, indices);
+  TEST_ASSERT_TRUE(ok);
+
+  for (size_t i = 0; i < 4; ++i) {
+    grad_output->values[i] = 1.0f;
+    indices->values[i] = 0.0f;
+  }
+
+  ok = st_maxpool2d_backward_nchw(grad_output, indices, 4, 4, grad_input);
+  TEST_ASSERT_TRUE(ok);
+
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, grad_input->values[0]);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[5]);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[7]);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[13]);
+  TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, grad_input->values[15]);
+
+  st_destroy(grad_input);
+  st_destroy(grad_output);
+  st_destroy(indices);
+  st_destroy(output);
+  st_destroy(input);
+}
+
 void test_st_avgpool2d_backward_nchw_should_distribute_gradient(void) {
   FloatTensor *grad_output = create_tensor_4d(1, 1, 2, 2);
   FloatTensor *grad_input = create_tensor_4d(1, 1, 4, 4);

@@ -8,6 +8,7 @@
 
 #include "st_conv.h"
 #include "st_backend.h"
+#include "st_workspace.h"
 #include "sm.h"
 
 #if defined(USE_ACCELERATE)
@@ -29,6 +30,75 @@
 
 /* Thread-local: each thread records its own last-used backend. */
 static _Thread_local const char *g_last_backend = "none";
+
+/* ---- Weight prepack cache (stored in weight->extra) ---- */
+
+typedef struct {
+  float *data;       /* 64-byte aligned [patch_size, c_out] layout */
+  size_t patch_size; /* c_in * k_h * k_w */
+  size_t c_out;
+} StWeightPack;
+
+static void st_weight_pack_free(void *p) {
+  StWeightPack *wp = (StWeightPack *)p;
+  if (wp) {
+    free(wp->data);
+    free(wp);
+  }
+}
+
+/// Retrieve or create the prepacked weight matrix [patch_size, c_out].
+static const StWeightPack *st_weight_prepack(const FloatTensor *weight,
+                                             size_t patch_size, size_t c_out) {
+  /* Fast path: cache hit */
+  StWeightPack *wp = (StWeightPack *)weight->extra;
+  if (wp && wp->patch_size == patch_size && wp->c_out == c_out) {
+    return wp;
+  }
+
+  /* Build repacked buffer (64-byte aligned). */
+  const size_t alloc_bytes = patch_size * c_out * sizeof(float);
+  void *raw = NULL;
+  if (posix_memalign(&raw, 64, alloc_bytes) != 0) {
+    return NULL;
+  }
+  float *data = (float *)raw;
+
+  const size_t c_in = weight->shape[1];
+  const size_t k_h = weight->shape[2];
+  const size_t k_w = weight->shape[3];
+
+  for (size_t co = 0; co < c_out; ++co) {
+    for (size_t ci = 0; ci < c_in; ++ci) {
+      for (size_t kh = 0; kh < k_h; ++kh) {
+        for (size_t kw = 0; kw < k_w; ++kw) {
+          const size_t k_idx = ((co * c_in + ci) * k_h + kh) * k_w + kw;
+          const size_t row = ((ci * k_h) + kh) * k_w + kw;
+          data[row * c_out + co] = weight->values[k_idx];
+        }
+      }
+    }
+  }
+
+  wp = (StWeightPack *)calloc(1, sizeof(StWeightPack));
+  if (!wp) {
+    free(raw);
+    return NULL;
+  }
+  wp->data = data;
+  wp->patch_size = patch_size;
+  wp->c_out = c_out;
+
+  /* Cache into weight->extra (mutable cast — lazy init of derived data). */
+  FloatTensor *w_mut = (FloatTensor *)weight;
+  if (w_mut->extra && w_mut->extra_free) {
+    w_mut->extra_free(w_mut->extra);
+  }
+  w_mut->extra = wp;
+  w_mut->extra_free = st_weight_pack_free;
+
+  return wp;
+}
 
 static const double ST_CONV_MPS_MACS_THRESHOLD_DEFAULT = 2.0e8;
 static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 1000000u;
@@ -436,27 +506,27 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
     return false;
   }
 
-  FloatMatrix *w_mat = sm_create(patch_size, c_out);
-  FloatMatrix *col = sm_create(out_spatial, patch_size);
-  FloatMatrix *y = sm_create(out_spatial, c_out);
-  if (!w_mat || !col || !y) {
-    sm_destroy(w_mat);
-    sm_destroy(col);
-    sm_destroy(y);
+  StWorkspace *ws = st_workspace_get();
+  st_workspace_reset(ws);
+
+  /* Prepacked weight: cached in weight->extra across calls. */
+  const StWeightPack *wp = st_weight_prepack(weight, patch_size, c_out);
+  if (!wp) {
     return false;
   }
 
-  for (size_t co = 0; co < c_out; ++co) {
-    for (size_t ci = 0; ci < c_in; ++ci) {
-      for (size_t kh = 0; kh < k_h; ++kh) {
-        for (size_t kw = 0; kw < k_w; ++kw) {
-          const size_t k_idx = ((co * c_in + ci) * k_h + kh) * k_w + kw;
-          const size_t row = ((ci * k_h) + kh) * k_w + kw;
-          w_mat->values[row * c_out + co] = weight->values[k_idx];
-        }
-      }
-    }
+  float *col_buf = st_workspace_alloc(ws, out_spatial * patch_size);
+  float *y_buf = st_workspace_alloc(ws, out_spatial * c_out);
+  if (!col_buf || !y_buf) {
+    return false;
   }
+
+  FloatMatrix w_mat = {.rows = patch_size, .cols = c_out,
+                       .capacity = patch_size * c_out, .values = wp->data};
+  FloatMatrix col = {.rows = out_spatial, .cols = patch_size,
+                     .capacity = out_spatial * patch_size, .values = col_buf};
+  FloatMatrix y = {.rows = out_spatial, .cols = c_out,
+                   .capacity = out_spatial * c_out, .values = y_buf};
 
   for (size_t ni = 0; ni < n; ++ni) {
     /* im2col: build column matrix — parallelise over output rows. */
@@ -482,17 +552,14 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
               v = input->values[in_idx];
             }
 
-            col->values[out_row * patch_size + col_idx] = v;
+            col.values[out_row * patch_size + col_idx] = v;
           }
         }
       }
     }
 
-    if (!sm_gemm(y, 1.0f, col, SM_NO_TRANSPOSE, w_mat, SM_NO_TRANSPOSE,
+    if (!sm_gemm(&y, 1.0f, &col, SM_NO_TRANSPOSE, &w_mat, SM_NO_TRANSPOSE,
                  0.0f)) {
-      sm_destroy(w_mat);
-      sm_destroy(col);
-      sm_destroy(y);
       return false;
     }
 
@@ -500,7 +567,7 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
       for (size_t ow = 0; ow < out_w; ++ow) {
         const size_t out_row = oh * out_w + ow;
         for (size_t co = 0; co < c_out; ++co) {
-          float v = y->values[out_row * c_out + co];
+          float v = y.values[out_row * c_out + co];
           if (bias) {
             v += bias->values[co];
           }
@@ -511,10 +578,6 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
       }
     }
   }
-
-  sm_destroy(w_mat);
-  sm_destroy(col);
-  sm_destroy(y);
 
   g_last_backend = "gemm";
   return true;
@@ -972,7 +1035,9 @@ static bool st_conv2d_backward_data_gemm(const FloatTensor *grad_output,
       .values = weight->values};
 
   /* d_col buffer: [out_spatial, patch_size] — same layout as forward im2col */
-  float *col_buf = (float *)calloc(out_spatial * patch_size, sizeof(float));
+  StWorkspace *ws = st_workspace_get();
+  st_workspace_reset(ws);
+  float *col_buf = st_workspace_calloc(ws, out_spatial * patch_size);
   if (!col_buf) {
     log_error("Error: st_conv2d_backward_data_gemm allocation failed.");
     return false;
@@ -993,7 +1058,6 @@ static bool st_conv2d_backward_data_gemm(const FloatTensor *grad_output,
      *       = [out_spatial, patch_size] */
     if (!sm_gemm(&d_col, 1.0f, &go_mat, SM_TRANSPOSE, &w_mat,
                  SM_NO_TRANSPOSE, 0.0f)) {
-      free(col_buf);
       log_error("Error: st_conv2d_backward_data_gemm GEMM failed.");
       return false;
     }
@@ -1006,7 +1070,6 @@ static bool st_conv2d_backward_data_gemm(const FloatTensor *grad_output,
               out_h, out_w, gi_n);
   }
 
-  free(col_buf);
   return true;
 }
 
@@ -1367,17 +1430,18 @@ static bool st_conv2d_backward_weight_gemm(const FloatTensor *input,
   const size_t out_spatial = out_h * out_w;
   const size_t patch_size = c_in * k_h * k_w;
 
-  float *col_buf = (float *)malloc(out_spatial * patch_size * sizeof(float));
+  StWorkspace *ws = st_workspace_get();
+  st_workspace_reset(ws);
+
+  float *col_buf = st_workspace_alloc(ws, out_spatial * patch_size);
   if (!col_buf) {
     log_error("Error: st_conv2d_backward_weight_gemm allocation failed.");
     return false;
   }
 
-  FloatMatrix *gw_mat = sm_create(c_out, patch_size);
-  if (!gw_mat) {
-    free(col_buf);
-    return false;
-  }
+  FloatMatrix gw_mat = {.rows = c_out, .cols = patch_size,
+                        .capacity = c_out * patch_size,
+                        .values = grad_weight->values};
 
   memset(grad_weight->values, 0, grad_weight->numel * sizeof(float));
 
@@ -1395,22 +1459,13 @@ static bool st_conv2d_backward_weight_gemm(const FloatTensor *input,
         .rows = out_spatial, .cols = patch_size, .capacity = 0,
         .values = col_buf};
 
-    memset(gw_mat->values, 0, c_out * patch_size * sizeof(float));
-    if (!sm_gemm(gw_mat, 1.0f, &go_mat, SM_NO_TRANSPOSE, &col_mat,
-                 SM_NO_TRANSPOSE, 0.0f)) {
-      free(col_buf);
-      sm_destroy(gw_mat);
+    if (!sm_gemm(&gw_mat, 1.0f, &go_mat, SM_NO_TRANSPOSE, &col_mat,
+                 SM_NO_TRANSPOSE, 1.0f)) {
       log_error("Error: st_conv2d_backward_weight_gemm GEMM failed.");
       return false;
     }
-
-    for (size_t i = 0; i < c_out * patch_size; ++i) {
-      grad_weight->values[i] += gw_mat->values[i];
-    }
   }
 
-  free(col_buf);
-  sm_destroy(gw_mat);
   return true;
 }
 

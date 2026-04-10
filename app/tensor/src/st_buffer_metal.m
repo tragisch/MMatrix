@@ -12,6 +12,7 @@
 #import "sm_mps.h"
 
 #import <Metal/Metal.h>
+#import <stdint.h>
 #import <string.h>
 
 StBuffer *st_buffer_alloc_metal_impl(size_t num_floats) {
@@ -21,6 +22,10 @@ StBuffer *st_buffer_alloc_metal_impl(size_t num_floats) {
 
   id<MTLDevice> device = (__bridge id<MTLDevice>)mps_get_shared_device();
   if (!device) {
+    return NULL;
+  }
+
+  if (num_floats > SIZE_MAX / sizeof(float)) {
     return NULL;
   }
 

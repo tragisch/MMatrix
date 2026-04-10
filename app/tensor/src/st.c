@@ -35,6 +35,53 @@ static bool st_validate_shape(size_t ndim, const size_t *shape) {
   return true;
 }
 
+static bool st_add_size_checked(size_t lhs, size_t rhs, size_t *out_sum) {
+  if (out_sum == NULL || lhs > SIZE_MAX - rhs) {
+    return false;
+  }
+  *out_sum = lhs + rhs;
+  return true;
+}
+
+static bool st_view_is_in_bounds(const FloatTensor *base, size_t ndim,
+                                 const size_t *shape,
+                                 const ptrdiff_t *strides,
+                                 size_t offset_elements) {
+  if (base == NULL || shape == NULL || strides == NULL ||
+      offset_elements >= base->capacity) {
+    return false;
+  }
+
+  size_t max_offset = 0;
+  for (size_t i = 0; i < ndim; ++i) {
+    if (strides[i] < 0) {
+      return false;
+    }
+
+    if (shape[i] <= 1 || strides[i] == 0) {
+      continue;
+    }
+
+    const size_t extent = shape[i] - 1;
+    const size_t stride = (size_t)strides[i];
+    if (extent > SIZE_MAX / stride) {
+      return false;
+    }
+
+    const size_t dim_max = extent * stride;
+    if (!st_add_size_checked(max_offset, dim_max, &max_offset)) {
+      return false;
+    }
+  }
+
+  size_t view_end = 0;
+  if (!st_add_size_checked(offset_elements, max_offset, &view_end)) {
+    return false;
+  }
+
+  return view_end < base->capacity;
+}
+
 bool st_numel_from_shape(size_t ndim, const size_t *shape, size_t *out_numel) {
   if (!st_validate_shape(ndim, shape) || out_numel == NULL) {
     return false;
@@ -82,7 +129,7 @@ FloatTensor *st_create(size_t ndim, const size_t *shape) {
     return NULL;
   }
 
-  StBuffer *buf = st_buffer_alloc_cpu(numel);
+  StBuffer *buf = st_buffer_alloc(numel);
   if (!buf) {
     log_error("Error: st_create buffer allocation failed.");
     return NULL;
@@ -178,19 +225,36 @@ static bool st_offset_from_indices(const FloatTensor *tensor,
     return false;
   }
 
-  ptrdiff_t off = 0;
+  size_t off = 0;
   for (size_t d = 0; d < tensor->ndim; ++d) {
     if (indices[d] >= tensor->shape[d]) {
       return false;
     }
-    off += (ptrdiff_t)indices[d] * tensor->strides[d];
+
+    if (tensor->strides[d] < 0) {
+      return false;
+    }
+
+    const size_t stride = (size_t)tensor->strides[d];
+    if (indices[d] == 0 || stride == 0) {
+      continue;
+    }
+    if (indices[d] > SIZE_MAX / stride) {
+      return false;
+    }
+
+    const size_t dim_offset = indices[d] * stride;
+    if (dim_offset > SIZE_MAX - off) {
+      return false;
+    }
+    off += dim_offset;
   }
 
-  if (off < 0 || (size_t)off >= tensor->capacity) {
+  if (off >= tensor->capacity) {
     return false;
   }
 
-  *out_offset = (size_t)off;
+  *out_offset = off;
   return true;
 }
 
@@ -273,7 +337,8 @@ bool st_reshape(FloatTensor *tensor, size_t new_ndim, const size_t *new_shape) {
 FloatTensor *st_view(FloatTensor *base, size_t ndim, const size_t *shape,
                      const ptrdiff_t *strides, size_t offset_elements) {
   if (base == NULL || base->values == NULL || !st_validate_shape(ndim, shape) ||
-      strides == NULL || offset_elements >= base->capacity) {
+      strides == NULL ||
+      !st_view_is_in_bounds(base, ndim, shape, strides, offset_elements)) {
     return NULL;
   }
 
@@ -298,6 +363,7 @@ FloatTensor *st_view(FloatTensor *base, size_t ndim, const size_t *shape,
   view->view_offset = base->view_offset + offset_elements;
   view->view_src = base;
   view->extra = NULL;
+  view->extra_free = NULL;
 
   /* Derived aliases (backward compat) */
   view->values = view->buf->data + view->view_offset;
@@ -327,7 +393,7 @@ FloatTensor *st_permute_view(FloatTensor *base, const size_t *perm) {
 
   FloatTensor *view = st_view(base, base->ndim, shape, strides, 0);
   if (view) {
-    view->layout = ST_LAYOUT_CONTIGUOUS;
+    view->layout = base->layout;
   }
   return view;
 }
@@ -365,6 +431,11 @@ FloatTensor *st_clone(const FloatTensor *src) {
 void st_destroy(FloatTensor *tensor) {
   if (!tensor) {
     return;
+  }
+
+  if (tensor->extra && tensor->extra_free) {
+    tensor->extra_free(tensor->extra);
+    tensor->extra = NULL;
   }
 
   if (tensor->buf) {

@@ -15,6 +15,7 @@
 #ifndef ST_BUFFER_H
 #define ST_BUFFER_H
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -51,8 +52,9 @@ typedef struct StBuffer {
   size_t capacity;
 
   /* Reference count: allows multiple tensor views on same buffer.
-   * Buffer is freed when refcount reaches 0.                          */
-  int refcount;
+   * Buffer is freed when refcount reaches 0.  Atomic for thread-safety
+   * when views are created/destroyed concurrently.                    */
+  _Atomic int refcount;
 
   /* If true, buffer owns `data` and will free() it on release.
    * False for buffers wrapping external pointers.                     */

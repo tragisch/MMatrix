@@ -58,6 +58,20 @@ static MPSGraphTensorData *_st_be_make_tensor_data(MPSGraphDevice *gDev,
 /* Conv thresholds are read from st_conv via the public threshold API. */
 
 /* ================================================================== */
+/*  MPSGraph cache (NSCache — thread-safe, auto-evict LRU)             */
+/* ================================================================== */
+
+static NSCache<NSString *, NSDictionary *> *_st_mps_graph_cache(void) {
+  static NSCache<NSString *, NSDictionary *> *cache = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    cache = [[NSCache alloc] init];
+    cache.countLimit = 16;
+  });
+  return cache;
+}
+
+/* ================================================================== */
 /*  supports_op                                                        */
 /* ================================================================== */
 
@@ -108,50 +122,83 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   id<MTLCommandQueue> queue = _st_be_mps_queue();
   if (!device || !queue) return false;
 
-  /* ---- Build MPSGraph ---- */
-  MPSGraph *graph = [[MPSGraph alloc] init];
+  /* ---- Cache lookup by shape signature ---- */
+  const int has_bias = (bias != NULL) ? 1 : 0;
+  NSString *cacheKey = [NSString stringWithFormat:
+      @"conv:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%d",
+      n, c_in, h_in, w_in, c_out, k_h, k_w,
+      params->stride_h, params->stride_w,
+      params->pad_h, params->pad_w,
+      params->dilation_h, params->dilation_w, has_bias];
 
-  MPSShape *inShape = @[ @(n), @(c_in), @(h_in), @(w_in) ];
-  MPSShape *wShape  = @[ @(c_out), @(c_in), @(k_h), @(k_w) ];
+  NSCache *cache = _st_mps_graph_cache();
+  NSDictionary *cached = [cache objectForKey:cacheKey];
 
-  MPSGraphTensor *inT = [graph placeholderWithShape:inShape
-                                           dataType:MPSDataTypeFloat32
-                                               name:@"input"];
-  MPSGraphTensor *wT  = [graph placeholderWithShape:wShape
-                                           dataType:MPSDataTypeFloat32
-                                               name:@"weight"];
+  MPSGraph *graph;
+  MPSGraphTensor *inT, *wT, *biasT, *resultT;
 
-  MPSGraphConvolution2DOpDescriptor *convDesc =
-      [MPSGraphConvolution2DOpDescriptor
-          descriptorWithStrideInX:(NSUInteger)params->stride_w
-                        strideInY:(NSUInteger)params->stride_h
-                  dilationRateInX:(NSUInteger)params->dilation_w
-                  dilationRateInY:(NSUInteger)params->dilation_h
-                           groups:1
-                      paddingLeft:(NSUInteger)params->pad_w
-                     paddingRight:(NSUInteger)params->pad_w
-                       paddingTop:(NSUInteger)params->pad_h
-                    paddingBottom:(NSUInteger)params->pad_h
-                     paddingStyle:MPSGraphPaddingStyleExplicit
-                       dataLayout:MPSGraphTensorNamedDataLayoutNCHW
-                    weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
+  if (cached) {
+    /* Cache hit — reuse compiled graph. */
+    graph   = cached[@"graph"];
+    inT     = cached[@"inT"];
+    wT      = cached[@"wT"];
+    biasT   = cached[@"biasT"];   /* may be NSNull */
+    resultT = cached[@"resultT"];
+    if ([biasT isEqual:[NSNull null]]) biasT = nil;
+  } else {
+    /* Cache miss — build graph. */
+    graph = [[MPSGraph alloc] init];
 
-  MPSGraphTensor *convT = [graph convolution2DWithSourceTensor:inT
-                                                 weightsTensor:wT
-                                                    descriptor:convDesc
-                                                          name:@"conv2d"];
+    MPSShape *inShape = @[ @(n), @(c_in), @(h_in), @(w_in) ];
+    MPSShape *wShape  = @[ @(c_out), @(c_in), @(k_h), @(k_w) ];
 
-  /* Optional bias: broadcast-add [1, C_out, 1, 1] over NCHW output. */
-  MPSGraphTensor *resultT = convT;
-  MPSGraphTensor *biasT   = nil;
+    inT = [graph placeholderWithShape:inShape
+                             dataType:MPSDataTypeFloat32
+                                 name:@"input"];
+    wT  = [graph placeholderWithShape:wShape
+                             dataType:MPSDataTypeFloat32
+                                 name:@"weight"];
 
-  if (bias) {
-    biasT   = [graph placeholderWithShape:@[ @1, @(c_out), @1, @1 ]
-                                 dataType:MPSDataTypeFloat32
-                                     name:@"bias"];
-    resultT = [graph additionWithPrimaryTensor:convT
-                               secondaryTensor:biasT
-                                          name:@"add_bias"];
+    MPSGraphConvolution2DOpDescriptor *convDesc =
+        [MPSGraphConvolution2DOpDescriptor
+            descriptorWithStrideInX:(NSUInteger)params->stride_w
+                          strideInY:(NSUInteger)params->stride_h
+                    dilationRateInX:(NSUInteger)params->dilation_w
+                    dilationRateInY:(NSUInteger)params->dilation_h
+                             groups:1
+                        paddingLeft:(NSUInteger)params->pad_w
+                       paddingRight:(NSUInteger)params->pad_w
+                         paddingTop:(NSUInteger)params->pad_h
+                      paddingBottom:(NSUInteger)params->pad_h
+                       paddingStyle:MPSGraphPaddingStyleExplicit
+                         dataLayout:MPSGraphTensorNamedDataLayoutNCHW
+                      weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
+
+    MPSGraphTensor *convT = [graph convolution2DWithSourceTensor:inT
+                                                   weightsTensor:wT
+                                                      descriptor:convDesc
+                                                            name:@"conv2d"];
+
+    resultT = convT;
+    biasT   = nil;
+
+    if (bias) {
+      biasT   = [graph placeholderWithShape:@[ @1, @(c_out), @1, @1 ]
+                                   dataType:MPSDataTypeFloat32
+                                       name:@"bias"];
+      resultT = [graph additionWithPrimaryTensor:convT
+                                 secondaryTensor:biasT
+                                            name:@"add_bias"];
+    }
+
+    /* Store into cache. */
+    [cache setObject:@{
+      @"graph"   : graph,
+      @"inT"     : inT,
+      @"wT"      : wT,
+      @"biasT"   : biasT   ?: [NSNull null],
+      @"resultT" : resultT,
+    } forKey:cacheKey];
   }
 
   /* ---- Prepare feed data ---- */
@@ -159,6 +206,9 @@ static bool mps_conv2d_forward(const FloatTensor *input,
 
   void *in_mh  = input->buf  ? st_buffer_metal_handle(input->buf)  : NULL;
   void *w_mh   = weight->buf ? st_buffer_metal_handle(weight->buf) : NULL;
+
+  MPSShape *inShape = @[ @(n), @(c_in), @(h_in), @(w_in) ];
+  MPSShape *wShape  = @[ @(c_out), @(c_in), @(k_h), @(k_w) ];
 
   const size_t inBytes = n * c_in * h_in * w_in * sizeof(float);
   const size_t wBytes  = c_out * c_in * k_h * k_w * sizeof(float);

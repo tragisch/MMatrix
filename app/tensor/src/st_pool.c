@@ -30,6 +30,62 @@ static bool st_pool_is_valid_4d(const FloatTensor *t) {
          st_is_contiguous(t);
 }
 
+static void st_pool_indices_free(void *ptr) {
+  free(ptr);
+}
+
+static bool st_pool_prepare_indices(FloatTensor *indices) {
+  if (!indices) {
+    return true;
+  }
+
+  if (indices->extra != NULL) {
+    if (indices->extra_free != st_pool_indices_free) {
+      log_error("Error: st_maxpool2d_nchw indices tensor metadata busy.");
+      return false;
+    }
+    indices->extra_free(indices->extra);
+    indices->extra = NULL;
+    indices->extra_free = NULL;
+  }
+
+  if (indices->numel > SIZE_MAX / sizeof(size_t)) {
+    log_error("Error: st_maxpool2d_nchw indices metadata overflow.");
+    return false;
+  }
+
+  size_t *storage = (size_t *)malloc(indices->numel * sizeof(size_t));
+  if (!storage) {
+    log_error("Error: st_maxpool2d_nchw indices metadata allocation failed.");
+    return false;
+  }
+
+  indices->extra = storage;
+  indices->extra_free = st_pool_indices_free;
+  return true;
+}
+
+static size_t *st_pool_indices_data(FloatTensor *indices) {
+  if (indices == NULL || indices->extra == NULL ||
+      indices->extra_free != st_pool_indices_free) {
+    return NULL;
+  }
+  return (size_t *)indices->extra;
+}
+
+static const size_t *st_pool_indices_data_const(const FloatTensor *indices) {
+  if (indices == NULL || indices->extra == NULL ||
+      indices->extra_free != st_pool_indices_free) {
+    return NULL;
+  }
+  return (const size_t *)indices->extra;
+}
+
+static bool st_pool_float_indices_are_exact(size_t spatial_in) {
+  const size_t max_exact_index = ((size_t)1 << FLT_MANT_DIG);
+  return spatial_in > 0 && spatial_in - 1 <= max_exact_index;
+}
+
 /* ---- Output size computation ---- */
 
 bool st_pool2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
@@ -87,6 +143,17 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
        indices->shape[2] != oh || indices->shape[3] != ow)) {
     log_error("Error: st_maxpool2d_nchw indices shape mismatch.");
     return false;
+  }
+
+  size_t *indices_data = NULL;
+  if (indices) {
+    if (!st_pool_prepare_indices(indices)) {
+      return false;
+    }
+    indices_data = st_pool_indices_data(indices);
+    if (!indices_data) {
+      return false;
+    }
   }
 
   /* ---- MPS dispatch via backend vtable ---- */
@@ -165,6 +232,7 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
         const size_t out_idx = ((ni * c + ci) * oh + ohi) * ow + owi;
         output->values[out_idx] = max_val;
         if (indices) {
+          indices_data[out_idx] = max_idx;
           indices->values[out_idx] = (float)max_idx;
         }
       }
@@ -315,7 +383,13 @@ bool st_maxpool2d_backward_nchw(const FloatTensor *grad_output,
   memset(grad_input->values, 0, grad_input->numel * sizeof(float));
 
   const size_t spatial_in = input_h * input_w;
+  const size_t *indices_data = st_pool_indices_data_const(indices);
+  if (!indices_data && !st_pool_float_indices_are_exact(spatial_in)) {
+    log_error("Error: st_maxpool2d_backward_nchw needs precise indices.");
+    return false;
+  }
 
+#pragma omp parallel for collapse(2) schedule(static) if (n * c > 4)
   for (size_t ni = 0; ni < n; ++ni) {
     for (size_t ci = 0; ci < c; ++ci) {
       float *gi_plane = grad_input->values + (ni * c + ci) * spatial_in;
@@ -323,7 +397,8 @@ bool st_maxpool2d_backward_nchw(const FloatTensor *grad_output,
       for (size_t ohi = 0; ohi < out_h; ++ohi) {
         for (size_t owi = 0; owi < out_w; ++owi) {
           const size_t go_idx = ((ni * c + ci) * out_h + ohi) * out_w + owi;
-          const size_t max_idx = (size_t)indices->values[go_idx];
+          const size_t max_idx = indices_data ? indices_data[go_idx]
+                                              : (size_t)indices->values[go_idx];
 
           if (max_idx < spatial_in) {
             gi_plane[max_idx] += grad_output->values[go_idx];

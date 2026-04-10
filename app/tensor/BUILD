@@ -153,6 +153,7 @@ cc_library(
         "src/st_buffer.c",
         "src/st_conv.c",
         "src/st_pool.c",
+        "src/st_workspace.c",
     ],
     hdrs = [
         "include/st.h",
@@ -161,6 +162,7 @@ cc_library(
         "include/st_buffer.h",
         "include/st_conv.h",
         "include/st_pool.h",
+        "include/st_workspace.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
@@ -278,6 +280,14 @@ unity_test(
 unity_test(
     name = "test_st_buffer",
     srcs = ["tests/test_st_buffer.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [":st"],
+)
+
+unity_test(
+    name = "test_st_workspace",
+    srcs = ["tests/test_st_workspace.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = [":st"],

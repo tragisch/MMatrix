@@ -121,6 +121,18 @@ void test_st_buffer_from_ptr_should_fail_on_null(void) {
   TEST_ASSERT_NULL(buf);
 }
 
+void test_st_buffer_alloc_should_fail_on_size_overflow(void) {
+  StBuffer *buf = st_buffer_alloc((SIZE_MAX / sizeof(float)) + 1);
+  TEST_ASSERT_NULL(buf);
+}
+
+void test_st_buffer_from_ptr_should_fail_on_size_overflow(void) {
+  float value = 1.0f;
+  StBuffer *buf =
+      st_buffer_from_ptr(&value, (SIZE_MAX / sizeof(float)) + 1, false);
+  TEST_ASSERT_NULL(buf);
+}
+
 /* ------------------------------------------------------------------ */
 /*  retain / release                                                   */
 /* ------------------------------------------------------------------ */

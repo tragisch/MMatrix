@@ -22,6 +22,18 @@ static id<MTLCommandQueue> _st_mps_queue(void) {
   return (__bridge id<MTLCommandQueue>)mps_get_shared_command_queue();
 }
 
+/* ---- MPSGraph cache (NSCache — thread-safe, auto-evict LRU) ---- */
+
+static NSCache<NSString *, NSDictionary *> *_st_mps_pool_cache(void) {
+  static NSCache<NSString *, NSDictionary *> *cache = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    cache = [[NSCache alloc] init];
+    cache.countLimit = 16;
+  });
+  return cache;
+}
+
 /* ---- Helper: create MPSGraphTensorData with zero-copy when possible ---- */
 
 static MPSGraphTensorData *_st_make_tensor_data(MPSGraphDevice *gDev,
@@ -63,34 +75,56 @@ bool st_maxpool2d_mps(const float *input, void *input_metal_handle,
   id<MTLCommandQueue> queue = _st_mps_queue();
   if (!device || !queue) return false;
 
-  MPSGraph *graph = [[MPSGraph alloc] init];
+  /* ---- Cache lookup ---- */
+  NSString *cacheKey = [NSString stringWithFormat:
+      @"maxpool:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu",
+      n, c, h, w, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w];
 
-  MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
-  MPSGraphTensor *inT =
-      [graph placeholderWithShape:inShape
-                         dataType:MPSDataTypeFloat32
-                             name:@"input"];
+  NSCache *cache = _st_mps_pool_cache();
+  NSDictionary *cached = [cache objectForKey:cacheKey];
 
-  MPSGraphPooling2DOpDescriptor *poolDesc =
-      [MPSGraphPooling2DOpDescriptor
-          descriptorWithKernelWidth:(NSUInteger)kernel_w
-                      kernelHeight:(NSUInteger)kernel_h
-                         strideInX:(NSUInteger)stride_w
-                         strideInY:(NSUInteger)stride_h
-                      paddingStyle:MPSGraphPaddingStyleExplicit
-                        dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
-  poolDesc.paddingLeft   = (NSUInteger)pad_w;
-  poolDesc.paddingRight  = (NSUInteger)pad_w;
-  poolDesc.paddingTop    = (NSUInteger)pad_h;
-  poolDesc.paddingBottom = (NSUInteger)pad_h;
+  MPSGraph *graph;
+  MPSGraphTensor *inT, *resultT;
 
-  MPSGraphTensor *resultT =
-      [graph maxPooling2DWithSourceTensor:inT
-                               descriptor:poolDesc
-                                     name:@"maxpool"];
+  if (cached) {
+    graph   = cached[@"graph"];
+    inT     = cached[@"inT"];
+    resultT = cached[@"resultT"];
+  } else {
+    graph = [[MPSGraph alloc] init];
+
+    MPSShape *shape = @[ @(n), @(c), @(h), @(w) ];
+    inT = [graph placeholderWithShape:shape
+                             dataType:MPSDataTypeFloat32
+                                 name:@"input"];
+
+    MPSGraphPooling2DOpDescriptor *poolDesc =
+        [MPSGraphPooling2DOpDescriptor
+            descriptorWithKernelWidth:(NSUInteger)kernel_w
+                        kernelHeight:(NSUInteger)kernel_h
+                           strideInX:(NSUInteger)stride_w
+                           strideInY:(NSUInteger)stride_h
+                        paddingStyle:MPSGraphPaddingStyleExplicit
+                          dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
+    poolDesc.paddingLeft   = (NSUInteger)pad_w;
+    poolDesc.paddingRight  = (NSUInteger)pad_w;
+    poolDesc.paddingTop    = (NSUInteger)pad_h;
+    poolDesc.paddingBottom = (NSUInteger)pad_h;
+
+    resultT = [graph maxPooling2DWithSourceTensor:inT
+                                       descriptor:poolDesc
+                                             name:@"maxpool"];
+
+    [cache setObject:@{
+      @"graph"   : graph,
+      @"inT"     : inT,
+      @"resultT" : resultT,
+    } forKey:cacheKey];
+  }
 
   /* Feed data */
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
+  MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
   const size_t inBytes = n * c * h * w * sizeof(float);
   MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
                                                      input_metal_handle,
@@ -136,34 +170,56 @@ bool st_avgpool2d_mps(const float *input, void *input_metal_handle,
   id<MTLCommandQueue> queue = _st_mps_queue();
   if (!device || !queue) return false;
 
-  MPSGraph *graph = [[MPSGraph alloc] init];
+  /* ---- Cache lookup ---- */
+  NSString *cacheKey = [NSString stringWithFormat:
+      @"avgpool:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu",
+      n, c, h, w, kernel_h, kernel_w, stride_h, stride_w, pad_h, pad_w];
 
-  MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
-  MPSGraphTensor *inT =
-      [graph placeholderWithShape:inShape
-                         dataType:MPSDataTypeFloat32
-                             name:@"input"];
+  NSCache *cache = _st_mps_pool_cache();
+  NSDictionary *cached = [cache objectForKey:cacheKey];
 
-  MPSGraphPooling2DOpDescriptor *poolDesc =
-      [MPSGraphPooling2DOpDescriptor
-          descriptorWithKernelWidth:(NSUInteger)kernel_w
-                      kernelHeight:(NSUInteger)kernel_h
-                         strideInX:(NSUInteger)stride_w
-                         strideInY:(NSUInteger)stride_h
-                      paddingStyle:MPSGraphPaddingStyleExplicit
-                        dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
-  poolDesc.paddingLeft   = (NSUInteger)pad_w;
-  poolDesc.paddingRight  = (NSUInteger)pad_w;
-  poolDesc.paddingTop    = (NSUInteger)pad_h;
-  poolDesc.paddingBottom = (NSUInteger)pad_h;
+  MPSGraph *graph;
+  MPSGraphTensor *inT, *resultT;
 
-  MPSGraphTensor *resultT =
-      [graph avgPooling2DWithSourceTensor:inT
-                               descriptor:poolDesc
-                                     name:@"avgpool"];
+  if (cached) {
+    graph   = cached[@"graph"];
+    inT     = cached[@"inT"];
+    resultT = cached[@"resultT"];
+  } else {
+    graph = [[MPSGraph alloc] init];
+
+    MPSShape *shape = @[ @(n), @(c), @(h), @(w) ];
+    inT = [graph placeholderWithShape:shape
+                             dataType:MPSDataTypeFloat32
+                                 name:@"input"];
+
+    MPSGraphPooling2DOpDescriptor *poolDesc =
+        [MPSGraphPooling2DOpDescriptor
+            descriptorWithKernelWidth:(NSUInteger)kernel_w
+                        kernelHeight:(NSUInteger)kernel_h
+                           strideInX:(NSUInteger)stride_w
+                           strideInY:(NSUInteger)stride_h
+                        paddingStyle:MPSGraphPaddingStyleExplicit
+                          dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
+    poolDesc.paddingLeft   = (NSUInteger)pad_w;
+    poolDesc.paddingRight  = (NSUInteger)pad_w;
+    poolDesc.paddingTop    = (NSUInteger)pad_h;
+    poolDesc.paddingBottom = (NSUInteger)pad_h;
+
+    resultT = [graph avgPooling2DWithSourceTensor:inT
+                                       descriptor:poolDesc
+                                             name:@"avgpool"];
+
+    [cache setObject:@{
+      @"graph"   : graph,
+      @"inT"     : inT,
+      @"resultT" : resultT,
+    } forKey:cacheKey];
+  }
 
   /* Feed data */
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
+  MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
   const size_t inBytes = n * c * h * w * sizeof(float);
   MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
                                                      input_metal_handle,
@@ -209,81 +265,113 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
   id<MTLCommandQueue> queue = _st_mps_queue();
   if (!device || !queue) return false;
 
-  MPSGraph *graph = [[MPSGraph alloc] init];
+  /* ---- Cache lookup ---- */
+  const int has_gamma = (gamma != NULL) ? 1 : 0;
+  const int has_beta  = (beta  != NULL) ? 1 : 0;
+  NSString *cacheKey = [NSString stringWithFormat:
+      @"bn:%zu,%zu,%zu,%zu,%d,%d",
+      n, c, h, w, has_gamma, has_beta];
 
-  MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
-  MPSGraphTensor *inT =
-      [graph placeholderWithShape:inShape
-                         dataType:MPSDataTypeFloat32
-                             name:@"input"];
+  NSCache *cache = _st_mps_pool_cache();
+  NSDictionary *cached = [cache objectForKey:cacheKey];
 
-  /* Compute mean and variance along N, H, W (axes 0, 2, 3). */
-  NSArray<NSNumber *> *reduceAxes = @[ @0, @2, @3 ];
+  MPSGraph *graph;
+  MPSGraphTensor *inT, *gammaT, *betaT, *resultT, *meanT, *varT;
 
-  MPSGraphTensor *meanT =
-      [graph meanOfTensor:inT axes:reduceAxes name:@"mean"];
+  if (cached) {
+    graph   = cached[@"graph"];
+    inT     = cached[@"inT"];
+    gammaT  = cached[@"gammaT"];
+    betaT   = cached[@"betaT"];
+    resultT = cached[@"resultT"];
+    meanT   = cached[@"meanT"];
+    varT    = cached[@"varT"];
+    if ([gammaT isEqual:[NSNull null]]) gammaT = nil;
+    if ([betaT  isEqual:[NSNull null]]) betaT  = nil;
+  } else {
+    graph = [[MPSGraph alloc] init];
 
-  MPSGraphTensor *diffT =
-      [graph subtractionWithPrimaryTensor:inT
-                          secondaryTensor:meanT
-                                     name:@"diff"];
+    MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
+    inT = [graph placeholderWithShape:inShape
+                             dataType:MPSDataTypeFloat32
+                                 name:@"input"];
 
-  MPSGraphTensor *sqDiffT =
-      [graph squareWithTensor:diffT name:@"sq_diff"];
+    /* Compute mean and variance along N, H, W (axes 0, 2, 3). */
+    NSArray<NSNumber *> *reduceAxes = @[ @0, @2, @3 ];
 
-  MPSGraphTensor *varT =
-      [graph meanOfTensor:sqDiffT axes:reduceAxes name:@"var"];
+    meanT = [graph meanOfTensor:inT axes:reduceAxes name:@"mean"];
 
-  /* Normalize: (x - mean) / sqrt(var + epsilon) */
-  MPSGraphTensor *epsT =
-      [graph constantWithScalar:(double)epsilon
-                          shape:@[ @1 ]
-                       dataType:MPSDataTypeFloat32];
+    MPSGraphTensor *diffT =
+        [graph subtractionWithPrimaryTensor:inT
+                            secondaryTensor:meanT
+                                       name:@"diff"];
 
-  MPSGraphTensor *varPlusEpsT =
-      [graph additionWithPrimaryTensor:varT
-                       secondaryTensor:epsT
-                                  name:@"var_eps"];
+    MPSGraphTensor *sqDiffT =
+        [graph squareWithTensor:diffT name:@"sq_diff"];
 
-  MPSGraphTensor *sqrtVarT =
-      [graph squareRootWithTensor:varPlusEpsT
-                             name:@"sqrt_var"];
+    varT = [graph meanOfTensor:sqDiffT axes:reduceAxes name:@"var"];
 
-  MPSGraphTensor *invStdT =
-      [graph reciprocalWithTensor:sqrtVarT
-                             name:@"inv_std"];
+    /* Normalize: (x - mean) / sqrt(var + epsilon) */
+    MPSGraphTensor *epsT =
+        [graph constantWithScalar:(double)epsilon
+                            shape:@[ @1 ]
+                         dataType:MPSDataTypeFloat32];
 
-  MPSGraphTensor *normedT =
-      [graph multiplicationWithPrimaryTensor:diffT
-                             secondaryTensor:invStdT
-                                        name:@"normed"];
+    MPSGraphTensor *varPlusEpsT =
+        [graph additionWithPrimaryTensor:varT
+                         secondaryTensor:epsT
+                                    name:@"var_eps"];
 
-  /* Scale and shift: gamma * normed + beta */
-  MPSGraphTensor *resultT = normedT;
+    MPSGraphTensor *sqrtVarT =
+        [graph squareRootWithTensor:varPlusEpsT
+                               name:@"sqrt_var"];
 
-  MPSGraphTensor *gammaT = nil;
-  MPSGraphTensor *betaT = nil;
+    MPSGraphTensor *invStdT =
+        [graph reciprocalWithTensor:sqrtVarT
+                               name:@"inv_std"];
 
-  if (gamma) {
-    gammaT = [graph placeholderWithShape:@[ @1, @(c), @1, @1 ]
-                                dataType:MPSDataTypeFloat32
-                                    name:@"gamma"];
-    resultT = [graph multiplicationWithPrimaryTensor:resultT
-                                     secondaryTensor:gammaT
-                                                name:@"scale"];
-  }
+    MPSGraphTensor *normedT =
+        [graph multiplicationWithPrimaryTensor:diffT
+                               secondaryTensor:invStdT
+                                          name:@"normed"];
 
-  if (beta) {
-    betaT = [graph placeholderWithShape:@[ @1, @(c), @1, @1 ]
-                               dataType:MPSDataTypeFloat32
-                                   name:@"beta"];
-    resultT = [graph additionWithPrimaryTensor:resultT
-                               secondaryTensor:betaT
-                                          name:@"shift"];
+    /* Scale and shift: gamma * normed + beta */
+    resultT = normedT;
+    gammaT  = nil;
+    betaT   = nil;
+
+    if (gamma) {
+      gammaT = [graph placeholderWithShape:@[ @1, @(c), @1, @1 ]
+                                  dataType:MPSDataTypeFloat32
+                                      name:@"gamma"];
+      resultT = [graph multiplicationWithPrimaryTensor:resultT
+                                       secondaryTensor:gammaT
+                                                  name:@"scale"];
+    }
+
+    if (beta) {
+      betaT = [graph placeholderWithShape:@[ @1, @(c), @1, @1 ]
+                                 dataType:MPSDataTypeFloat32
+                                     name:@"beta"];
+      resultT = [graph additionWithPrimaryTensor:resultT
+                                 secondaryTensor:betaT
+                                            name:@"shift"];
+    }
+
+    [cache setObject:@{
+      @"graph"   : graph,
+      @"inT"     : inT,
+      @"gammaT"  : gammaT  ?: [NSNull null],
+      @"betaT"   : betaT   ?: [NSNull null],
+      @"resultT" : resultT,
+      @"meanT"   : meanT,
+      @"varT"    : varT,
+    } forKey:cacheKey];
   }
 
   /* Feed data */
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
+  MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
   const size_t inBytes = n * c * h * w * sizeof(float);
 
   MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,

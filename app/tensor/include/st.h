@@ -42,6 +42,7 @@ typedef struct FloatTensor {
   size_t view_offset;               // element offset into buf->data
   struct FloatTensor *view_src;     // base tensor for views; NULL if owner
   void *extra;                      // backend-specific hook (pipeline cache, …)
+  void (*extra_free)(void *);        // destructor for extra (NULL = no-op)
 } FloatTensor;
 
 // Compute default row-major contiguous strides from shape.

@@ -194,6 +194,32 @@ void test_st_view_should_reference_base_data_with_offset(void) {
   st_destroy(base);
 }
 
+void test_st_view_should_reject_out_of_bounds_shape_stride_combination(void) {
+  size_t base_shape[2] = {3, 4};
+  FloatTensor *base = st_create(2, base_shape);
+  TEST_ASSERT_NOT_NULL(base);
+
+  size_t view_shape[2] = {2, 4};
+  ptrdiff_t bad_strides[2] = {9, 1};
+  FloatTensor *view = st_view(base, 2, view_shape, bad_strides, 0);
+
+  TEST_ASSERT_NULL(view);
+  st_destroy(base);
+}
+
+void test_st_view_should_reject_negative_strides(void) {
+  size_t base_shape[2] = {2, 3};
+  FloatTensor *base = st_create(2, base_shape);
+  TEST_ASSERT_NOT_NULL(base);
+
+  size_t view_shape[2] = {2, 3};
+  ptrdiff_t bad_strides[2] = {3, -1};
+  FloatTensor *view = st_view(base, 2, view_shape, bad_strides, 0);
+
+  TEST_ASSERT_NULL(view);
+  st_destroy(base);
+}
+
 void test_st_permute_view_should_swap_dimensions_without_copy(void) {
   size_t shape[2] = {2, 3};
   FloatTensor *t = st_create(2, shape);
