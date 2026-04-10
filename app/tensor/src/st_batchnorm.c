@@ -13,6 +13,7 @@
 
 #include <log.h>
 #include <math.h>
+#include <string.h>
 
 #if defined(USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
