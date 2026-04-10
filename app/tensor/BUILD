@@ -16,10 +16,24 @@ config_setting(
 )
 
 config_setting(
+    name = "macos",
+    constraint_values = [
+        "@platforms//os:macos",
+    ],
+)
+
+config_setting(
     name = "linux_x86_64",
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "linux",
+    constraint_values = [
+        "@platforms//os:linux",
     ],
 )
 
@@ -30,6 +44,22 @@ config_setting(
 
 config_setting(
     name = "backend_openblas",
+    values = {"define": "MATRIX_BACKEND=openblas"},
+)
+
+config_setting(
+    name = "backend_accelerate_macos",
+    constraint_values = [
+        "@platforms//os:macos",
+    ],
+    values = {"define": "MATRIX_BACKEND=accelerate"},
+)
+
+config_setting(
+    name = "backend_openblas_linux",
+    constraint_values = [
+        "@platforms//os:linux",
+    ],
     values = {"define": "MATRIX_BACKEND=openblas"},
 )
 
@@ -68,32 +98,32 @@ perf_copts = select({
 })
 
 package_copts = select({
-    ":backend_accelerate": [
+    ":backend_accelerate_macos": [
         "-DUSE_ACCELERATE",
         "-DACCELERATE_NEW_LAPACK",
     ],
-    ":backend_openblas": [
+    ":backend_openblas_linux": [
         "-DUSE_OPENBLAS",
     ],
     "//conditions:default": [],
 })
 
 openmp_copts = select({
-    ":macos_arm64": [
+    ":macos": [
         "-Xpreprocessor",
         "-fopenmp",
     ],
-    ":linux_x86_64": ["-fopenmp"],
+    ":linux": ["-fopenmp"],
     "//conditions:default": [],
 })
 
 openmp_linkopts = select({
-    ":linux_x86_64": [],
+    ":linux": [],
     "//conditions:default": [],
 })
 
 accelerate_linkopts = select({
-    ":backend_accelerate": [
+    ":backend_accelerate_macos": [
         "-framework Accelerate",
         "-lc++abi",
     ],
@@ -101,7 +131,7 @@ accelerate_linkopts = select({
 })
 
 mps_linkopts = select({
-    ":backend_accelerate": [
+    ":backend_accelerate_macos": [
         "-framework Metal",
         "-framework MetalPerformanceShaders",
         "-framework MetalPerformanceShadersGraph",
@@ -118,22 +148,31 @@ cc_library(
     name = "st",
     srcs = [
         "src/st.c",
+        "src/st_backend.c",
         "src/st_batchnorm.c",
+        "src/st_buffer.c",
         "src/st_conv.c",
         "src/st_pool.c",
     ],
     hdrs = [
         "include/st.h",
+        "include/st_backend.h",
         "include/st_batchnorm.h",
+        "include/st_buffer.h",
         "include/st_conv.h",
         "include/st_pool.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
     deps = default_deps + ["//app/matrix:sm"] + select({
-        ":backend_accelerate": [
+        ":backend_accelerate_macos": [
             ":st_mps_objc",
             "//app/matrix:sm_mps_objc",
         ],
@@ -143,13 +182,27 @@ cc_library(
 
 objc_library(
     name = "st_mps_objc",
-    srcs = ["src/st_mps.m"],
-    hdrs = ["src/st_mps.h"],
+    srcs = [
+        "src/st_backend_mps.m",
+        "src/st_buffer_metal.m",
+        "src/st_mps.m",
+    ],
+    hdrs = [
+        "include/st.h",
+        "include/st_backend.h",
+        "include/st_buffer.h",
+        "include/st_conv.h",
+        "src/st_buffer_metal.h",
+        "src/st_mps.h",
+    ],
     copts = [
         "-ObjC",
         "-fobjc-arc",
     ],
-    includes = ["src"],
+    includes = [
+        "include",
+        "src",
+    ],
     target_compatible_with = select({
         ":backend_accelerate": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
@@ -217,6 +270,14 @@ unity_test(
 unity_test(
     name = "test_st_batchnorm_relu",
     srcs = ["tests/test_st_batchnorm_relu.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [":st"],
+)
+
+unity_test(
+    name = "test_st_buffer",
+    srcs = ["tests/test_st_buffer.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = [":st"],

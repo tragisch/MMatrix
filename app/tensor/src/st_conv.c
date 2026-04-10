@@ -7,14 +7,11 @@
  */
 
 #include "st_conv.h"
+#include "st_backend.h"
 #include "sm.h"
 
 #if defined(USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
-#endif
-
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-#include "sm_mps.h"
 #endif
 
 #include <log.h>
@@ -528,25 +525,11 @@ static bool st_conv2d_mps_nchw(const FloatTensor *input,
                                const FloatTensor *bias,
                                const StConv2dParams *params,
                                FloatTensor *output) {
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-  return mps_conv2d_nchw(
-      input->values, input->shape[0],
-      input->shape[1], input->shape[2], input->shape[3],
-      weight->values, weight->shape[0],
-      weight->shape[2], weight->shape[3],
-      bias ? bias->values : NULL,
-      params->stride_h, params->stride_w,
-      params->pad_h, params->pad_w,
-      params->dilation_h, params->dilation_w,
-      output->values, output->shape[2], output->shape[3]);
-#else
-  (void)input;
-  (void)weight;
-  (void)bias;
-  (void)params;
-  (void)output;
+  const StBackend *mps = st_backend_mps();
+  if (mps && mps->conv2d_forward) {
+    return mps->conv2d_forward(input, weight, bias, params, output);
+  }
   return false;
-#endif
 }
 
 static bool st_conv2d_should_use_cpu_opt(size_t n, size_t c_in, size_t c_out,
@@ -577,8 +560,13 @@ static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
 static bool st_conv2d_should_use_mps(size_t n, size_t c_in, size_t c_out,
                                      size_t out_h, size_t out_w, size_t k_h,
                                      size_t k_w) {
-  /* Only dispatch to MPS in AUTO mode when runtime backend is MPS. */
-  if (sm_get_backend() != SM_BACKEND_MPS) return false;
+  /* Only dispatch to MPS when the MPS backend is available and selected. */
+  const StBackend *mps = st_backend_mps();
+  if (!mps) return false;
+
+  /* Check global override: if user forced a non-MPS backend, skip. */
+  const StBackend *dflt = st_get_default_backend();
+  if (dflt && dflt != mps) return false;
 
   st_conv_init_mps_thresholds_once();
 

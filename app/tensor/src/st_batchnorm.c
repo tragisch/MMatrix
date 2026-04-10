@@ -7,7 +7,8 @@
  */
 
 #include "st_batchnorm.h"
-#include "sm.h"
+#include "st_backend.h"
+#include "st_buffer.h"
 
 #include <log.h>
 #include <math.h>
@@ -16,11 +17,6 @@
 
 #if defined(USE_ACCELERATE)
 #include <Accelerate/Accelerate.h>
-#endif
-
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-#include "st_mps.h"
-#define ST_BN_MPS_THRESHOLD 4096 /* numel threshold for MPS dispatch */
 #endif
 
 /* ---- Validation helpers ---- */
@@ -76,19 +72,16 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
     return false;
   }
 
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-  /* MPS dispatch for large tensors. */
-  if (sm_get_backend() == SM_BACKEND_MPS &&
-      input->numel >= ST_BN_MPS_THRESHOLD) {
-    bool ok = st_batchnorm2d_forward_mps(
-        input->values, n, c, h, w,
-        gamma ? gamma->values : NULL,
-        beta ? beta->values : NULL,
-        epsilon, output->values, mean->values, var->values);
-    if (ok) return true;
-    /* Fallback to CPU on MPS failure. */
+  /* ---- MPS dispatch via backend vtable ---- */
+  {
+    const StBackend *be = st_select_backend(ST_OP_BATCHNORM2D_FORWARD, input);
+    if (be && be->batchnorm2d_forward) {
+      bool ok = be->batchnorm2d_forward(input, gamma, beta, epsilon, output,
+                                        mean, var);
+      if (ok) return true;
+      /* Fallback to CPU on MPS failure. */
+    }
   }
-#endif
 
   const float inv_m = 1.0f / (float)m;
 

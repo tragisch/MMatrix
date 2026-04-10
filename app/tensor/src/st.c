@@ -7,6 +7,7 @@
  */
 
 #include "st.h"
+#include "st_buffer.h"
 #include "sm.h"
 
 #include <log.h>
@@ -81,30 +82,39 @@ FloatTensor *st_create(size_t ndim, const size_t *shape) {
     return NULL;
   }
 
-  FloatTensor *tensor = (FloatTensor *)calloc(1, sizeof(FloatTensor));
-  if (!tensor) {
-    log_error("Error: st_create tensor allocation failed.");
+  StBuffer *buf = st_buffer_alloc_cpu(numel);
+  if (!buf) {
+    log_error("Error: st_create buffer allocation failed.");
     return NULL;
   }
 
-  tensor->values = (float *)calloc(numel, sizeof(float));
-  if (!tensor->values) {
-    log_error("Error: st_create data allocation failed.");
-    free(tensor);
+  FloatTensor *tensor = (FloatTensor *)calloc(1, sizeof(FloatTensor));
+  if (!tensor) {
+    log_error("Error: st_create tensor allocation failed.");
+    st_buffer_release(buf);
     return NULL;
   }
 
   tensor->ndim = ndim;
   memcpy(tensor->shape, shape, ndim * sizeof(size_t));
   if (!st_compute_default_strides(ndim, shape, tensor->strides)) {
-    free(tensor->values);
+    st_buffer_release(buf);
     free(tensor);
     return NULL;
   }
   tensor->numel = numel;
-  tensor->capacity = numel;
-  tensor->owns_data = true;
   tensor->layout = ST_LAYOUT_CONTIGUOUS;
+
+  /* Buffer-backed storage */
+  tensor->buf = buf;
+  tensor->view_offset = 0;
+  tensor->view_src = NULL;
+  tensor->extra = NULL;
+
+  /* Derived aliases (backward compat) */
+  tensor->values = buf->data;
+  tensor->capacity = buf->capacity;
+  tensor->owns_data = true;
 
   return tensor;
 }
@@ -122,24 +132,40 @@ FloatTensor *st_create_with_data(size_t ndim, const size_t *shape, float *data,
     return NULL;
   }
 
+  StBuffer *buf = st_buffer_from_ptr(data, capacity, take_ownership);
+  if (!buf) {
+    log_error("Error: st_create_with_data buffer creation failed.");
+    return NULL;
+  }
+
   FloatTensor *tensor = (FloatTensor *)calloc(1, sizeof(FloatTensor));
   if (!tensor) {
     log_error("Error: st_create_with_data tensor allocation failed.");
+    st_buffer_release(buf);
     return NULL;
   }
 
   tensor->ndim = ndim;
   memcpy(tensor->shape, shape, ndim * sizeof(size_t));
   if (!st_compute_default_strides(ndim, shape, tensor->strides)) {
+    st_buffer_release(buf);
     free(tensor);
     return NULL;
   }
 
   tensor->numel = numel;
-  tensor->capacity = capacity;
-  tensor->values = data;
-  tensor->owns_data = take_ownership;
   tensor->layout = ST_LAYOUT_CONTIGUOUS;
+
+  /* Buffer-backed storage */
+  tensor->buf = buf;
+  tensor->view_offset = 0;
+  tensor->view_src = NULL;
+  tensor->extra = NULL;
+
+  /* Derived aliases (backward compat) */
+  tensor->values = buf->data;
+  tensor->capacity = buf->capacity;
+  tensor->owns_data = take_ownership;
 
   return tensor;
 }
@@ -265,10 +291,18 @@ FloatTensor *st_view(FloatTensor *base, size_t ndim, const size_t *shape,
   memcpy(view->shape, shape, ndim * sizeof(size_t));
   memcpy(view->strides, strides, ndim * sizeof(ptrdiff_t));
   view->numel = numel;
-  view->capacity = base->capacity - offset_elements;
-  view->values = base->values + offset_elements;
-  view->owns_data = false;
   view->layout = base->layout;
+
+  /* Buffer-backed storage: share base's buffer */
+  view->buf = st_buffer_retain(base->buf);
+  view->view_offset = base->view_offset + offset_elements;
+  view->view_src = base;
+  view->extra = NULL;
+
+  /* Derived aliases (backward compat) */
+  view->values = view->buf->data + view->view_offset;
+  view->capacity = view->buf->capacity - view->view_offset;
+  view->owns_data = false;
 
   return view;
 }
@@ -333,10 +367,12 @@ void st_destroy(FloatTensor *tensor) {
     return;
   }
 
-  if (tensor->owns_data && tensor->values) {
-    free(tensor->values);
+  if (tensor->buf) {
+    st_buffer_release(tensor->buf);
+    tensor->buf = NULL;
   }
 
+  tensor->values = NULL;
   free(tensor);
 }
 

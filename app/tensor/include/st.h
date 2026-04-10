@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "st_buffer.h"
+
 #define ST_MAX_DIMS 8
 
 typedef enum StLayout {
@@ -34,6 +36,12 @@ typedef struct FloatTensor {
   float *values;
   bool owns_data;
   StLayout layout;
+
+  /* ---- Buffer-backed storage (Phase 1) ---- */
+  StBuffer *buf;                    // ref-counted backing storage
+  size_t view_offset;               // element offset into buf->data
+  struct FloatTensor *view_src;     // base tensor for views; NULL if owner
+  void *extra;                      // backend-specific hook (pipeline cache, …)
 } FloatTensor;
 
 // Compute default row-major contiguous strides from shape.

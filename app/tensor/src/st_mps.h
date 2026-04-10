@@ -24,13 +24,17 @@ extern "C" {
 
 /// MPS-accelerated MaxPool2D forward (NCHW layout).
 /// indices may be NULL.
-bool st_maxpool2d_mps(const float *input, size_t n, size_t c, size_t h,
+/// input_metal_handle: if non-NULL, an id<MTLBuffer> (cast to void*) for
+/// zero-copy GPU input.  When NULL, input data is copied via NSData.
+bool st_maxpool2d_mps(const float *input, void *input_metal_handle,
+                      size_t n, size_t c, size_t h,
                       size_t w, size_t kernel_h, size_t kernel_w,
                       size_t stride_h, size_t stride_w, size_t pad_h,
                       size_t pad_w, float *output, size_t out_h, size_t out_w);
 
 /// MPS-accelerated AvgPool2D forward (NCHW layout).
-bool st_avgpool2d_mps(const float *input, size_t n, size_t c, size_t h,
+bool st_avgpool2d_mps(const float *input, void *input_metal_handle,
+                      size_t n, size_t c, size_t h,
                       size_t w, size_t kernel_h, size_t kernel_w,
                       size_t stride_h, size_t stride_w, size_t pad_h,
                       size_t pad_w, float *output, size_t out_h, size_t out_w);
@@ -38,7 +42,8 @@ bool st_avgpool2d_mps(const float *input, size_t n, size_t c, size_t h,
 /// MPS-accelerated BatchNorm2D forward (NCHW layout).
 /// gamma and beta may be NULL (defaults: gamma=1, beta=0).
 /// mean and var are computed and written (pre-allocated, size C).
-bool st_batchnorm2d_forward_mps(const float *input, size_t n, size_t c,
+bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
+                                size_t n, size_t c,
                                 size_t h, size_t w, const float *gamma,
                                 const float *beta, float epsilon,
                                 float *output, float *mean_out,

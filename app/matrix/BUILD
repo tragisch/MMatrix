@@ -21,10 +21,24 @@ config_setting(
 )
 
 config_setting(
+    name = "macos",
+    constraint_values = [
+        "@platforms//os:macos",
+    ],
+)
+
+config_setting(
     name = "linux_x86_64",
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "linux",
+    constraint_values = [
+        "@platforms//os:linux",
     ],
 )
 
@@ -54,6 +68,22 @@ config_setting(
 
 config_setting(
     name = "backend_openblas",
+    values = {"define": "MATRIX_BACKEND=openblas"},
+)
+
+config_setting(
+    name = "backend_accelerate_macos",
+    constraint_values = [
+        "@platforms//os:macos",
+    ],
+    values = {"define": "MATRIX_BACKEND=accelerate"},
+)
+
+config_setting(
+    name = "backend_openblas_linux",
+    constraint_values = [
+        "@platforms//os:linux",
+    ],
     values = {"define": "MATRIX_BACKEND=openblas"},
 )
 
@@ -96,22 +126,22 @@ perf_copts = select({
 })
 
 package_copts = select({
-    ":backend_accelerate": [
+    ":backend_accelerate_macos": [
         "-DUSE_ACCELERATE",
         "-DACCELERATE_NEW_LAPACK",
     ],
-    ":backend_openblas": [
+    ":backend_openblas_linux": [
         "-DUSE_OPENBLAS",
     ],
     "//conditions:default": [],
 })
 
 openmp_copts = select({
-    ":macos_arm64": [
+    ":macos": [
         "-Xpreprocessor",
         "-fopenmp",
     ],
-    ":linux_x86_64": ["-fopenmp"],
+    ":linux": ["-fopenmp"],
     "//conditions:default": [],
 })
 
@@ -124,12 +154,12 @@ openmp_linkopts = select({
     # Passing -fopenmp again at link time makes clang inject -lomp, which
     # bypasses Bazel's external dependency wiring and fails if libomp is not in
     # the system linker search path.
-    ":linux_x86_64": [],
+    ":linux": [],
     "//conditions:default": [],
 })
 
 accelerate_linkopts = select({
-    ":backend_accelerate": [
+    ":backend_accelerate_macos": [
         "-framework Accelerate",
         "-lc++abi",
     ],
@@ -137,7 +167,7 @@ accelerate_linkopts = select({
 })
 
 mps_linkopts = select({
-    ":backend_accelerate": [
+    ":backend_accelerate_macos": [
         "-framework Metal",
         "-framework MetalPerformanceShaders",
         "-framework MetalPerformanceShadersGraph",
@@ -195,6 +225,11 @@ cc_library(
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
     deps = default_deps + [
         ":dm",
@@ -211,9 +246,14 @@ cc_library(
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
     deps = default_deps + select({
-        ":backend_openblas": ["@openblas"],
+        ":backend_openblas_linux": ["@openblas"],
         "//conditions:default": [],
     }),
 )
@@ -225,10 +265,15 @@ cc_library(
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
     deps = default_deps + select({
-        ":backend_accelerate": [":sm_mps_objc"],
-        ":backend_openblas": ["@openblas"],
+        ":backend_accelerate_macos": [":sm_mps_objc"],
+        ":backend_openblas_linux": ["@openblas"],
         "//conditions:default": [],
     }),
 )
@@ -258,6 +303,11 @@ cc_library(
     ],
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
     deps = default_deps + ["@suitesparse"],
 )

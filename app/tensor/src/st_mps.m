@@ -22,11 +22,34 @@ static id<MTLCommandQueue> _st_mps_queue(void) {
   return (__bridge id<MTLCommandQueue>)mps_get_shared_command_queue();
 }
 
+/* ---- Helper: create MPSGraphTensorData with zero-copy when possible ---- */
+
+static MPSGraphTensorData *_st_make_tensor_data(MPSGraphDevice *gDev,
+                                                const float *data,
+                                                void *metal_handle,
+                                                size_t bytes,
+                                                MPSShape *shape) {
+  if (metal_handle) {
+    /* Zero-copy path: MTLBuffer already in shared memory. */
+    id<MTLBuffer> mtl_buf = (__bridge id<MTLBuffer>)metal_handle;
+    return [[MPSGraphTensorData alloc] initWithMTLBuffer:mtl_buf
+                                                  shape:shape
+                                               dataType:MPSDataTypeFloat32];
+  }
+  /* Fallback: copy via NSData. */
+  return [[MPSGraphTensorData alloc]
+      initWithDevice:gDev
+                data:[NSData dataWithBytes:data length:bytes]
+               shape:shape
+            dataType:MPSDataTypeFloat32];
+}
+
 /* ================================================================== */
 /*  MPS MaxPool2D (NCHW layout)                                       */
 /* ================================================================== */
 
-bool st_maxpool2d_mps(const float *input, size_t n, size_t c, size_t h,
+bool st_maxpool2d_mps(const float *input, void *input_metal_handle,
+                      size_t n, size_t c, size_t h,
                       size_t w, size_t kernel_h, size_t kernel_w,
                       size_t stride_h, size_t stride_w, size_t pad_h,
                       size_t pad_w, float *output, size_t out_h,
@@ -69,11 +92,9 @@ bool st_maxpool2d_mps(const float *input, size_t n, size_t c, size_t h,
   /* Feed data */
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
   const size_t inBytes = n * c * h * w * sizeof(float);
-  MPSGraphTensorData *inData = [[MPSGraphTensorData alloc]
-      initWithDevice:gDev
-                data:[NSData dataWithBytes:input length:inBytes]
-               shape:inShape
-            dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
+                                                     input_metal_handle,
+                                                     inBytes, inShape);
 
   NSDictionary *feeds = @{inT : inData};
 
@@ -100,7 +121,8 @@ bool st_maxpool2d_mps(const float *input, size_t n, size_t c, size_t h,
 /*  MPS AvgPool2D (NCHW layout)                                       */
 /* ================================================================== */
 
-bool st_avgpool2d_mps(const float *input, size_t n, size_t c, size_t h,
+bool st_avgpool2d_mps(const float *input, void *input_metal_handle,
+                      size_t n, size_t c, size_t h,
                       size_t w, size_t kernel_h, size_t kernel_w,
                       size_t stride_h, size_t stride_w, size_t pad_h,
                       size_t pad_w, float *output, size_t out_h,
@@ -143,11 +165,9 @@ bool st_avgpool2d_mps(const float *input, size_t n, size_t c, size_t h,
   /* Feed data */
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
   const size_t inBytes = n * c * h * w * sizeof(float);
-  MPSGraphTensorData *inData = [[MPSGraphTensorData alloc]
-      initWithDevice:gDev
-                data:[NSData dataWithBytes:input length:inBytes]
-               shape:inShape
-            dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
+                                                     input_metal_handle,
+                                                     inBytes, inShape);
 
   NSDictionary *feeds = @{inT : inData};
 
@@ -174,7 +194,8 @@ bool st_avgpool2d_mps(const float *input, size_t n, size_t c, size_t h,
 /*  MPS BatchNorm2D Forward (NCHW layout)                             */
 /* ================================================================== */
 
-bool st_batchnorm2d_forward_mps(const float *input, size_t n, size_t c,
+bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
+                                size_t n, size_t c,
                                 size_t h, size_t w, const float *gamma,
                                 const float *beta, float epsilon,
                                 float *output, float *mean_out,
@@ -265,11 +286,9 @@ bool st_batchnorm2d_forward_mps(const float *input, size_t n, size_t c,
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
   const size_t inBytes = n * c * h * w * sizeof(float);
 
-  MPSGraphTensorData *inData = [[MPSGraphTensorData alloc]
-      initWithDevice:gDev
-                data:[NSData dataWithBytes:input length:inBytes]
-               shape:inShape
-            dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
+                                                     input_metal_handle,
+                                                     inBytes, inShape);
 
   NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feeds =
       [NSMutableDictionary dictionaryWithCapacity:3];

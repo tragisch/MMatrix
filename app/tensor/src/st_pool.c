@@ -7,7 +7,8 @@
  */
 
 #include "st_pool.h"
-#include "sm.h"
+#include "st_backend.h"
+#include "st_buffer.h"
 
 #include <log.h>
 #include <float.h>
@@ -20,11 +21,6 @@
 
 #ifdef __ARM_NEON
 #include <arm_neon.h>
-#endif
-
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-#include "st_mps.h"
-#define ST_POOL_MPS_THRESHOLD 4096  /* numel threshold for MPS dispatch */
 #endif
 
 /* ---- Validation helpers ---- */
@@ -93,15 +89,15 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-  if (!indices && sm_get_backend() == SM_BACKEND_MPS &&
-      input->numel >= ST_POOL_MPS_THRESHOLD) {
-    bool ok = st_maxpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
-                               stride_h, stride_w, pad_h, pad_w,
-                               output->values, oh, ow);
-    if (ok) return true;
+  /* ---- MPS dispatch via backend vtable ---- */
+  {
+    const StBackend *be = st_select_backend(ST_OP_MAXPOOL2D_FORWARD, input);
+    if (be && be->maxpool2d_forward) {
+      bool ok = be->maxpool2d_forward(input, kernel_h, kernel_w, stride_h,
+                                      stride_w, pad_h, pad_w, output, indices);
+      if (ok) return true;
+    }
   }
-#endif
 
   const size_t nc = n * c;
 
@@ -206,15 +202,15 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
-#if defined(USE_ACCELERATE) && defined(__APPLE__)
-  if (sm_get_backend() == SM_BACKEND_MPS &&
-      input->numel >= ST_POOL_MPS_THRESHOLD) {
-    bool ok = st_avgpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
-                               stride_h, stride_w, pad_h, pad_w,
-                               output->values, oh, ow);
-    if (ok) return true;
+  /* ---- MPS dispatch via backend vtable ---- */
+  {
+    const StBackend *be = st_select_backend(ST_OP_AVGPOOL2D_FORWARD, input);
+    if (be && be->avgpool2d_forward) {
+      bool ok = be->avgpool2d_forward(input, kernel_h, kernel_w, stride_h,
+                                      stride_w, pad_h, pad_w, output);
+      if (ok) return true;
+    }
   }
-#endif
 
   const size_t nc_avg = n * c;
 
