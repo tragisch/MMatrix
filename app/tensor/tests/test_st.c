@@ -274,6 +274,41 @@ void test_st_clone_should_materialize_non_contiguous_view(void) {
   st_destroy(t);
 }
 
+void test_st_to_bf16_and_back_should_materialize_non_contiguous_view(void) {
+  size_t shape[2] = {2, 3};
+  FloatTensor *t = st_create(2, shape);
+  TEST_ASSERT_NOT_NULL(t);
+
+  float data[] = {1, 2, 3, 4, 5, 6};
+  for (size_t i = 0; i < 6; ++i) {
+    t->values[i] = data[i];
+  }
+
+  size_t perm[2] = {1, 0};
+  FloatTensor *p = st_permute_view(t, perm);
+  TEST_ASSERT_NOT_NULL(p);
+
+  FloatTensor *bf = st_to_bf16(p);
+  TEST_ASSERT_NOT_NULL(bf);
+  TEST_ASSERT_EQUAL_UINT32((uint32_t)ST_DTYPE_BF16, (uint32_t)bf->dtype);
+  TEST_ASSERT_TRUE(st_is_contiguous(bf));
+
+  FloatTensor *f = st_to_f32(bf);
+  TEST_ASSERT_NOT_NULL(f);
+  TEST_ASSERT_EQUAL_UINT32((uint32_t)ST_DTYPE_F32, (uint32_t)f->dtype);
+  TEST_ASSERT_TRUE(st_is_contiguous(f));
+
+  float expected[] = {1, 4, 2, 5, 3, 6};
+  for (size_t i = 0; i < 6; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(EPSILON, expected[i], f->values[i]);
+  }
+
+  st_destroy(f);
+  st_destroy(bf);
+  st_destroy(p);
+  st_destroy(t);
+}
+
 void test_st_create_with_data_without_ownership_should_not_take_free_responsibility(
     void) {
   size_t shape[2] = {2, 2};

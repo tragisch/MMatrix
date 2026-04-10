@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "st_buffer.h"
+#include "st_dtype.h"
 
 #define ST_MAX_DIMS 8
 
@@ -36,6 +37,7 @@ typedef struct FloatTensor {
   float *values;
   bool owns_data;
   StLayout layout;
+  StDtype dtype;     /* element type: ST_DTYPE_F32 (default) | ST_DTYPE_BF16 */
 
   /* ---- Buffer-backed storage (Phase 1) ---- */
   StBuffer *buf;                    // ref-counted backing storage
@@ -55,12 +57,21 @@ bool st_numel_from_shape(size_t ndim, const size_t *shape, size_t *out_numel);
 // Create contiguous tensor and zero-initialize memory.
 FloatTensor *st_create(size_t ndim, const size_t *shape);
 
+// Create contiguous bf16 tensor and zero-initialize memory (half the storage of f32).
+FloatTensor *st_create_bf16(size_t ndim, const size_t *shape);
+
 // Create tensor wrapper around existing data pointer (optional ownership transfer).
 FloatTensor *st_create_with_data(size_t ndim, const size_t *shape, float *data,
                                  size_t capacity, bool take_ownership);
 
-// Create deep copy of tensor in contiguous storage.
+// Create deep copy of tensor in contiguous storage (preserves dtype).
 FloatTensor *st_clone(const FloatTensor *src);
+
+// Convert tensor to f32 (returns new tensor; no-op clone if already f32).
+FloatTensor *st_to_f32(const FloatTensor *src);
+
+// Convert tensor to bf16 (returns new tensor; no-op clone if already bf16).
+FloatTensor *st_to_bf16(const FloatTensor *src);
 
 // Create tensor view with custom shape/strides and offset (view does not own data).
 FloatTensor *st_view(FloatTensor *base, size_t ndim, const size_t *shape,

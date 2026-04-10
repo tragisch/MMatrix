@@ -74,6 +74,44 @@ StBuffer *st_buffer_alloc_cpu(size_t num_floats) {
 /*  Metal allocation                                                   */
 /* ------------------------------------------------------------------ */
 
+StBuffer *st_buffer_alloc_bytes_cpu(size_t num_bytes) {
+  if (num_bytes == 0) {
+    log_error("Error: st_buffer_alloc_bytes_cpu zero size.");
+    return NULL;
+  }
+
+  StBuffer *buf = (StBuffer *)calloc(1, sizeof(StBuffer));
+  if (!buf) {
+    log_error("Error: st_buffer_alloc_bytes_cpu struct allocation failed.");
+    return NULL;
+  }
+
+  /* Round up to 64-byte alignment boundary. */
+  const size_t alloc_bytes = (num_bytes + 63u) & ~(size_t)63u;
+
+  void *raw = NULL;
+  if (posix_memalign(&raw, 64, alloc_bytes) != 0 || !raw) {
+    log_error("Error: st_buffer_alloc_bytes_cpu data allocation failed.");
+    free(buf);
+    return NULL;
+  }
+  memset(raw, 0, alloc_bytes);
+  buf->data = (float *)raw;
+
+  buf->type = ST_BUFFER_CPU;
+  buf->size_bytes = num_bytes;
+  buf->capacity = num_bytes / sizeof(float);
+  buf->refcount = 1;
+  buf->owns_data = true;
+  buf->_backend_handle = NULL;
+
+  return buf;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Metal allocation (float-based)                                     */
+/* ------------------------------------------------------------------ */
+
 StBuffer *st_buffer_alloc_metal(size_t num_floats) {
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
   StBuffer *buf = st_buffer_alloc_metal_impl(num_floats);
@@ -95,6 +133,11 @@ StBuffer *st_buffer_alloc(size_t num_floats) {
 #else
   return st_buffer_alloc_cpu(num_floats);
 #endif
+}
+
+StBuffer *st_buffer_alloc_bytes(size_t num_bytes) {
+  /* For now always CPU — Metal byte-based alloc can be added later. */
+  return st_buffer_alloc_bytes_cpu(num_bytes);
 }
 
 /* ------------------------------------------------------------------ */

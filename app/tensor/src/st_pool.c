@@ -9,6 +9,7 @@
 #include "st_pool.h"
 #include "st_backend.h"
 #include "st_buffer.h"
+#include "st_dtype.h"
 
 #include <log.h>
 #include <float.h>
@@ -119,6 +120,38 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
   if (indices && !st_pool_is_valid_4d(indices)) {
     log_error("Error: st_maxpool2d_nchw indices must be valid contiguous 4D.");
     return false;
+  }
+
+  /* ---- bf16 promotion: convert inputs to f32, compute, convert back ---- */
+  const bool need_bf16 =
+      (input->dtype == ST_DTYPE_BF16) ||
+      (output->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16) {
+    FloatTensor *in_f32 = (input->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(input)
+                              : (FloatTensor *)input;
+    FloatTensor *out_f32 = st_create(output->ndim, output->shape);
+    if (!in_f32 || !out_f32) {
+      if (in_f32 != input) st_destroy(in_f32);
+      st_destroy(out_f32);
+      log_error("Error: st_maxpool2d_nchw bf16 promotion allocation failed.");
+      return false;
+    }
+
+    bool ok = st_maxpool2d_nchw(in_f32, kernel_h, kernel_w, stride_h, stride_w,
+                                pad_h, pad_w, out_f32, indices);
+
+    if (ok && output->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(out_f32->values, (uint16_t *)output->values,
+                          output->numel);
+    } else if (ok) {
+      memcpy(output->values, out_f32->values, output->numel * sizeof(float));
+    }
+
+    if (in_f32 != input) st_destroy(in_f32);
+    st_destroy(out_f32);
+    return ok;
   }
 
   const size_t n = input->shape[0];
@@ -252,6 +285,38 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     return false;
   }
 
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16 =
+      (input->dtype == ST_DTYPE_BF16) ||
+      (output->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16) {
+    FloatTensor *in_f32 = (input->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(input)
+                              : (FloatTensor *)input;
+    FloatTensor *out_f32 = st_create(output->ndim, output->shape);
+    if (!in_f32 || !out_f32) {
+      if (in_f32 != input) st_destroy(in_f32);
+      st_destroy(out_f32);
+      log_error("Error: st_avgpool2d_nchw bf16 promotion allocation failed.");
+      return false;
+    }
+
+    bool ok = st_avgpool2d_nchw(in_f32, kernel_h, kernel_w, stride_h, stride_w,
+                                pad_h, pad_w, out_f32);
+
+    if (ok && output->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(out_f32->values, (uint16_t *)output->values,
+                          output->numel);
+    } else if (ok) {
+      memcpy(output->values, out_f32->values, output->numel * sizeof(float));
+    }
+
+    if (in_f32 != input) st_destroy(in_f32);
+    st_destroy(out_f32);
+    return ok;
+  }
+
   const size_t n = input->shape[0];
   const size_t c = input->shape[1];
   const size_t h = input->shape[2];
@@ -364,6 +429,41 @@ bool st_maxpool2d_backward_nchw(const FloatTensor *grad_output,
     return false;
   }
 
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16 =
+      (grad_output->dtype == ST_DTYPE_BF16) ||
+      (grad_input->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16) {
+    FloatTensor *go_f32 = (grad_output->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(grad_output)
+                              : (FloatTensor *)grad_output;
+    FloatTensor *gi_f32 = st_create(grad_input->ndim, grad_input->shape);
+    if (!go_f32 || !gi_f32) {
+      if (go_f32 != grad_output) st_destroy(go_f32);
+      st_destroy(gi_f32);
+      log_error(
+          "Error: st_maxpool2d_backward_nchw bf16 promotion allocation "
+          "failed.");
+      return false;
+    }
+
+    bool ok = st_maxpool2d_backward_nchw(go_f32, indices, input_h, input_w,
+                                         gi_f32);
+
+    if (ok && grad_input->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(gi_f32->values, (uint16_t *)grad_input->values,
+                          grad_input->numel);
+    } else if (ok) {
+      memcpy(grad_input->values, gi_f32->values,
+             grad_input->numel * sizeof(float));
+    }
+
+    if (go_f32 != grad_output) st_destroy(go_f32);
+    st_destroy(gi_f32);
+    return ok;
+  }
+
   const size_t n = grad_output->shape[0];
   const size_t c = grad_output->shape[1];
   const size_t out_h = grad_output->shape[2];
@@ -422,6 +522,41 @@ bool st_avgpool2d_backward_nchw(const FloatTensor *grad_output,
         "Error: st_avgpool2d_backward_nchw expects valid contiguous 4D "
         "tensors.");
     return false;
+  }
+
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16_promotion =
+      (grad_output->dtype == ST_DTYPE_BF16) ||
+      (grad_input->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16_promotion) {
+    FloatTensor *go_f32 = (grad_output->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(grad_output)
+                              : (FloatTensor *)grad_output;
+    FloatTensor *gi_f32 = st_create(grad_input->ndim, grad_input->shape);
+    if (!go_f32 || !gi_f32) {
+      if (go_f32 != grad_output) st_destroy(go_f32);
+      st_destroy(gi_f32);
+      log_error(
+          "Error: st_avgpool2d_backward_nchw bf16 promotion allocation "
+          "failed.");
+      return false;
+    }
+
+    bool ok = st_avgpool2d_backward_nchw(go_f32, kernel_h, kernel_w, stride_h,
+                                         stride_w, pad_h, pad_w, gi_f32);
+
+    if (ok && grad_input->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(gi_f32->values, (uint16_t *)grad_input->values,
+                          grad_input->numel);
+    } else if (ok) {
+      memcpy(grad_input->values, gi_f32->values,
+             grad_input->numel * sizeof(float));
+    }
+
+    if (go_f32 != grad_output) st_destroy(go_f32);
+    st_destroy(gi_f32);
+    return ok;
   }
 
   const size_t n = grad_output->shape[0];
@@ -494,6 +629,39 @@ bool st_global_avgpool2d_nchw(const FloatTensor *input, FloatTensor *output) {
     return false;
   }
 
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16_promotion =
+      (input->dtype == ST_DTYPE_BF16) ||
+      (output->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16_promotion) {
+    FloatTensor *in_f32 = (input->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(input)
+                              : (FloatTensor *)input;
+    FloatTensor *out_f32 = st_create(output->ndim, output->shape);
+    if (!in_f32 || !out_f32) {
+      if (in_f32 != input) st_destroy(in_f32);
+      st_destroy(out_f32);
+      log_error(
+          "Error: st_global_avgpool2d_nchw bf16 promotion allocation "
+          "failed.");
+      return false;
+    }
+
+    bool ok = st_global_avgpool2d_nchw(in_f32, out_f32);
+
+    if (ok && output->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(out_f32->values, (uint16_t *)output->values,
+                          output->numel);
+    } else if (ok) {
+      memcpy(output->values, out_f32->values, output->numel * sizeof(float));
+    }
+
+    if (in_f32 != input) st_destroy(in_f32);
+    st_destroy(out_f32);
+    return ok;
+  }
+
   const size_t n = input->shape[0];
   const size_t c = input->shape[1];
   const size_t h = input->shape[2];
@@ -536,6 +704,40 @@ bool st_global_avgpool2d_backward_nchw(const FloatTensor *grad_output,
         "Error: st_global_avgpool2d_backward_nchw expects valid contiguous 4D "
         "tensors.");
     return false;
+  }
+
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16_promotion =
+      (grad_output->dtype == ST_DTYPE_BF16) ||
+      (grad_input->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16_promotion) {
+    FloatTensor *go_f32 = (grad_output->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(grad_output)
+                              : (FloatTensor *)grad_output;
+    FloatTensor *gi_f32 = st_create(grad_input->ndim, grad_input->shape);
+    if (!go_f32 || !gi_f32) {
+      if (go_f32 != grad_output) st_destroy(go_f32);
+      st_destroy(gi_f32);
+      log_error(
+          "Error: st_global_avgpool2d_backward_nchw bf16 promotion allocation "
+          "failed.");
+      return false;
+    }
+
+    bool ok = st_global_avgpool2d_backward_nchw(go_f32, gi_f32);
+
+    if (ok && grad_input->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(gi_f32->values, (uint16_t *)grad_input->values,
+                          grad_input->numel);
+    } else if (ok) {
+      memcpy(grad_input->values, gi_f32->values,
+             grad_input->numel * sizeof(float));
+    }
+
+    if (go_f32 != grad_output) st_destroy(go_f32);
+    st_destroy(gi_f32);
+    return ok;
   }
 
   const size_t n = grad_input->shape[0];

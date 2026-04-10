@@ -74,6 +74,11 @@ typedef struct StBuffer {
 /// Allocate a CPU buffer of at least `num_floats` elements (zero-filled).
 StBuffer *st_buffer_alloc_cpu(size_t num_floats);
 
+/// Allocate a CPU buffer of at least `num_bytes` bytes (zero-filled).
+/// For dtype-flexible storage (e.g., bf16 tensors where element size != 4).
+/// capacity is set to num_bytes / sizeof(float) (truncated).
+StBuffer *st_buffer_alloc_bytes_cpu(size_t num_bytes);
+
 /// Allocate a Metal shared-memory buffer of at least `num_floats` elements.
 /// Falls back to CPU allocation if Metal is unavailable.
 /// Returns NULL on failure.
@@ -82,6 +87,10 @@ StBuffer *st_buffer_alloc_metal(size_t num_floats);
 /// Allocate best available buffer type for the current platform.
 /// Apple Silicon → Metal; everything else → CPU.
 StBuffer *st_buffer_alloc(size_t num_floats);
+
+/// Allocate best available buffer type, sized in raw bytes.
+/// For dtype-flexible storage (e.g., bf16 tensors).
+StBuffer *st_buffer_alloc_bytes(size_t num_bytes);
 
 /// Wrap an existing CPU pointer.  If `take_ownership` is true the buffer
 /// will free(data) on release; otherwise the caller keeps ownership.

@@ -8,6 +8,7 @@
 
 #include "st_conv.h"
 #include "st_backend.h"
+#include "st_dtype.h"
 #include "st_workspace.h"
 #include "sm.h"
 
@@ -707,6 +708,60 @@ bool st_conv2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
 bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
                     const FloatTensor *bias, const StConv2dParams *params,
                     FloatTensor *output) {
+  if (!input || !weight || !params || !output) {
+    log_error("Error: st_conv2d_nchw received NULL required argument.");
+    return false;
+  }
+
+  /* ---- bf16 promotion: convert inputs to f32, compute, convert back ---- */
+  const bool need_bf16 =
+      (input && input->dtype == ST_DTYPE_BF16) ||
+      (weight && weight->dtype == ST_DTYPE_BF16) ||
+      (bias && bias->dtype == ST_DTYPE_BF16) ||
+      (output && output->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16) {
+    FloatTensor *in_f32 = (input->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(input)
+                              : (FloatTensor *)input;
+    FloatTensor *w_f32 = (weight->dtype == ST_DTYPE_BF16)
+                             ? st_to_f32(weight)
+                             : (FloatTensor *)weight;
+    FloatTensor *b_f32 = NULL;
+    if (bias) {
+      b_f32 = (bias->dtype == ST_DTYPE_BF16) ? st_to_f32(bias)
+                                              : (FloatTensor *)bias;
+    }
+
+    /* Allocate f32 output for computation. */
+    FloatTensor *out_f32 = st_create(output->ndim, output->shape);
+    if (!in_f32 || !w_f32 || !out_f32 || (bias && !b_f32)) {
+      if (in_f32 != input) st_destroy(in_f32);
+      if (w_f32 != weight) st_destroy(w_f32);
+      if (b_f32 && b_f32 != bias) st_destroy(b_f32);
+      st_destroy(out_f32);
+      log_error("Error: st_conv2d_nchw bf16 promotion allocation failed.");
+      return false;
+    }
+
+    bool ok = st_conv2d_nchw(in_f32, w_f32, b_f32, params, out_f32);
+
+    /* Convert result back to bf16 if output is bf16. */
+    if (ok && output->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(out_f32->values, (uint16_t *)output->values,
+                          output->numel);
+    } else if (ok) {
+      memcpy(output->values, out_f32->values,
+             output->numel * sizeof(float));
+    }
+
+    if (in_f32 != input) st_destroy(in_f32);
+    if (w_f32 != weight) st_destroy(w_f32);
+    if (b_f32 && b_f32 != bias) st_destroy(b_f32);
+    st_destroy(out_f32);
+    return ok;
+  }
+
   StConv2dParams local = st_conv2d_default_params();
   if (params) {
     local = *params;
@@ -1275,6 +1330,43 @@ bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
                                   const FloatTensor *weight,
                                   const StConv2dParams *params,
                                   FloatTensor *grad_input) {
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16 =
+      (grad_output && grad_output->dtype == ST_DTYPE_BF16) ||
+      (weight && weight->dtype == ST_DTYPE_BF16) ||
+      (grad_input && grad_input->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16) {
+    FloatTensor *go_f32 = (grad_output->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(grad_output)
+                              : (FloatTensor *)grad_output;
+    FloatTensor *w_f32 = (weight->dtype == ST_DTYPE_BF16)
+                             ? st_to_f32(weight)
+                             : (FloatTensor *)weight;
+    FloatTensor *gi_f32 = st_create(grad_input->ndim, grad_input->shape);
+    if (!go_f32 || !w_f32 || !gi_f32) {
+      if (go_f32 != grad_output) st_destroy(go_f32);
+      if (w_f32 != weight) st_destroy(w_f32);
+      st_destroy(gi_f32);
+      return false;
+    }
+
+    bool ok = st_conv2d_backward_data_nchw(go_f32, w_f32, params, gi_f32);
+
+    if (ok && grad_input->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(gi_f32->values, (uint16_t *)grad_input->values,
+                          grad_input->numel);
+    } else if (ok) {
+      memcpy(grad_input->values, gi_f32->values,
+             grad_input->numel * sizeof(float));
+    }
+
+    if (go_f32 != grad_output) st_destroy(go_f32);
+    if (w_f32 != weight) st_destroy(w_f32);
+    st_destroy(gi_f32);
+    return ok;
+  }
+
   if (!st_conv2d_is_valid_tensor(grad_output, 4) ||
       !st_conv2d_is_valid_tensor(weight, 4) ||
       !st_conv2d_is_valid_tensor(grad_input, 4)) {
@@ -1475,6 +1567,43 @@ bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
                                     const FloatTensor *grad_output,
                                     const StConv2dParams *params,
                                     FloatTensor *grad_weight) {
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16 =
+      (input && input->dtype == ST_DTYPE_BF16) ||
+      (grad_output && grad_output->dtype == ST_DTYPE_BF16) ||
+      (grad_weight && grad_weight->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16) {
+    FloatTensor *in_f32 = (input->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(input)
+                              : (FloatTensor *)input;
+    FloatTensor *go_f32 = (grad_output->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(grad_output)
+                              : (FloatTensor *)grad_output;
+    FloatTensor *gw_f32 = st_create(grad_weight->ndim, grad_weight->shape);
+    if (!in_f32 || !go_f32 || !gw_f32) {
+      if (in_f32 != input) st_destroy(in_f32);
+      if (go_f32 != grad_output) st_destroy(go_f32);
+      st_destroy(gw_f32);
+      return false;
+    }
+
+    bool ok = st_conv2d_backward_weight_nchw(in_f32, go_f32, params, gw_f32);
+
+    if (ok && grad_weight->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(gw_f32->values, (uint16_t *)grad_weight->values,
+                          grad_weight->numel);
+    } else if (ok) {
+      memcpy(grad_weight->values, gw_f32->values,
+             grad_weight->numel * sizeof(float));
+    }
+
+    if (in_f32 != input) st_destroy(in_f32);
+    if (go_f32 != grad_output) st_destroy(go_f32);
+    st_destroy(gw_f32);
+    return ok;
+  }
+
   if (!st_conv2d_is_valid_tensor(input, 4) ||
       !st_conv2d_is_valid_tensor(grad_output, 4) ||
       !st_conv2d_is_valid_tensor(grad_weight, 4)) {
@@ -1533,6 +1662,37 @@ bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
 
 bool st_conv2d_backward_bias(const FloatTensor *grad_output,
                              FloatTensor *grad_bias) {
+  /* ---- bf16 promotion ---- */
+  const bool need_bf16 =
+      (grad_output && grad_output->dtype == ST_DTYPE_BF16) ||
+      (grad_bias && grad_bias->dtype == ST_DTYPE_BF16);
+
+  if (need_bf16) {
+    FloatTensor *go_f32 = (grad_output->dtype == ST_DTYPE_BF16)
+                              ? st_to_f32(grad_output)
+                              : (FloatTensor *)grad_output;
+    FloatTensor *gb_f32 = st_create(grad_bias->ndim, grad_bias->shape);
+    if (!go_f32 || !gb_f32) {
+      if (go_f32 != grad_output) st_destroy(go_f32);
+      st_destroy(gb_f32);
+      return false;
+    }
+
+    bool ok = st_conv2d_backward_bias(go_f32, gb_f32);
+
+    if (ok && grad_bias->dtype == ST_DTYPE_BF16) {
+      st_f32_to_bf16_bulk(gb_f32->values, (uint16_t *)grad_bias->values,
+                          grad_bias->numel);
+    } else if (ok) {
+      memcpy(grad_bias->values, gb_f32->values,
+             grad_bias->numel * sizeof(float));
+    }
+
+    if (go_f32 != grad_output) st_destroy(go_f32);
+    st_destroy(gb_f32);
+    return ok;
+  }
+
   if (!st_conv2d_is_valid_tensor(grad_output, 4)) {
     log_error("Error: st_conv2d_backward_bias expects valid 4D grad_output.");
     return false;

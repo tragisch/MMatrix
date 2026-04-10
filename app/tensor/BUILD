@@ -153,6 +153,7 @@ cc_library(
         "src/st_batchnorm.c",
         "src/st_buffer.c",
         "src/st_conv.c",
+        "src/st_dtype.c",
         "src/st_pool.c",
         "src/st_workspace.c",
     ],
@@ -162,6 +163,7 @@ cc_library(
         "include/st_batchnorm.h",
         "include/st_buffer.h",
         "include/st_conv.h",
+        "include/st_dtype.h",
         "include/st_pool.h",
         "include/st_workspace.h",
     ],
@@ -289,6 +291,14 @@ unity_test(
 unity_test(
     name = "test_st_workspace",
     srcs = ["tests/test_st_workspace.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [":st"],
+)
+
+unity_test(
+    name = "test_st_dtype",
+    srcs = ["tests/test_st_dtype.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = [":st"],

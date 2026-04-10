@@ -169,6 +169,52 @@ void test_st_conv2d_nchw_reference_with_bias(void) {
   st_destroy(bias);
 }
 
+void test_st_conv2d_nchw_should_promote_bf16_bias_for_f32_compute(void) {
+  FloatTensor *input = create_tensor_4d(1, 1, 3, 3);
+  FloatTensor *weight = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *output = create_tensor_4d(1, 1, 2, 2);
+  size_t bias_shape[1] = {1};
+  FloatTensor *bias = st_create_bf16(1, bias_shape);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(output);
+  TEST_ASSERT_NOT_NULL(bias);
+
+  float in_vals[] = {
+      1.0f, 2.0f, 3.0f,
+      4.0f, 5.0f, 6.0f,
+      7.0f, 8.0f, 9.0f,
+  };
+  float k_vals[] = {
+      1.0f, 0.0f,
+      0.0f, -1.0f,
+  };
+
+  for (size_t i = 0; i < 9; ++i) {
+    input->values[i] = in_vals[i];
+  }
+  for (size_t i = 0; i < 4; ++i) {
+    weight->values[i] = k_vals[i];
+  }
+  TEST_ASSERT_TRUE(st_set(bias, (size_t[]){0}, 1.0f));
+
+  StConv2dParams p = st_conv2d_default_params();
+  p.backend = ST_CONV_BACKEND_REFERENCE;
+
+  bool ok = st_conv2d_nchw(input, weight, bias, &p, output);
+  TEST_ASSERT_TRUE(ok);
+
+  for (size_t i = 0; i < 4; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, -3.0f, output->values[i]);
+  }
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(output);
+  st_destroy(bias);
+}
+
 void test_st_conv2d_nchw_should_fail_on_shape_mismatch(void) {
   FloatTensor *input = create_tensor_4d(1, 1, 3, 3);
   FloatTensor *weight = create_tensor_4d(2, 1, 2, 2);
