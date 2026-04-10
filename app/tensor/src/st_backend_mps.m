@@ -113,9 +113,6 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   const size_t c_out = weight->shape[0];
   const size_t k_h   = weight->shape[2];
   const size_t k_w   = weight->shape[3];
-  const size_t h_out = output->shape[2];
-  const size_t w_out = output->shape[3];
-
   @autoreleasepool {
 
   id<MTLDevice> device = _st_be_mps_device();

@@ -11,7 +11,16 @@
 #include <log.h>
 #include <math.h>
 #include <omp.h>
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wimplicit-int-conversion"
+#pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#endif
 #include <pcg_variants.h>
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include <stdint.h>
 
 #define INIT_CAPACITY 100

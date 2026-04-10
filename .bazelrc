@@ -22,6 +22,7 @@ common --registry=https://bcr.bazel.build
 # Enable local caching
 build --disk_cache=.cache/bazel_cache
 build --workspace_status_command=tools/workspace_status.sh
+build --per_file_copt=external/openmp\\+/runtime/src/.*@-Wno-unused-function
 
 ###############################
 # Debug & Analyze             #

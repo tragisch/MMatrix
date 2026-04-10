@@ -69,6 +69,7 @@ default_copts = [
     "-Wpedantic",
     "-Wconversion",
     "-Wsign-conversion",
+    "-Wno-c23-extensions",
 ]
 
 perf_copts = select({
