@@ -6,7 +6,10 @@ common --curses=yes
 common --enable_platform_specific_config
 
 # registries:
-common --registry=https://raw.githubusercontent.com/tragisch/bazel-registry/main
+# Verwende lokal den verifizierten Bazel-Registry-Checkout. Die frühere
+# Raw-GitHub-URL lieferte für openmp@22.1.1 einen abweichenden source.json-Hash
+# und blockierte dadurch reguläre Testläufe.
+common --registry=file:///Users/uwe/Documents/Programmierung/Bazel-Registry
 common --registry=https://bcr.bazel.build
 
 ###############################

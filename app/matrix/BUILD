@@ -200,7 +200,7 @@ cc_library(
         ":dm",
         ":dms",
         ":sm",
-        ":st",
+        "//app/tensor:st",
     ],
 )
 
@@ -233,33 +233,6 @@ cc_library(
     }),
 )
 
-cc_library(
-    name = "st",
-    srcs = [
-        "src/st.c",
-        "src/st_batchnorm.c",
-        "src/st_conv.c",
-        "src/st_pool.c",
-    ],
-    hdrs = [
-        "include/st.h",
-        "include/st_batchnorm.h",
-        "include/st_conv.h",
-        "include/st_pool.h",
-    ],
-    copts = default_copts + perf_copts + package_copts + openmp_copts,
-    includes = ["include"],
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
-    visibility = ["//visibility:public"],
-    deps = default_deps + [":sm"] + select({
-        ":backend_accelerate": [
-            ":sm_mps_objc",
-            ":st_mps_objc",
-        ],
-        "//conditions:default": [],
-    }),
-)
-
 objc_library(
     name = "sm_mps_objc",
     srcs = ["src/sm_mps.m"],
@@ -273,22 +246,7 @@ objc_library(
         ":backend_accelerate": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
-)
-
-objc_library(
-    name = "st_mps_objc",
-    srcs = ["src/st_mps.m"],
-    hdrs = ["src/st_mps.h"],
-    copts = [
-        "-ObjC",
-        "-fobjc-arc",
-    ],
-    includes = ["src"],
-    target_compatible_with = select({
-        ":backend_accelerate": ["@platforms//os:macos"],
-        "//conditions:default": ["@platforms//:incompatible"],
-    }),
-    deps = [":sm_mps_objc"],
+    visibility = ["//app/tensor:__pkg__"],
 )
 
 cc_library(
@@ -325,70 +283,6 @@ unity_test(
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix:sm"],
-)
-
-unity_test(
-    name = "test_st",
-    srcs = ["tests/test_st.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
-)
-
-unity_test(
-    name = "test_st_conv",
-    srcs = ["tests/test_st_conv.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
-)
-
-unity_test(
-    name = "test_st_conv_backward",
-    srcs = ["tests/test_st_conv_backward.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
-)
-
-unity_test(
-    name = "test_st_pool",
-    srcs = ["tests/test_st_pool.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
-)
-
-unity_test(
-    name = "test_st_ops",
-    srcs = ["tests/test_st_ops.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
-)
-
-unity_test(
-    name = "test_st_batchnorm",
-    srcs = ["tests/test_st_batchnorm.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
-)
-
-unity_test(
-    name = "test_st_conv_backward_gemm",
-    srcs = ["tests/test_st_conv_backward_gemm.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
-)
-
-unity_test(
-    name = "test_st_batchnorm_relu",
-    srcs = ["tests/test_st_batchnorm_relu.c"],
-    my_config = ["tests/my_config.yml"],
-    tags = ["smoke"],
-    deps = ["@//app/matrix:st"],
 )
 
 unity_test(

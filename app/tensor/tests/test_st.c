@@ -211,8 +211,8 @@ void test_st_permute_view_should_swap_dimensions_without_copy(void) {
   TEST_ASSERT_EQUAL_UINT32(3u, (uint32_t)p->shape[0]);
   TEST_ASSERT_EQUAL_UINT32(2u, (uint32_t)p->shape[1]);
 
-  size_t i01[2] = {0, 1};  // old(1,0)
-  size_t i21[2] = {2, 1};  // old(1,2)
+  size_t i01[2] = {0, 1};
+  size_t i21[2] = {2, 1};
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 4.0f, st_get(p, i01));
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 6.0f, st_get(p, i21));
 

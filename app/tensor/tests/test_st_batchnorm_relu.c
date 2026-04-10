@@ -69,15 +69,12 @@ static FloatTensor *create_1d(size_t len) {
   return st_create(1, shape);
 }
 
-/* Fill tensor with pseudo-random values in [-1, 1]. */
 static void fill_rand(FloatTensor *t, unsigned int seed) {
   for (size_t i = 0; i < t->numel; ++i) {
     seed = seed * 1103515245u + 12345u;
     t->values[i] = ((float)(seed >> 16) / 32768.0f) - 1.0f;
   }
 }
-
-/* ---- Fused BN+ReLU forward matches separate BN then ReLU ---- */
 
 void test_fused_bn_relu_forward_matches_separate(void) {
   FloatTensor *input = create_4d(2, 3, 4, 4);
@@ -95,7 +92,6 @@ void test_fused_bn_relu_forward_matches_separate(void) {
 
   const float eps = 1e-5f;
 
-  /* Separate: BN then ReLU */
   FloatTensor *output_sep = create_4d(2, 3, 4, 4);
   FloatTensor *mean_sep = create_1d(3);
   FloatTensor *var_sep = create_1d(3);
@@ -109,7 +105,6 @@ void test_fused_bn_relu_forward_matches_separate(void) {
   ok = st_apply_relu(output_sep);
   TEST_ASSERT_TRUE(ok);
 
-  /* Fused */
   FloatTensor *output_fused = create_4d(2, 3, 4, 4);
   FloatTensor *mean_fused = create_1d(3);
   FloatTensor *var_fused = create_1d(3);
@@ -121,13 +116,11 @@ void test_fused_bn_relu_forward_matches_separate(void) {
                                    mean_fused, var_fused);
   TEST_ASSERT_TRUE(ok);
 
-  /* Compare outputs */
   for (size_t i = 0; i < output_sep->numel; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, output_sep->values[i],
                              output_fused->values[i]);
   }
 
-  /* Compare mean/var */
   for (size_t i = 0; i < 3; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, mean_sep->values[i],
                              mean_fused->values[i]);
@@ -145,8 +138,6 @@ void test_fused_bn_relu_forward_matches_separate(void) {
   st_destroy(gamma);
   st_destroy(input);
 }
-
-/* ---- Fused BN+ReLU forward with NULL gamma/beta ---- */
 
 void test_fused_bn_relu_forward_null_gamma_beta(void) {
   FloatTensor *input = create_4d(1, 2, 3, 3);
@@ -189,11 +180,7 @@ void test_fused_bn_relu_forward_null_gamma_beta(void) {
   st_destroy(input);
 }
 
-/* ---- Fused BN+ReLU forward: all negatives after BN should be zero ---- */
-
 void test_fused_bn_relu_forward_all_negative_clipped(void) {
-  /* Create input where after BN all values should be negative. 
-   * Set beta to a large negative value. */
   FloatTensor *input = create_4d(1, 1, 2, 2);
   FloatTensor *gamma = create_1d(1);
   FloatTensor *beta = create_1d(1);
@@ -201,7 +188,6 @@ void test_fused_bn_relu_forward_all_negative_clipped(void) {
   TEST_ASSERT_NOT_NULL(gamma);
   TEST_ASSERT_NOT_NULL(beta);
 
-  /* All same value → zero variance → normalized to 0; beta=-10 makes it all <0 */
   for (size_t i = 0; i < 4; ++i) input->values[i] = 5.0f;
   gamma->values[0] = 1.0f;
   beta->values[0] = -10.0f;
@@ -227,8 +213,6 @@ void test_fused_bn_relu_forward_all_negative_clipped(void) {
   st_destroy(input);
 }
 
-/* ---- Fused BN+ReLU backward matches separate ReLU-backward + BN-backward ---- */
-
 void test_fused_bn_relu_backward_matches_separate(void) {
   FloatTensor *input = create_4d(2, 3, 4, 4);
   FloatTensor *gamma = create_1d(3);
@@ -245,7 +229,6 @@ void test_fused_bn_relu_backward_matches_separate(void) {
 
   const float eps = 1e-5f;
 
-  /* Fused forward */
   FloatTensor *bn_output = create_4d(2, 3, 4, 4);
   FloatTensor *mean = create_1d(3);
   FloatTensor *var = create_1d(3);
@@ -257,12 +240,10 @@ void test_fused_bn_relu_backward_matches_separate(void) {
                                         mean, var);
   TEST_ASSERT_TRUE(ok);
 
-  /* grad_output */
   FloatTensor *grad_output = create_4d(2, 3, 4, 4);
   TEST_ASSERT_NOT_NULL(grad_output);
   fill_rand(grad_output, 77);
 
-  /* Fused backward */
   FloatTensor *grad_input_fused = create_4d(2, 3, 4, 4);
   FloatTensor *grad_gamma_fused = create_1d(3);
   FloatTensor *grad_beta_fused = create_1d(3);
@@ -275,7 +256,6 @@ void test_fused_bn_relu_backward_matches_separate(void) {
                                     grad_gamma_fused, grad_beta_fused);
   TEST_ASSERT_TRUE(ok);
 
-  /* Separate backward: manually apply ReLU mask to grad_output, then BN backward */
   FloatTensor *grad_output_masked = create_4d(2, 3, 4, 4);
   TEST_ASSERT_NOT_NULL(grad_output_masked);
   for (size_t i = 0; i < grad_output->numel; ++i) {
@@ -295,13 +275,11 @@ void test_fused_bn_relu_backward_matches_separate(void) {
                                grad_beta_sep);
   TEST_ASSERT_TRUE(ok);
 
-  /* Compare grad_input */
   for (size_t i = 0; i < grad_input_fused->numel; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, grad_input_sep->values[i],
                              grad_input_fused->values[i]);
   }
 
-  /* Compare grad_gamma and grad_beta */
   for (size_t i = 0; i < 3; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, grad_gamma_sep->values[i],
                              grad_gamma_fused->values[i]);
@@ -324,8 +302,6 @@ void test_fused_bn_relu_backward_matches_separate(void) {
   st_destroy(gamma);
   st_destroy(input);
 }
-
-/* ---- Fused BN+ReLU backward with NULL grad_gamma/grad_beta ---- */
 
 void test_fused_bn_relu_backward_null_grads(void) {
   FloatTensor *input = create_4d(1, 2, 3, 3);
@@ -356,12 +332,10 @@ void test_fused_bn_relu_backward_null_grads(void) {
   FloatTensor *grad_input = create_4d(1, 2, 3, 3);
   TEST_ASSERT_NOT_NULL(grad_input);
 
-  /* Should work with NULL grad_gamma and grad_beta */
   ok = st_batchnorm2d_backward_relu(grad_output, input, bn_output, mean, var,
                                     gamma, eps, grad_input, NULL, NULL);
   TEST_ASSERT_TRUE(ok);
 
-  /* Just check it didn't crash and grad_input has reasonable values */
   bool has_nonzero = false;
   for (size_t i = 0; i < grad_input->numel; ++i) {
     if (grad_input->values[i] != 0.0f) {

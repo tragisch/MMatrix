@@ -94,14 +94,12 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
   }
 
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
-  /* MPS dispatch for large tensors (indices not supported on MPS path). */
   if (!indices && sm_get_backend() == SM_BACKEND_MPS &&
       input->numel >= ST_POOL_MPS_THRESHOLD) {
     bool ok = st_maxpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
                                stride_h, stride_w, pad_h, pad_w,
                                output->values, oh, ow);
     if (ok) return true;
-    /* Fallback to CPU on MPS failure. */
   }
 #endif
 
@@ -115,9 +113,6 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
 
     for (size_t ohi = 0; ohi < oh; ++ohi) {
 #ifdef __ARM_NEON
-      /* NEON-optimized path: process 4 output positions at a time when
-       * possible.  For no-padding (pad_h==0, pad_w==0) and kernel fully
-       * inside, we can safely vectorise the inner loop. */
       size_t owi = 0;
       if (pad_h == 0 && pad_w == 0 && ow >= 4 && stride_w == 1 &&
           !indices) {
@@ -127,13 +122,11 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
             const size_t ih_val = ohi * stride_h + kh;
             if (ih_val >= h) break;
             for (size_t kw = 0; kw < kernel_w; ++kw) {
-              /* Load 4 contiguous input elements */
               const size_t base_iw = owi * stride_w + kw;
               if (base_iw + 3 < w) {
                 float32x4_t vin = vld1q_f32(&in_plane[ih_val * w + base_iw]);
                 vmax = vmaxq_f32(vmax, vin);
               } else {
-                /* Scalar fallback near right edge */
                 float tmp[4];
                 for (int t = 0; t < 4; ++t) {
                   size_t iw_t = (owi + (size_t)t) * stride_w + kw;
@@ -148,7 +141,6 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
           vst1q_f32(&output->values[base_out], vmax);
         }
       }
-      /* Scalar remainder / fallback */
       for (; owi < ow; ++owi) {
 #else
       for (size_t owi = 0; owi < ow; ++owi) {
@@ -215,14 +207,12 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
   }
 
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
-  /* MPS dispatch for large tensors. */
   if (sm_get_backend() == SM_BACKEND_MPS &&
       input->numel >= ST_POOL_MPS_THRESHOLD) {
     bool ok = st_avgpool2d_mps(input->values, n, c, h, w, kernel_h, kernel_w,
                                stride_h, stride_w, pad_h, pad_w,
                                output->values, oh, ow);
     if (ok) return true;
-    /* Fallback to CPU on MPS failure. */
   }
 #endif
 
@@ -236,8 +226,6 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
 
     for (size_t ohi = 0; ohi < oh; ++ohi) {
 #ifdef __ARM_NEON
-      /* NEON-optimized path for avgpool: process 4 output positions when
-       * there is no padding and stride_w == 1. */
       size_t owi_avg = 0;
       if (pad_h == 0 && pad_w == 0 && ow >= 4 && stride_w == 1) {
         const float inv_count = 1.0f / (float)(kernel_h * kernel_w);
@@ -264,13 +252,11 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
             const size_t base_out = ((ni * c + ci) * oh + ohi) * ow + owi_avg;
             vst1q_f32(&output->values[base_out], vsum);
           } else {
-            /* Fallback to scalar for this batch of 4 */
-            owi_avg -= 0;  /* will be re-processed below */
+            owi_avg -= 0;
             break;
           }
         }
       }
-      /* Scalar remainder / fallback */
       for (size_t owi = owi_avg; owi < ow; ++owi) {
 #else
       for (size_t owi = 0; owi < ow; ++owi) {
@@ -330,7 +316,6 @@ bool st_maxpool2d_backward_nchw(const FloatTensor *grad_output,
     return false;
   }
 
-  /* Zero grad_input before accumulating. */
   memset(grad_input->values, 0, grad_input->numel * sizeof(float));
 
   const size_t spatial_in = input_h * input_w;
@@ -381,7 +366,6 @@ bool st_avgpool2d_backward_nchw(const FloatTensor *grad_output,
     return false;
   }
 
-  /* Zero grad_input before accumulating. */
   memset(grad_input->values, 0, grad_input->numel * sizeof(float));
 
   for (size_t ni = 0; ni < n; ++ni) {
@@ -390,7 +374,6 @@ bool st_avgpool2d_backward_nchw(const FloatTensor *grad_output,
 
       for (size_t ohi = 0; ohi < out_h; ++ohi) {
         for (size_t owi = 0; owi < out_w; ++owi) {
-          /* Count valid elements in this window (for correct average). */
           size_t count = 0;
           for (size_t kh = 0; kh < kernel_h; ++kh) {
             for (size_t kw = 0; kw < kernel_w; ++kw) {
@@ -412,7 +395,6 @@ bool st_avgpool2d_backward_nchw(const FloatTensor *grad_output,
           const float grad_val =
               grad_output->values[go_idx] / (float)count;
 
-          /* Distribute gradient equally to all contributing input positions. */
           for (size_t kh = 0; kh < kernel_h; ++kh) {
             for (size_t kw = 0; kw < kernel_w; ++kw) {
               const ptrdiff_t ih =

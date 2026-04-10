@@ -1049,34 +1049,8 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
   const size_t h = grad_input->shape[2];
   const size_t w = grad_input->shape[3];
 
-  /* Backward data = convolution of grad_output with rotated-180° weight
-   * (full convolution). For stride==1 no-dilation, we need to pad grad_output
-   * by (kernel-1) on each side, then convolve with rotated weight.
-   *
-   * Pad grad_output: [N, Cout, out_h+2, out_w+2] (padding by k-1 = 2 on each side)
-   * Rotated weight: weight[co, ci, kh, kw] → rot_w[ci, co, 2-kh, 2-kw]
-   * Then standard conv: rot_w convolved with padded_grad_output.
-   *
-   * For simplicity and correctness, use Winograd on this transposed conv.
-   * However, implementing full Winograd tiling with all edge cases is complex.
-   * We'll use a simplified approach: tile-based Winograd where possible,
-   * fallback to GEMM for edge tiles.
-   */
-
-  /* Since implementing full Winograd tiling with boundary handling is
-   * non-trivial and error-prone, we use the GEMM path which is already
-   * highly optimized with BLAS. The Winograd path will be dispatched
-   * only when the sizes are well-aligned. */
-
-  /* Pad grad_output by 2 on each side to get full convolution */
   const size_t pad_go_h = out_h + 4;
   const size_t pad_go_w = out_w + 4;
-
-  /* The output size of the full conv should be h × w */
-  /* full conv output = pad_go - kernel + 1 = (out_h + 4) - 3 + 1 = out_h + 2 */
-  /* For this to equal h, we need h = out_h + 2 which is true when
-   * stride==1, pad==0: out_h = h - 3 + 1 = h-2, so h = out_h + 2. ✓
-   * For pad_h != 0: out_h = h + 2*pad_h - 2, so h = out_h - 2*pad_h + 2. */
 
   const size_t expected_h = out_h + 2 - 2 * local->pad_h;
   const size_t expected_w = out_w + 2 - 2 * local->pad_w;
@@ -1085,15 +1059,12 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
     return false;  /* Dimensions don't match — fallback. */
   }
 
-  /* Tile dimensions: input tile 4×4, output tile 2×2 */
   const size_t tile_out = 2;
   const size_t tile_in = 4;
 
-  /* Number of tiles in each dimension (may need to handle remainder) */
   const size_t tiles_h = (h + tile_out - 1) / tile_out;
   const size_t tiles_w = (w + tile_out - 1) / tile_out;
 
-  /* Rotate weight 180°: w_rot[ci, co, kh, kw] = weight[co, ci, 2-kh, 2-kw] */
   float *w_rot = (float *)malloc(c_in * c_out * 9 * sizeof(float));
   if (!w_rot) {
     log_error("Error: st_conv2d_backward_data_winograd_3x3 allocation failed.");
@@ -1112,13 +1083,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
     }
   }
 
-  /* Transform all filters with G: Gw = G × g × G^T (for each ci,co pair)
-   * G is 4×3:
-   * [[1,    0,   0  ],
-   *  [0.5,  0.5, 0.5],
-   *  [0.5, -0.5, 0.5],
-   *  [0,    0,   1  ]]
-   */
   float *Gw = (float *)malloc(c_in * c_out * 16 * sizeof(float));
   if (!Gw) {
     free(w_rot);
@@ -1131,7 +1095,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
       const float *g = &w_rot[((ci * c_out + co) * 3) * 3];
       float tmp[4][3];
 
-      /* tmp = G × g  (4×3 × 3×3 → 4×3) */
       for (size_t j = 0; j < 3; ++j) {
         tmp[0][j] = g[0 * 3 + j];
         tmp[1][j] = 0.5f * (g[0 * 3 + j] + g[1 * 3 + j] + g[2 * 3 + j]);
@@ -1139,7 +1102,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
         tmp[3][j] = g[2 * 3 + j];
       }
 
-      /* Gw_tile = tmp × G^T  (4×3 × 3×4 → 4×4) */
       float *gw_tile = &Gw[(ci * c_out + co) * 16];
       for (size_t i = 0; i < 4; ++i) {
         gw_tile[i * 4 + 0] = tmp[i][0];
@@ -1154,7 +1116,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
 
   free(w_rot);
 
-  /* Pad grad_output by 2 on each side */
   float *padded_go = (float *)calloc(n * c_out * pad_go_h * pad_go_w,
                                      sizeof(float));
   if (!padded_go) {
@@ -1176,7 +1137,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
     }
   }
 
-  /* Process tiles */
 #pragma omp parallel for schedule(static) if (n > 1)
   for (size_t ni = 0; ni < n; ++ni) {
     for (size_t ci = 0; ci < c_in; ++ci) {
@@ -1184,10 +1144,9 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
 
       for (size_t th = 0; th < tiles_h; ++th) {
         for (size_t tw = 0; tw < tiles_w; ++tw) {
-          float out_tile[4] = {0};  /* 2×2 output */
+          float out_tile[4] = {0};
 
           for (size_t co = 0; co < c_out; ++co) {
-            /* Extract 4×4 input tile from padded grad_output */
             float d[4][4];
             const size_t base_h = th * tile_out;
             const size_t base_w = tw * tile_out;
@@ -1206,9 +1165,7 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
               }
             }
 
-            /* B^T × d × B  (input transform) */
             float BtdB[4][4];
-            /* First: B^T × d → tmp[4][4] */
             float tmp2[4][4];
             for (size_t j = 0; j < 4; ++j) {
               tmp2[0][j] = d[0][j] - d[2][j];
@@ -1216,7 +1173,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
               tmp2[2][j] = -d[1][j] + d[2][j];
               tmp2[3][j] = d[1][j] - d[3][j];
             }
-            /* tmp2 × B → BtdB[4][4] */
             for (size_t i = 0; i < 4; ++i) {
               BtdB[i][0] = tmp2[i][0] - tmp2[i][2];
               BtdB[i][1] = tmp2[i][1] + tmp2[i][2];
@@ -1224,7 +1180,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
               BtdB[i][3] = tmp2[i][1] - tmp2[i][3];
             }
 
-            /* Element-wise multiply with transformed filter */
             const float *gw_tile = &Gw[(ci * c_out + co) * 16];
             float M[4][4];
             for (size_t i = 0; i < 4; ++i) {
@@ -1233,22 +1188,17 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
               }
             }
 
-            /* A^T × M × A  (output transform, 2×4 × 4×4 × 4×2 → 2×2) */
-            /* A^T = [[1, 1, 1, 0],
-             *        [0, 1,-1, 1]] */
             float tmp3[2][4];
             for (size_t j = 0; j < 4; ++j) {
               tmp3[0][j] = M[0][j] + M[1][j] + M[2][j];
               tmp3[1][j] = M[1][j] - M[2][j] + M[3][j];
             }
-            /* tmp3 × A → 2×2 */
             out_tile[0] += tmp3[0][0] + tmp3[0][1] + tmp3[0][2];
             out_tile[1] += tmp3[0][1] - tmp3[0][2] + tmp3[0][3];
             out_tile[2] += tmp3[1][0] + tmp3[1][1] + tmp3[1][2];
             out_tile[3] += tmp3[1][1] - tmp3[1][2] + tmp3[1][3];
           }
 
-          /* Write output tile to grad_input */
           for (size_t i = 0; i < tile_out; ++i) {
             for (size_t j = 0; j < tile_out; ++j) {
               const size_t oh_pos = th * tile_out + i;
@@ -1313,10 +1263,8 @@ bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
     return false;
   }
 
-  /* Zero grad_input before accumulating. */
   memset(grad_input->values, 0, grad_input->numel * sizeof(float));
 
-  /* Try GEMM path for larger problems. */
   const double macs = (double)n * (double)c_out * (double)out_h *
                       (double)out_w * (double)c_in * (double)k_h * (double)k_w;
   if (macs >= 1.0e3 && local.backend != ST_CONV_BACKEND_REFERENCE) {
@@ -1325,16 +1273,10 @@ bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
     if (ok) {
       return true;
     }
-    /* Fallback to naive on GEMM failure. */
     memset(grad_input->values, 0, grad_input->numel * sizeof(float));
   }
 
-  /* TODO: Winograd F(2,3) is currently disabled pending correctness fixes.
-   * Once validated, re-enable with a high-MACs gate so GEMM is preferred
-   * for medium-sized problems.
-   */
 #if 0
-  /* Try Winograd F(2,3) path for 3×3 kernels with stride==1 and dilation==1. */
   if (k_h == 3 && k_w == 3 && local.stride_h == 1 && local.stride_w == 1 &&
       local.dilation_h == 1 && local.dilation_w == 1 &&
       local.backend != ST_CONV_BACKEND_REFERENCE) {
@@ -1343,7 +1285,6 @@ bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
     if (ok) {
       return true;
     }
-    /* Fallback on Winograd failure (e.g. dimension mismatch). */
     memset(grad_input->values, 0, grad_input->numel * sizeof(float));
   }
 #endif
@@ -1438,38 +1379,27 @@ static bool st_conv2d_backward_weight_gemm(const FloatTensor *input,
   const size_t out_spatial = out_h * out_w;
   const size_t patch_size = c_in * k_h * k_w;
 
-  /* col buffer: [out_spatial, patch_size] */
   float *col_buf = (float *)malloc(out_spatial * patch_size * sizeof(float));
   if (!col_buf) {
     log_error("Error: st_conv2d_backward_weight_gemm allocation failed.");
     return false;
   }
 
-  /* Temporary result matrix [c_out, patch_size] for accumulation per batch. */
   FloatMatrix *gw_mat = sm_create(c_out, patch_size);
   if (!gw_mat) {
     free(col_buf);
     return false;
   }
 
-  /* Zero grad_weight accumulator. */
   memset(grad_weight->values, 0, grad_weight->numel * sizeof(float));
 
   for (size_t ni = 0; ni < n; ++ni) {
-    /* im2col on input[ni] */
     const float *in_n = input->values + ni * c_in * h * w;
     st_im2col_for_backward(in_n, c_in, h, w, k_h, k_w, local->stride_h,
                            local->stride_w, local->pad_h, local->pad_w,
                            local->dilation_h, local->dilation_w, out_h, out_w,
                            col_buf);
 
-    /* grad_output_n: [c_out, out_spatial] (NCHW layout — c_out planes,
-     * each of size out_spatial).
-     * We want: gw += grad_output_n × col^T
-     *        [c_out, patch_size] = [c_out, out_spatial] × [out_spatial, patch_size]^T
-     * Actually col is [out_spatial, patch_size], so col^T is [patch_size, out_spatial].
-     * We need [c_out, patch_size] = go[c_out, out_spatial] × col[out_spatial, patch_size]
-     * That's just go × col with no transposes! */
     FloatMatrix go_mat = {
         .rows = c_out, .cols = out_spatial, .capacity = 0,
         .values = grad_output->values + ni * c_out * out_spatial};
@@ -1486,8 +1416,6 @@ static bool st_conv2d_backward_weight_gemm(const FloatTensor *input,
       return false;
     }
 
-    /* Accumulate into grad_weight: gw_mat is [c_out, patch_size] which maps to
-     * [c_out, c_in, k_h, k_w] directly (row-major). */
     for (size_t i = 0; i < c_out * patch_size; ++i) {
       grad_weight->values[i] += gw_mat->values[i];
     }
@@ -1525,8 +1453,8 @@ bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
 
   const size_t n = input->shape[0];
   const size_t c_in = input->shape[1];
-  (void)input->shape[2]; /* h — used only by sub-functions */
-  (void)input->shape[3]; /* w — used only by sub-functions */
+  (void)input->shape[2];
+  (void)input->shape[3];
 
   const size_t c_out = grad_output->shape[1];
   const size_t out_h = grad_output->shape[2];
@@ -1541,10 +1469,8 @@ bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
   const size_t k_h = grad_weight->shape[2];
   const size_t k_w = grad_weight->shape[3];
 
-  /* Zero grad_weight before accumulating. */
   memset(grad_weight->values, 0, grad_weight->numel * sizeof(float));
 
-  /* Try GEMM path for larger problems. */
   const double macs = (double)n * (double)c_out * (double)out_h *
                       (double)out_w * (double)c_in * (double)k_h * (double)k_w;
   if (macs >= 1.0e4 && local.backend != ST_CONV_BACKEND_REFERENCE) {
@@ -1553,7 +1479,6 @@ bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
     if (ok) {
       return true;
     }
-    /* Fallback to naive on GEMM failure. */
     memset(grad_weight->values, 0, grad_weight->numel * sizeof(float));
   }
 
@@ -1591,7 +1516,6 @@ bool st_conv2d_backward_bias(const FloatTensor *grad_output,
     return false;
   }
 
-  /* Summe über N, H, W für jeden Kanal. */
   memset(grad_bias->values, 0, c_out * sizeof(float));
 
   const size_t out_spatial = out_h * out_w;

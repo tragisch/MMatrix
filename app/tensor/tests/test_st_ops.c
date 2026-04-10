@@ -73,8 +73,6 @@
 void setUp(void) {}
 void tearDown(void) {}
 
-/* ---- st_inplace_add ---- */
-
 void test_st_inplace_add_should_add_elementwise(void) {
   size_t shape[2] = {2, 3};
   FloatTensor *a = st_create(2, shape);
@@ -111,8 +109,6 @@ void test_st_inplace_add_null_b_should_be_noop(void) {
   st_destroy(a);
 }
 
-/* ---- st_inplace_sub ---- */
-
 void test_st_inplace_sub_should_subtract_elementwise(void) {
   size_t shape[1] = {4};
   FloatTensor *a = st_create(1, shape);
@@ -136,8 +132,6 @@ void test_st_inplace_sub_should_subtract_elementwise(void) {
   st_destroy(a);
 }
 
-/* ---- st_inplace_scale ---- */
-
 void test_st_inplace_scale_should_multiply_all(void) {
   size_t shape[1] = {3};
   FloatTensor *t = st_create(1, shape);
@@ -156,8 +150,6 @@ void test_st_inplace_scale_should_multiply_all(void) {
 
   st_destroy(t);
 }
-
-/* ---- st_inplace_elementwise_multiply ---- */
 
 void test_st_inplace_elementwise_multiply_should_hadamard(void) {
   size_t shape[1] = {3};
@@ -181,8 +173,6 @@ void test_st_inplace_elementwise_multiply_should_hadamard(void) {
   st_destroy(b);
   st_destroy(a);
 }
-
-/* ---- st_fill ---- */
 
 void test_st_fill_should_set_all_elements(void) {
   size_t shape[2] = {3, 4};
@@ -217,8 +207,6 @@ void test_st_fill_zero_should_zero(void) {
   st_destroy(t);
 }
 
-/* ---- st_apply_relu ---- */
-
 void test_st_apply_relu_should_clamp_negatives(void) {
   size_t shape[1] = {5};
   FloatTensor *t = st_create(1, shape);
@@ -238,8 +226,6 @@ void test_st_apply_relu_should_clamp_negatives(void) {
 
   st_destroy(t);
 }
-
-/* ---- st_apply_relu_backward ---- */
 
 void test_st_apply_relu_backward_should_zero_where_inactive(void) {
   size_t shape[1] = {5};
@@ -266,15 +252,11 @@ void test_st_apply_relu_backward_should_zero_where_inactive(void) {
   st_destroy(activation);
 }
 
-/* ---- st_sum_axes ---- */
-
 void test_st_sum_axes_should_sum_over_single_axis(void) {
-  /* 2x3 tensor, sum over axis 0 → shape [3] */
   size_t shape[2] = {2, 3};
   FloatTensor *t = st_create(2, shape);
   TEST_ASSERT_NOT_NULL(t);
 
-  /* [[1,2,3],[4,5,6]] */
   float vals[] = {1, 2, 3, 4, 5, 6};
   memcpy(t->values, vals, sizeof(vals));
 
@@ -293,12 +275,10 @@ void test_st_sum_axes_should_sum_over_single_axis(void) {
 }
 
 void test_st_sum_axes_should_sum_over_multiple_axes(void) {
-  /* [2, 3, 4] tensor, sum over axes {0, 2} → shape [3] */
   size_t shape[3] = {2, 3, 4};
   FloatTensor *t = st_create(3, shape);
   TEST_ASSERT_NOT_NULL(t);
 
-  /* Fill with 1.0 */
   for (size_t i = 0; i < 24; ++i) {
     t->values[i] = 1.0f;
   }
@@ -309,7 +289,6 @@ void test_st_sum_axes_should_sum_over_multiple_axes(void) {
 
   TEST_ASSERT_EQUAL_UINT32(1u, (uint32_t)r->ndim);
   TEST_ASSERT_EQUAL_UINT32(3u, (uint32_t)r->shape[0]);
-  /* Each: 2 * 4 = 8 */
   for (size_t i = 0; i < 3; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, 8.0f, r->values[i]);
   }
@@ -319,12 +298,10 @@ void test_st_sum_axes_should_sum_over_multiple_axes(void) {
 }
 
 void test_st_sum_axes_nchw_bias_gradient(void) {
-  /* Sum over {0, 2, 3} of NCHW → [C] (bias gradient pattern). */
   size_t shape[4] = {2, 3, 2, 2};
   FloatTensor *t = st_create(4, shape);
   TEST_ASSERT_NOT_NULL(t);
 
-  /* Fill channel ci with value (ci+1). */
   for (size_t ni = 0; ni < 2; ++ni) {
     for (size_t ci = 0; ci < 3; ++ci) {
       for (size_t i = 0; i < 4; ++i) {
@@ -339,7 +316,6 @@ void test_st_sum_axes_nchw_bias_gradient(void) {
 
   TEST_ASSERT_EQUAL_UINT32(1u, (uint32_t)r->ndim);
   TEST_ASSERT_EQUAL_UINT32(3u, (uint32_t)r->shape[0]);
-  /* channel 0: 2*4*1=8, channel 1: 2*4*2=16, channel 2: 2*4*3=24. */
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 8.0f, r->values[0]);
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 16.0f, r->values[1]);
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 24.0f, r->values[2]);
@@ -347,8 +323,6 @@ void test_st_sum_axes_nchw_bias_gradient(void) {
   st_destroy(r);
   st_destroy(t);
 }
-
-/* ---- st_pad_nchw ---- */
 
 void test_st_pad_nchw_should_add_zeros(void) {
   size_t shape[4] = {1, 1, 2, 2};
@@ -364,17 +338,11 @@ void test_st_pad_nchw_should_add_zeros(void) {
   TEST_ASSERT_EQUAL_UINT32(4u, (uint32_t)p->shape[2]);
   TEST_ASSERT_EQUAL_UINT32(4u, (uint32_t)p->shape[3]);
 
-  /* Top-left corner should be 0. */
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, p->values[0]);
-  /* (1,1) should be 1.0 */
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 1.0f, p->values[5]);
-  /* (1,2) should be 2.0 */
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 2.0f, p->values[6]);
-  /* (2,1) should be 3.0 */
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 3.0f, p->values[9]);
-  /* (2,2) should be 4.0 */
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 4.0f, p->values[10]);
-  /* Bottom-right should be 0. */
   TEST_ASSERT_FLOAT_WITHIN(EPSILON, 0.0f, p->values[15]);
 
   st_destroy(p);
@@ -391,7 +359,7 @@ void test_st_pad_nchw_no_padding_should_clone(void) {
 
   FloatTensor *p = st_pad_nchw(t, 0, 0, 0.0f);
   TEST_ASSERT_NOT_NULL(p);
-  TEST_ASSERT_TRUE(p->values != t->values); /* deep copy */
+  TEST_ASSERT_TRUE(p->values != t->values);
 
   for (size_t i = 0; i < 4; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, t->values[i], p->values[i]);
@@ -400,5 +368,3 @@ void test_st_pad_nchw_no_padding_should_clone(void) {
   st_destroy(p);
   st_destroy(t);
 }
-
-
