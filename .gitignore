@@ -107,6 +107,7 @@ MODULE.bazel.lock
 /archive/*
 /.cache
 /.cache/*
+.github/copilot-instructions.md
 
 # legal reason to ignore:
 /third_party/hdf5/*
