@@ -7,6 +7,7 @@
  */
 
 #include "st_conv.h"
+#include "st_batchnorm.h"
 
 #define UNITY_INCLUDE_FLOAT
 #define UNITY_FLOAT_PRECISION 6
@@ -67,6 +68,11 @@ void tearDown(void) {}
 static FloatTensor *create_tensor_4d(size_t n, size_t c, size_t h, size_t w) {
   size_t shape[4] = {n, c, h, w};
   return st_create(4, shape);
+}
+
+static FloatTensor *create_tensor_1d(size_t n) {
+  size_t shape[1] = {n};
+  return st_create(1, shape);
 }
 
 void test_st_conv2d_output_hw_should_compute_expected_shape(void) {
@@ -557,6 +563,143 @@ void test_st_conv2d_cpu_opt_with_padding_should_match_reference(void) {
   st_destroy(weight);
   st_destroy(out_ref);
   st_destroy(out_opt);
+}
+
+void test_st_conv2d_batchnorm2d_forward_should_match_separate_ops(void) {
+  FloatTensor *input = create_tensor_4d(1, 2, 4, 4);
+  FloatTensor *weight = create_tensor_4d(2, 2, 3, 3);
+  FloatTensor *bias = create_tensor_1d(2);
+  FloatTensor *gamma = create_tensor_1d(2);
+  FloatTensor *beta = create_tensor_1d(2);
+  FloatTensor *fused_out = create_tensor_4d(1, 2, 2, 2);
+  FloatTensor *fused_mean = create_tensor_1d(2);
+  FloatTensor *fused_var = create_tensor_1d(2);
+  FloatTensor *ref_conv = create_tensor_4d(1, 2, 2, 2);
+  FloatTensor *ref_out = create_tensor_4d(1, 2, 2, 2);
+  FloatTensor *ref_mean = create_tensor_1d(2);
+  FloatTensor *ref_var = create_tensor_1d(2);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(bias);
+  TEST_ASSERT_NOT_NULL(gamma);
+  TEST_ASSERT_NOT_NULL(beta);
+  TEST_ASSERT_NOT_NULL(fused_out);
+  TEST_ASSERT_NOT_NULL(fused_mean);
+  TEST_ASSERT_NOT_NULL(fused_var);
+  TEST_ASSERT_NOT_NULL(ref_conv);
+  TEST_ASSERT_NOT_NULL(ref_out);
+  TEST_ASSERT_NOT_NULL(ref_mean);
+  TEST_ASSERT_NOT_NULL(ref_var);
+
+  for (size_t i = 0; i < input->numel; ++i) {
+    input->values[i] = (float)((int)(i % 9) - 4) * 0.25f;
+  }
+  for (size_t i = 0; i < weight->numel; ++i) {
+    weight->values[i] = (float)((int)(i % 7) - 3) * 0.2f;
+  }
+  bias->values[0] = 0.5f;
+  bias->values[1] = -0.25f;
+  gamma->values[0] = 1.5f;
+  gamma->values[1] = 0.75f;
+  beta->values[0] = -0.2f;
+  beta->values[1] = 0.4f;
+
+  StConv2dParams p = st_conv2d_default_params();
+  p.backend = ST_CONV_BACKEND_MPS;
+
+  bool ok = st_conv2d_batchnorm2d_forward_nchw(
+      input, weight, bias, &p, gamma, beta, 1e-5f,
+      fused_out, fused_mean, fused_var);
+  TEST_ASSERT_TRUE(ok);
+
+  p.backend = ST_CONV_BACKEND_REFERENCE;
+  ok = st_conv2d_nchw(input, weight, bias, &p, ref_conv);
+  TEST_ASSERT_TRUE(ok);
+  ok = st_batchnorm2d_forward(ref_conv, gamma, beta, 1e-5f,
+                              ref_out, ref_mean, ref_var);
+  TEST_ASSERT_TRUE(ok);
+
+  for (size_t i = 0; i < fused_out->numel; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, ref_out->values[i], fused_out->values[i]);
+  }
+  for (size_t i = 0; i < 2; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, ref_mean->values[i], fused_mean->values[i]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-5f, ref_var->values[i], fused_var->values[i]);
+  }
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(bias);
+  st_destroy(gamma);
+  st_destroy(beta);
+  st_destroy(fused_out);
+  st_destroy(fused_mean);
+  st_destroy(fused_var);
+  st_destroy(ref_conv);
+  st_destroy(ref_out);
+  st_destroy(ref_mean);
+  st_destroy(ref_var);
+}
+
+void test_st_conv2d_batchnorm2d_forward_without_optional_tensors_should_match_separate_ops(void) {
+  FloatTensor *input = create_tensor_4d(1, 1, 4, 4);
+  FloatTensor *weight = create_tensor_4d(1, 1, 3, 3);
+  FloatTensor *fused_out = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *fused_mean = create_tensor_1d(1);
+  FloatTensor *fused_var = create_tensor_1d(1);
+  FloatTensor *ref_conv = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *ref_out = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *ref_mean = create_tensor_1d(1);
+  FloatTensor *ref_var = create_tensor_1d(1);
+
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(weight);
+  TEST_ASSERT_NOT_NULL(fused_out);
+  TEST_ASSERT_NOT_NULL(fused_mean);
+  TEST_ASSERT_NOT_NULL(fused_var);
+  TEST_ASSERT_NOT_NULL(ref_conv);
+  TEST_ASSERT_NOT_NULL(ref_out);
+  TEST_ASSERT_NOT_NULL(ref_mean);
+  TEST_ASSERT_NOT_NULL(ref_var);
+
+  for (size_t i = 0; i < input->numel; ++i) {
+    input->values[i] = (float)(i + 1) * 0.1f;
+  }
+  for (size_t i = 0; i < weight->numel; ++i) {
+    weight->values[i] = (float)((int)(i % 5) - 2) * 0.15f;
+  }
+
+  StConv2dParams p = st_conv2d_default_params();
+  p.backend = ST_CONV_BACKEND_MPS;
+
+  bool ok = st_conv2d_batchnorm2d_forward_nchw(
+      input, weight, NULL, &p, NULL, NULL, 1e-5f,
+      fused_out, fused_mean, fused_var);
+  TEST_ASSERT_TRUE(ok);
+
+  p.backend = ST_CONV_BACKEND_REFERENCE;
+  ok = st_conv2d_nchw(input, weight, NULL, &p, ref_conv);
+  TEST_ASSERT_TRUE(ok);
+  ok = st_batchnorm2d_forward(ref_conv, NULL, NULL, 1e-5f,
+                              ref_out, ref_mean, ref_var);
+  TEST_ASSERT_TRUE(ok);
+
+  for (size_t i = 0; i < fused_out->numel; ++i) {
+    TEST_ASSERT_FLOAT_WITHIN(1e-3f, ref_out->values[i], fused_out->values[i]);
+  }
+  TEST_ASSERT_FLOAT_WITHIN(1e-5f, ref_mean->values[0], fused_mean->values[0]);
+  TEST_ASSERT_FLOAT_WITHIN(1e-5f, ref_var->values[0], fused_var->values[0]);
+
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(fused_out);
+  st_destroy(fused_mean);
+  st_destroy(fused_var);
+  st_destroy(ref_conv);
+  st_destroy(ref_out);
+  st_destroy(ref_mean);
+  st_destroy(ref_var);
 }
 
 void test_st_conv2d_auto_larger_tensor_all_backends_agree(void) {

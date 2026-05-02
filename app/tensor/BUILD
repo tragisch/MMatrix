@@ -127,6 +127,7 @@ objc_library(
         "include/st_backend.h",
         "include/st_buffer.h",
         "include/st_conv.h",
+        "include/st_dtype.h",
         "src/st_buffer_metal.h",
         "src/st_mps.h",
     ],

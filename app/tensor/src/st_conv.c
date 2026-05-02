@@ -8,6 +8,7 @@
 
 #include "st_conv.h"
 #include "st_backend.h"
+#include "st_batchnorm.h"
 #include "st_dtype.h"
 #include "st_workspace.h"
 #include "sm.h"
@@ -921,6 +922,52 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
       }
       return true;
   }
+}
+
+bool st_conv2d_batchnorm2d_forward_nchw(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var) {
+  if (!input || !weight || !params || !output || !mean || !var) {
+    log_error("Error: st_conv2d_batchnorm2d_forward_nchw received NULL required argument.");
+    return false;
+  }
+
+  const bool can_try_mps =
+      input->dtype == ST_DTYPE_F32 &&
+      weight->dtype == ST_DTYPE_F32 &&
+      (!bias || bias->dtype == ST_DTYPE_F32) &&
+      (!gamma || gamma->dtype == ST_DTYPE_F32) &&
+      (!beta || beta->dtype == ST_DTYPE_F32) &&
+      output->dtype == ST_DTYPE_F32 &&
+      mean->dtype == ST_DTYPE_F32 &&
+      var->dtype == ST_DTYPE_F32 &&
+      (params->backend == ST_CONV_BACKEND_AUTO ||
+       params->backend == ST_CONV_BACKEND_MPS);
+
+  if (can_try_mps &&
+      st_backend_conv2d_batchnorm2d_forward_mps(
+          input, weight, bias, params, gamma, beta, epsilon,
+          output, mean, var)) {
+    g_last_backend = "mps_conv_bn";
+    return true;
+  }
+
+  FloatTensor *conv_out = st_create(output->ndim, output->shape);
+  if (!conv_out) {
+    log_error("Error: st_conv2d_batchnorm2d_forward_nchw temporary allocation failed.");
+    return false;
+  }
+
+  bool ok = st_conv2d_nchw(input, weight, bias, params, conv_out);
+  if (ok) {
+    ok = st_batchnorm2d_forward(conv_out, gamma, beta, epsilon,
+                                output, mean, var);
+  }
+
+  st_destroy(conv_out);
+  return ok;
 }
 
 const char *st_conv2d_last_backend(void) { return g_last_backend; }

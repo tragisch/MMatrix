@@ -28,26 +28,6 @@ static id<MTLCommandQueue> _st_be_mps_queue(void) {
   return (__bridge id<MTLCommandQueue>)mps_get_shared_command_queue();
 }
 
-/* ---- Helper: create MPSGraphTensorData with zero-copy when possible ---- */
-
-static MPSGraphTensorData *_st_be_make_tensor_data(MPSGraphDevice *gDev,
-                                                   const float *data,
-                                                   void *metal_handle,
-                                                   size_t bytes,
-                                                   MPSShape *shape) {
-  if (metal_handle) {
-    id<MTLBuffer> mtl_buf = (__bridge id<MTLBuffer>)metal_handle;
-    return [[MPSGraphTensorData alloc] initWithMTLBuffer:mtl_buf
-                                                  shape:shape
-                                               dataType:MPSDataTypeFloat32];
-  }
-  return [[MPSGraphTensorData alloc]
-      initWithDevice:gDev
-                data:[NSData dataWithBytes:data length:bytes]
-               shape:shape
-            dataType:MPSDataTypeFloat32];
-}
-
 /* ================================================================== */
 /*  Thresholds                                                         */
 /* ================================================================== */
@@ -69,6 +49,10 @@ static NSCache<NSString *, NSDictionary *> *_st_mps_graph_cache(void) {
     cache.countLimit = 16;
   });
   return cache;
+}
+
+static bool st_mps_tensor_is_valid(const FloatTensor *t, size_t ndim) {
+  return t != NULL && t->values != NULL && t->ndim == ndim;
 }
 
 /* ================================================================== */
@@ -210,11 +194,10 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   const size_t inBytes = n * c_in * h_in * w_in * sizeof(float);
   const size_t wBytes  = c_out * c_in * k_h * k_w * sizeof(float);
 
-  MPSGraphTensorData *inData = _st_be_make_tensor_data(gDev, input->values,
-                                                        in_mh, inBytes,
-                                                        inShape);
-  MPSGraphTensorData *wData  = _st_be_make_tensor_data(gDev, weight->values,
-                                                        w_mh, wBytes, wShape);
+  MPSGraphTensorData *inData = st_mps_make_tensor_data(gDev, input->values,
+                                                       in_mh, inBytes, inShape);
+  MPSGraphTensorData *wData  = st_mps_make_tensor_data(
+      gDev, weight->values, w_mh, wBytes, wShape);
 
   NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feeds =
       [NSMutableDictionary dictionaryWithCapacity:3];
@@ -224,7 +207,7 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   if (bias && biasT) {
     void *b_mh = bias->buf ? st_buffer_metal_handle(bias->buf) : NULL;
     const size_t bBytes = c_out * sizeof(float);
-    MPSGraphTensorData *bData = _st_be_make_tensor_data(
+    MPSGraphTensorData *bData = st_mps_make_tensor_data(
         gDev, bias->values, b_mh, bBytes, @[ @1, @(c_out), @1, @1 ]);
     feeds[biasT] = bData;
   }
@@ -306,6 +289,299 @@ static bool mps_batchnorm2d_forward(const FloatTensor *input,
       input->values, mh, n, c, h, w,
       gamma ? gamma->values : NULL, beta ? beta->values : NULL,
       epsilon, output->values, mean->values, var->values);
+}
+
+bool st_backend_conv2d_batchnorm2d_forward_mps(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var) {
+  if (!input || !weight || !params || !output || !mean || !var) return false;
+  if (params->backend != ST_CONV_BACKEND_AUTO &&
+      params->backend != ST_CONV_BACKEND_MPS) {
+    return false;
+  }
+
+  if (input->dtype != ST_DTYPE_F32 || weight->dtype != ST_DTYPE_F32 ||
+      output->dtype != ST_DTYPE_F32 || mean->dtype != ST_DTYPE_F32 ||
+      var->dtype != ST_DTYPE_F32) {
+    return false;
+  }
+  if ((bias && bias->dtype != ST_DTYPE_F32) ||
+      (gamma && gamma->dtype != ST_DTYPE_F32) ||
+      (beta && beta->dtype != ST_DTYPE_F32)) {
+    return false;
+  }
+
+  if (!st_mps_tensor_is_valid(input, 4) ||
+      !st_mps_tensor_is_valid(weight, 4) ||
+      !st_mps_tensor_is_valid(output, 4) ||
+      !st_mps_tensor_is_valid(mean, 1) ||
+      !st_mps_tensor_is_valid(var, 1)) {
+    return false;
+  }
+  if (!st_is_contiguous(input) || !st_is_contiguous(weight) ||
+      !st_is_contiguous(output) || !st_is_contiguous(mean) ||
+      !st_is_contiguous(var)) {
+    return false;
+  }
+  if (bias && (!st_mps_tensor_is_valid(bias, 1) || !st_is_contiguous(bias))) {
+    return false;
+  }
+  if (gamma &&
+      (!st_mps_tensor_is_valid(gamma, 1) || !st_is_contiguous(gamma))) {
+    return false;
+  }
+  if (beta && (!st_mps_tensor_is_valid(beta, 1) || !st_is_contiguous(beta))) {
+    return false;
+  }
+
+  const size_t n = input->shape[0];
+  const size_t c_in = input->shape[1];
+  const size_t h_in = input->shape[2];
+  const size_t w_in = input->shape[3];
+  const size_t c_out = weight->shape[0];
+  const size_t w_c_in = weight->shape[1];
+  const size_t k_h = weight->shape[2];
+  const size_t k_w = weight->shape[3];
+
+  if (c_in != w_c_in) return false;
+  if (bias && bias->shape[0] != c_out) return false;
+  if (gamma && gamma->shape[0] != c_out) return false;
+  if (beta && beta->shape[0] != c_out) return false;
+  if (mean->shape[0] != c_out || var->shape[0] != c_out) return false;
+
+  size_t out_h = 0;
+  size_t out_w = 0;
+  if (!st_conv2d_output_hw(h_in, w_in, k_h, k_w, params, &out_h, &out_w)) {
+    return false;
+  }
+  if (output->shape[0] != n || output->shape[1] != c_out ||
+      output->shape[2] != out_h || output->shape[3] != out_w) {
+    return false;
+  }
+
+  if (params->backend == ST_CONV_BACKEND_AUTO) {
+    const StBackend *mps = st_backend_mps();
+    const StBackend *dflt = st_get_default_backend();
+    if (!mps || (dflt && dflt != mps)) {
+      return false;
+    }
+
+    double macs_threshold = 0.0;
+    size_t out_elems_threshold = 0;
+    st_conv_get_mps_thresholds(&macs_threshold, &out_elems_threshold);
+
+    const double macs =
+        (double)n * (double)c_out * (double)out_h * (double)out_w *
+        (double)c_in * (double)k_h * (double)k_w;
+    const size_t out_elems = n * c_out * out_h * out_w;
+    if (macs < macs_threshold || out_elems < out_elems_threshold) {
+      return false;
+    }
+  }
+
+  @autoreleasepool {
+    id<MTLDevice> device = _st_be_mps_device();
+    id<MTLCommandQueue> queue = _st_be_mps_queue();
+    if (!device || !queue) return false;
+
+    const int has_bias = (bias != NULL) ? 1 : 0;
+    const int has_gamma = (gamma != NULL) ? 1 : 0;
+    const int has_beta = (beta != NULL) ? 1 : 0;
+    NSString *cacheKey = [NSString stringWithFormat:
+        @"convbn:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%d,%d,%d,%.9g",
+        n, c_in, h_in, w_in, c_out, k_h, k_w,
+        params->stride_h, params->stride_w,
+        params->pad_h, params->pad_w,
+        params->dilation_h, params->dilation_w,
+        has_bias, has_gamma, has_beta, (double)epsilon];
+
+    NSCache *cache = _st_mps_graph_cache();
+    NSDictionary *cached = [cache objectForKey:cacheKey];
+
+    MPSGraph *graph;
+    MPSGraphTensor *inT, *wT, *biasT, *gammaT, *betaT;
+    MPSGraphTensor *resultT, *meanT, *varT;
+
+    if (cached) {
+      graph = cached[@"graph"];
+      inT = cached[@"inT"];
+      wT = cached[@"wT"];
+      biasT = cached[@"biasT"];
+      gammaT = cached[@"gammaT"];
+      betaT = cached[@"betaT"];
+      resultT = cached[@"resultT"];
+      meanT = cached[@"meanT"];
+      varT = cached[@"varT"];
+      if ([biasT isEqual:[NSNull null]]) biasT = nil;
+      if ([gammaT isEqual:[NSNull null]]) gammaT = nil;
+      if ([betaT isEqual:[NSNull null]]) betaT = nil;
+    } else {
+      graph = [[MPSGraph alloc] init];
+
+      MPSShape *inShape = @[ @(n), @(c_in), @(h_in), @(w_in) ];
+      MPSShape *wShape = @[ @(c_out), @(c_in), @(k_h), @(k_w) ];
+
+      inT = [graph placeholderWithShape:inShape
+                               dataType:MPSDataTypeFloat32
+                                   name:@"input"];
+      wT = [graph placeholderWithShape:wShape
+                              dataType:MPSDataTypeFloat32
+                                  name:@"weight"];
+
+      MPSGraphConvolution2DOpDescriptor *convDesc =
+          [MPSGraphConvolution2DOpDescriptor
+              descriptorWithStrideInX:(NSUInteger)params->stride_w
+                            strideInY:(NSUInteger)params->stride_h
+                      dilationRateInX:(NSUInteger)params->dilation_w
+                      dilationRateInY:(NSUInteger)params->dilation_h
+                               groups:1
+                          paddingLeft:(NSUInteger)params->pad_w
+                         paddingRight:(NSUInteger)params->pad_w
+                           paddingTop:(NSUInteger)params->pad_h
+                        paddingBottom:(NSUInteger)params->pad_h
+                         paddingStyle:MPSGraphPaddingStyleExplicit
+                           dataLayout:MPSGraphTensorNamedDataLayoutNCHW
+                        weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
+
+      MPSGraphTensor *convT = [graph convolution2DWithSourceTensor:inT
+                                                     weightsTensor:wT
+                                                        descriptor:convDesc
+                                                              name:@"conv2d"];
+
+      MPSGraphTensor *bnInputT = convT;
+      biasT = nil;
+      gammaT = nil;
+      betaT = nil;
+
+      if (bias) {
+        biasT = [graph placeholderWithShape:@[ @1, @(c_out), @1, @1 ]
+                                   dataType:MPSDataTypeFloat32
+                                       name:@"bias"];
+        bnInputT = [graph additionWithPrimaryTensor:bnInputT
+                                    secondaryTensor:biasT
+                                               name:@"add_bias"];
+      }
+
+      NSArray<NSNumber *> *reduceAxes = @[ @0, @2, @3 ];
+      meanT = [graph meanOfTensor:bnInputT axes:reduceAxes name:@"mean"];
+
+      MPSGraphTensor *diffT =
+          [graph subtractionWithPrimaryTensor:bnInputT
+                              secondaryTensor:meanT
+                                         name:@"diff"];
+      MPSGraphTensor *sqDiffT =
+          [graph squareWithTensor:diffT name:@"sq_diff"];
+      varT = [graph meanOfTensor:sqDiffT axes:reduceAxes name:@"var"];
+
+      MPSGraphTensor *epsT =
+          [graph constantWithScalar:(double)epsilon
+                              shape:@[ @1 ]
+                           dataType:MPSDataTypeFloat32];
+      MPSGraphTensor *varPlusEpsT =
+          [graph additionWithPrimaryTensor:varT
+                           secondaryTensor:epsT
+                                      name:@"var_eps"];
+      MPSGraphTensor *sqrtVarT =
+          [graph squareRootWithTensor:varPlusEpsT name:@"sqrt_var"];
+      MPSGraphTensor *invStdT =
+          [graph reciprocalWithTensor:sqrtVarT name:@"inv_std"];
+
+      resultT = [graph multiplicationWithPrimaryTensor:diffT
+                                       secondaryTensor:invStdT
+                                                  name:@"normed"];
+
+      if (gamma) {
+        gammaT = [graph placeholderWithShape:@[ @1, @(c_out), @1, @1 ]
+                                    dataType:MPSDataTypeFloat32
+                                        name:@"gamma"];
+        resultT = [graph multiplicationWithPrimaryTensor:resultT
+                                         secondaryTensor:gammaT
+                                                    name:@"scale"];
+      }
+
+      if (beta) {
+        betaT = [graph placeholderWithShape:@[ @1, @(c_out), @1, @1 ]
+                                   dataType:MPSDataTypeFloat32
+                                       name:@"beta"];
+        resultT = [graph additionWithPrimaryTensor:resultT
+                                   secondaryTensor:betaT
+                                              name:@"shift"];
+      }
+
+      [cache setObject:@{
+        @"graph" : graph,
+        @"inT" : inT,
+        @"wT" : wT,
+        @"biasT" : biasT ?: [NSNull null],
+        @"gammaT" : gammaT ?: [NSNull null],
+        @"betaT" : betaT ?: [NSNull null],
+        @"resultT" : resultT,
+        @"meanT" : meanT,
+        @"varT" : varT,
+      } forKey:cacheKey];
+    }
+
+    MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
+    MPSShape *inShape = @[ @(n), @(c_in), @(h_in), @(w_in) ];
+    MPSShape *wShape = @[ @(c_out), @(c_in), @(k_h), @(k_w) ];
+    const size_t inBytes = n * c_in * h_in * w_in * sizeof(float);
+    const size_t wBytes = c_out * c_in * k_h * k_w * sizeof(float);
+
+    void *in_mh = input->buf ? st_buffer_metal_handle(input->buf) : NULL;
+    void *w_mh = weight->buf ? st_buffer_metal_handle(weight->buf) : NULL;
+    MPSGraphTensorData *inData = st_mps_make_tensor_data(
+        gDev, input->values, in_mh, inBytes, inShape);
+    MPSGraphTensorData *wData = st_mps_make_tensor_data(
+        gDev, weight->values, w_mh, wBytes, wShape);
+
+    NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feeds =
+        [NSMutableDictionary dictionaryWithCapacity:5];
+    feeds[inT] = inData;
+    feeds[wT] = wData;
+
+    if (bias && biasT) {
+      void *b_mh = bias->buf ? st_buffer_metal_handle(bias->buf) : NULL;
+      feeds[biasT] = st_mps_make_tensor_data(
+          gDev, bias->values, b_mh, c_out * sizeof(float),
+          @[ @1, @(c_out), @1, @1 ]);
+    }
+
+    if (gamma && gammaT) {
+      void *g_mh = gamma->buf ? st_buffer_metal_handle(gamma->buf) : NULL;
+      feeds[gammaT] = st_mps_make_tensor_data(
+          gDev, gamma->values, g_mh, c_out * sizeof(float),
+          @[ @1, @(c_out), @1, @1 ]);
+    }
+
+    if (beta && betaT) {
+      void *b_mh = beta->buf ? st_buffer_metal_handle(beta->buf) : NULL;
+      feeds[betaT] = st_mps_make_tensor_data(
+          gDev, beta->values, b_mh, c_out * sizeof(float),
+          @[ @1, @(c_out), @1, @1 ]);
+    }
+
+    NSDictionary<MPSGraphTensor *, MPSGraphTensorData *> *results = nil;
+    @try {
+      results = [graph runWithMTLCommandQueue:queue
+                                       feeds:feeds
+                               targetTensors:@[ resultT, meanT, varT ]
+                            targetOperations:nil];
+    } @catch (NSException *exception) {
+      return false;
+    }
+
+    MPSGraphTensorData *outData = results[resultT];
+    MPSGraphTensorData *meanData = results[meanT];
+    MPSGraphTensorData *varData = results[varT];
+    if (!outData || !meanData || !varData) return false;
+
+    [outData.mpsndarray readBytes:output->values strideBytes:nil];
+    [meanData.mpsndarray readBytes:mean->values strideBytes:nil];
+    [varData.mpsndarray readBytes:var->values strideBytes:nil];
+    return true;
+  }
 }
 
 /* ================================================================== */

@@ -34,30 +34,6 @@ static NSCache<NSString *, NSDictionary *> *_st_mps_pool_cache(void) {
   return cache;
 }
 
-/* ---- Helper: create MPSGraphTensorData with zero-copy when possible ---- */
-
-static MPSGraphTensorData *_st_make_tensor_data(MPSGraphDevice *gDev,
-                                                const float *data,
-                                                void *metal_handle,
-                                                size_t bytes,
-                                                MPSShape *shape) {
-  if (metal_handle) {
-    /* Zero-copy path: MTLBuffer already in shared memory. */
-    id<MTLBuffer> mtl_buf = (__bridge id<MTLBuffer>)metal_handle;
-    return [[MPSGraphTensorData alloc] initWithMTLBuffer:mtl_buf
-                                                  shape:shape
-                                               dataType:MPSDataTypeFloat32];
-  }
-  /* Fallback: wrap caller-owned CPU memory for the duration of the run. */
-  return [[MPSGraphTensorData alloc]
-      initWithDevice:gDev
-                data:[NSData dataWithBytesNoCopy:(void *)data
-                                          length:bytes
-                                    freeWhenDone:NO]
-               shape:shape
-            dataType:MPSDataTypeFloat32];
-}
-
 /* ================================================================== */
 /*  MPS MaxPool2D (NCHW layout)                                       */
 /* ================================================================== */
@@ -128,9 +104,9 @@ bool st_maxpool2d_mps(const float *input, void *input_metal_handle,
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
   MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
   const size_t inBytes = n * c * h * w * sizeof(float);
-  MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
-                                                     input_metal_handle,
-                                                     inBytes, inShape);
+  MPSGraphTensorData *inData = st_mps_make_tensor_data(gDev, input,
+                                                       input_metal_handle,
+                                                       inBytes, inShape);
 
   NSDictionary *feeds = @{inT : inData};
 
@@ -223,9 +199,9 @@ bool st_avgpool2d_mps(const float *input, void *input_metal_handle,
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
   MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
   const size_t inBytes = n * c * h * w * sizeof(float);
-  MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
-                                                     input_metal_handle,
-                                                     inBytes, inShape);
+  MPSGraphTensorData *inData = st_mps_make_tensor_data(gDev, input,
+                                                       input_metal_handle,
+                                                       inBytes, inShape);
 
   NSDictionary *feeds = @{inT : inData};
 
@@ -376,9 +352,9 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
   MPSShape *inShape = @[ @(n), @(c), @(h), @(w) ];
   const size_t inBytes = n * c * h * w * sizeof(float);
 
-  MPSGraphTensorData *inData = _st_make_tensor_data(gDev, input,
-                                                     input_metal_handle,
-                                                     inBytes, inShape);
+  MPSGraphTensorData *inData = st_mps_make_tensor_data(gDev, input,
+                                                       input_metal_handle,
+                                                       inBytes, inShape);
 
   NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feeds =
       [NSMutableDictionary dictionaryWithCapacity:3];
@@ -386,15 +362,15 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
 
   if (gamma && gammaT) {
     const size_t gBytes = c * sizeof(float);
-    MPSGraphTensorData *gData =
-        _st_make_tensor_data(gDev, gamma, NULL, gBytes, @[ @1, @(c), @1, @1 ]);
+    MPSGraphTensorData *gData = st_mps_make_tensor_data(
+        gDev, gamma, NULL, gBytes, @[ @1, @(c), @1, @1 ]);
     feeds[gammaT] = gData;
   }
 
   if (beta && betaT) {
     const size_t bBytes = c * sizeof(float);
-    MPSGraphTensorData *bData =
-        _st_make_tensor_data(gDev, beta, NULL, bBytes, @[ @1, @(c), @1, @1 ]);
+    MPSGraphTensorData *bData = st_mps_make_tensor_data(
+        gDev, beta, NULL, bBytes, @[ @1, @(c), @1, @1 ]);
     feeds[betaT] = bData;
   }
 

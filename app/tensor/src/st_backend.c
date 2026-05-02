@@ -56,4 +56,21 @@ const StBackend *st_select_backend(StOp op, const FloatTensor *tensor) {
 
 #if !(defined(__APPLE__) && defined(USE_ACCELERATE))
 const StBackend *st_backend_mps(void) { return NULL; }
+bool st_backend_conv2d_batchnorm2d_forward_mps(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var) {
+  (void)input;
+  (void)weight;
+  (void)bias;
+  (void)params;
+  (void)gamma;
+  (void)beta;
+  (void)epsilon;
+  (void)output;
+  (void)mean;
+  (void)var;
+  return false;
+}
 #endif

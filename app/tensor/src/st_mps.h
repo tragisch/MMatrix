@@ -11,8 +11,28 @@
 
 #ifdef __OBJC__
 #import <Foundation/Foundation.h>
+#import <Metal/Metal.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
+
+static inline MPSGraphTensorData *st_mps_make_tensor_data(
+    MPSGraphDevice *gDev, const float *data, void *metal_handle, size_t bytes,
+    MPSShape *shape) {
+  if (metal_handle) {
+    id<MTLBuffer> mtl_buf = (__bridge id<MTLBuffer>)metal_handle;
+    return [[MPSGraphTensorData alloc] initWithMTLBuffer:mtl_buf
+                                                  shape:shape
+                                               dataType:MPSDataTypeFloat32];
+  }
+
+  return [[MPSGraphTensorData alloc]
+      initWithDevice:gDev
+                data:[NSData dataWithBytesNoCopy:(void *)data
+                                          length:bytes
+                                    freeWhenDone:NO]
+               shape:shape
+            dataType:MPSDataTypeFloat32];
+}
 #endif
 
 #ifdef __cplusplus
@@ -25,7 +45,8 @@ extern "C" {
 /// MPS-accelerated MaxPool2D forward (NCHW layout).
 /// indices may be NULL.
 /// input_metal_handle: if non-NULL, an id<MTLBuffer> (cast to void*) for
-/// zero-copy GPU input.  When NULL, input data is copied via NSData.
+/// zero-copy GPU input. When NULL, caller-owned CPU memory is wrapped
+/// without copy for duration of graph run.
 bool st_maxpool2d_mps(const float *input, void *input_metal_handle,
                       size_t n, size_t c, size_t h,
                       size_t w, size_t kernel_h, size_t kernel_w,

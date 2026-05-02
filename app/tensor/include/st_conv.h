@@ -46,6 +46,14 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
                     const FloatTensor *bias, const StConv2dParams *params,
                     FloatTensor *output);
 
+// Fused Conv2D + BatchNorm2D forward for NCHW tensors.
+// Semantics match `st_conv2d_nchw` followed by `st_batchnorm2d_forward`.
+bool st_conv2d_batchnorm2d_forward_nchw(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var);
+
 // Override MPS AUTO dispatch thresholds at runtime. Returns false on invalid input.
 bool st_conv_set_mps_thresholds(double macs_threshold,
                                 size_t out_elems_threshold);

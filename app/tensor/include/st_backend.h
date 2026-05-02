@@ -100,6 +100,15 @@ typedef struct StBackend {
 /// Return the MPS backend, or NULL if not compiled / not available.
 const StBackend *st_backend_mps(void);
 
+/// MPS-specific fused Conv2D + BatchNorm2D forward helper.
+/// Returns true when MPS handled the full fused path, false when caller
+/// should fall back to the regular sequential implementation.
+bool st_backend_conv2d_batchnorm2d_forward_mps(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var);
+
 /// Set the default backend used by tensor dispatch.
 /// Pass NULL to reset to auto-dispatch (tries MPS, falls back to CPU).
 void st_set_default_backend(const StBackend *backend);
