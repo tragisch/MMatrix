@@ -56,6 +56,7 @@ which is available as a Bazel dependency in this project (`@graphblas`).
 - Overview and API style: [`docs/Overview.md`](docs/Overview.md)
 - Performance notes: [`docs/Performance.md`](docs/Performance.md)
 - Grafana benchmark workflow: [`docs/Grafana.md`](docs/Grafana.md)
+- Copilot workspace guidance: [`.github/copilot-instructions.md`](.github/copilot-instructions.md)
 - Float dense API (`sm`): [`docs/api/sm.md`](docs/api/sm.md)
 - Double dense API (`dm`): [`docs/api/dm.md`](docs/api/dm.md)
 - Sparse COO API (`dms`): [`docs/api/dms.md`](docs/api/dms.md)
