@@ -22,8 +22,8 @@
 // beta    [C] — learnable shift (may be NULL for beta=0)
 // epsilon  small constant for numerical stability (e.g. 1e-5)
 // output  [N, C, H, W] — normalized, scaled, shifted
-// mean    [C] — computed channel means   (must be pre-allocated, written)
-// var     [C] — computed channel variances (must be pre-allocated, written)
+// mean    [C] — computed channel means in f32 (must be pre-allocated, written)
+// var     [C] — computed channel variances in f32 (must be pre-allocated, written)
 bool st_batchnorm2d_forward(const FloatTensor *input,
                             const FloatTensor *gamma,
                             const FloatTensor *beta, float epsilon,
@@ -33,8 +33,8 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
 // Backward pass for Batch Normalization.
 // grad_output [N, C, H, W]
 // input       [N, C, H, W] — original input from forward
-// mean        [C] — from forward
-// var         [C] — from forward
+// mean        [C] f32 — from forward
+// var         [C] f32 — from forward
 // gamma       [C] — learnable scale (may be NULL for gamma=1)
 // epsilon      same epsilon used in forward
 // grad_input  [N, C, H, W] — gradient w.r.t. input (pre-allocated)

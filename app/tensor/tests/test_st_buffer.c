@@ -126,11 +126,25 @@ void test_st_buffer_alloc_should_fail_on_size_overflow(void) {
   TEST_ASSERT_NULL(buf);
 }
 
+void test_st_buffer_alloc_bytes_should_fail_on_size_overflow(void) {
+  StBuffer *buf = st_buffer_alloc_bytes(SIZE_MAX - 31u);
+  TEST_ASSERT_NULL(buf);
+}
+
 void test_st_buffer_from_ptr_should_fail_on_size_overflow(void) {
   float value = 1.0f;
   StBuffer *buf =
       st_buffer_from_ptr(&value, (SIZE_MAX / sizeof(float)) + 1, false);
   TEST_ASSERT_NULL(buf);
+}
+
+void test_st_buffer_alloc_bytes_should_preserve_requested_size(void) {
+  StBuffer *buf = st_buffer_alloc_bytes(6);
+  TEST_ASSERT_NOT_NULL(buf);
+  TEST_ASSERT_EQUAL(6, buf->size_bytes);
+  TEST_ASSERT_EQUAL(1, buf->capacity);
+
+  st_buffer_release(buf);
 }
 
 /* ------------------------------------------------------------------ */

@@ -48,10 +48,12 @@ static MPSGraphTensorData *_st_make_tensor_data(MPSGraphDevice *gDev,
                                                   shape:shape
                                                dataType:MPSDataTypeFloat32];
   }
-  /* Fallback: copy via NSData. */
+  /* Fallback: wrap caller-owned CPU memory for the duration of the run. */
   return [[MPSGraphTensorData alloc]
       initWithDevice:gDev
-                data:[NSData dataWithBytes:data length:bytes]
+                data:[NSData dataWithBytesNoCopy:(void *)data
+                                          length:bytes
+                                    freeWhenDone:NO]
                shape:shape
             dataType:MPSDataTypeFloat32];
 }
@@ -384,21 +386,15 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
 
   if (gamma && gammaT) {
     const size_t gBytes = c * sizeof(float);
-    MPSGraphTensorData *gData = [[MPSGraphTensorData alloc]
-        initWithDevice:gDev
-                  data:[NSData dataWithBytes:gamma length:gBytes]
-                 shape:@[ @1, @(c), @1, @1 ]
-              dataType:MPSDataTypeFloat32];
+    MPSGraphTensorData *gData =
+        _st_make_tensor_data(gDev, gamma, NULL, gBytes, @[ @1, @(c), @1, @1 ]);
     feeds[gammaT] = gData;
   }
 
   if (beta && betaT) {
     const size_t bBytes = c * sizeof(float);
-    MPSGraphTensorData *bData = [[MPSGraphTensorData alloc]
-        initWithDevice:gDev
-                  data:[NSData dataWithBytes:beta length:bBytes]
-                 shape:@[ @1, @(c), @1, @1 ]
-              dataType:MPSDataTypeFloat32];
+    MPSGraphTensorData *bData =
+        _st_make_tensor_data(gDev, beta, NULL, bBytes, @[ @1, @(c), @1, @1 ]);
     feeds[betaT] = bData;
   }
 
@@ -424,23 +420,13 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
   /* Read mean [1, C, 1, 1] → flatten to [C] */
   MPSGraphTensorData *meanData = results[meanT];
   if (meanData) {
-    float *mean_buf = (float *)malloc(c * sizeof(float));
-    if (mean_buf) {
-      [meanData.mpsndarray readBytes:mean_buf strideBytes:nil];
-      memcpy(mean_out, mean_buf, c * sizeof(float));
-      free(mean_buf);
-    }
+    [meanData.mpsndarray readBytes:mean_out strideBytes:nil];
   }
 
   /* Read variance [1, C, 1, 1] → flatten to [C] */
   MPSGraphTensorData *varData = results[varT];
   if (varData) {
-    float *var_buf = (float *)malloc(c * sizeof(float));
-    if (var_buf) {
-      [varData.mpsndarray readBytes:var_buf strideBytes:nil];
-      memcpy(var_out, var_buf, c * sizeof(float));
-      free(var_buf);
-    }
+    [varData.mpsndarray readBytes:var_out strideBytes:nil];
   }
 
   return true;

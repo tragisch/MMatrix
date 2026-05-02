@@ -1171,7 +1171,14 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
   const size_t tiles_h = (h + tile_out - 1) / tile_out;
   const size_t tiles_w = (w + tile_out - 1) / tile_out;
 
-  float *w_rot = (float *)malloc(c_in * c_out * 9 * sizeof(float));
+  StWorkspace *ws = st_workspace_get();
+  if (!ws) {
+    log_error("Error: st_conv2d_backward_data_winograd_3x3 workspace unavailable.");
+    return false;
+  }
+  st_workspace_reset(ws);
+
+  float *w_rot = st_workspace_alloc(ws, c_in * c_out * 9);
   if (!w_rot) {
     log_error("Error: st_conv2d_backward_data_winograd_3x3 allocation failed.");
     return false;
@@ -1189,9 +1196,8 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
     }
   }
 
-  float *Gw = (float *)malloc(c_in * c_out * 16 * sizeof(float));
+  float *Gw = st_workspace_alloc(ws, c_in * c_out * 16);
   if (!Gw) {
-    free(w_rot);
     log_error("Error: st_conv2d_backward_data_winograd_3x3 allocation failed.");
     return false;
   }
@@ -1220,12 +1226,8 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
     }
   }
 
-  free(w_rot);
-
-  float *padded_go = (float *)calloc(n * c_out * pad_go_h * pad_go_w,
-                                     sizeof(float));
+  float *padded_go = st_workspace_calloc(ws, n * c_out * pad_go_h * pad_go_w);
   if (!padded_go) {
-    free(Gw);
     log_error("Error: st_conv2d_backward_data_winograd_3x3 allocation failed.");
     return false;
   }
@@ -1319,8 +1321,6 @@ static bool __attribute__((unused)) st_conv2d_backward_data_winograd_3x3(
     }
   }
 
-  free(Gw);
-  free(padded_go);
   return true;
 }
 
@@ -1418,19 +1418,6 @@ bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
     }
     memset(grad_input->values, 0, grad_input->numel * sizeof(float));
   }
-
-#if 0
-  if (k_h == 3 && k_w == 3 && local.stride_h == 1 && local.stride_w == 1 &&
-      local.dilation_h == 1 && local.dilation_w == 1 &&
-      local.backend != ST_CONV_BACKEND_REFERENCE) {
-    bool ok = st_conv2d_backward_data_winograd_3x3(grad_output, weight, &local,
-                                                   grad_input);
-    if (ok) {
-      return true;
-    }
-    memset(grad_input->values, 0, grad_input->numel * sizeof(float));
-  }
-#endif
 
   return st_conv2d_backward_data_naive(grad_output, weight, &local,
                                        grad_input);

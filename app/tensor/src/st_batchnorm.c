@@ -31,6 +31,10 @@ static bool st_bn_is_valid_1d(const FloatTensor *t, size_t expected_len) {
          t->shape[0] == expected_len && st_is_contiguous(t);
 }
 
+static bool st_bn_is_valid_1d_f32(const FloatTensor *t, size_t expected_len) {
+  return st_bn_is_valid_1d(t, expected_len) && t->dtype == ST_DTYPE_F32;
+}
+
 static float st_bn_sum_plane(const float *plane, size_t spatial) {
 #if defined(USE_ACCELERATE)
   float plane_sum = 0.0f;
@@ -71,9 +75,9 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
     return false;
   }
 
-  if (!st_bn_is_valid_1d(mean, c) || !st_bn_is_valid_1d(var, c)) {
+  if (!st_bn_is_valid_1d_f32(mean, c) || !st_bn_is_valid_1d_f32(var, c)) {
     log_error(
-        "Error: st_batchnorm2d_forward mean/var must be contiguous [C].");
+        "Error: st_batchnorm2d_forward mean/var must be contiguous f32 [C].");
     return false;
   }
 
@@ -211,9 +215,9 @@ bool st_batchnorm2d_backward(const FloatTensor *grad_output,
   const size_t spatial = h * w;
   const size_t m = n * spatial;
 
-  if (!st_bn_is_valid_1d(mean, c) || !st_bn_is_valid_1d(var, c)) {
+  if (!st_bn_is_valid_1d_f32(mean, c) || !st_bn_is_valid_1d_f32(var, c)) {
     log_error(
-        "Error: st_batchnorm2d_backward mean/var must be contiguous [C].");
+        "Error: st_batchnorm2d_backward mean/var must be contiguous f32 [C].");
     return false;
   }
 
@@ -390,9 +394,9 @@ bool st_batchnorm2d_forward_relu(const FloatTensor *input,
     return false;
   }
 
-  if (!st_bn_is_valid_1d(mean, c) || !st_bn_is_valid_1d(var, c)) {
+  if (!st_bn_is_valid_1d_f32(mean, c) || !st_bn_is_valid_1d_f32(var, c)) {
     log_error(
-        "Error: st_batchnorm2d_forward_relu mean/var must be contiguous [C].");
+        "Error: st_batchnorm2d_forward_relu mean/var must be contiguous f32 [C].");
     return false;
   }
 
@@ -526,9 +530,9 @@ bool st_batchnorm2d_backward_relu(const FloatTensor *grad_output,
   const size_t spatial = h * w;
   const size_t m = n * spatial;
 
-  if (!st_bn_is_valid_1d(mean, c) || !st_bn_is_valid_1d(var, c)) {
+  if (!st_bn_is_valid_1d_f32(mean, c) || !st_bn_is_valid_1d_f32(var, c)) {
     log_error(
-        "Error: st_batchnorm2d_backward_relu mean/var must be contiguous [C].");
+        "Error: st_batchnorm2d_backward_relu mean/var must be contiguous f32 [C].");
     return false;
   }
 

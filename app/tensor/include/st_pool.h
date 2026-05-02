@@ -28,7 +28,8 @@ bool st_pool2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
 // input  [N, C, H, W]
 // output [N, C, out_H, out_W]
 // indices [N, C, out_H, out_W]  — linear index of max within each window
-//         (stored as float for API uniformity; cast to size_t for use).
+//         (must be F32; values are stored as float for API uniformity and
+//         cast to size_t for use).
 //         Pass NULL if indices are not needed (e.g. inference-only).
 bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
                        size_t kernel_w, size_t stride_h, size_t stride_w,
@@ -46,7 +47,7 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
 
 // Backward pass for max-pool 2D.
 // grad_output [N, C, out_H, out_W]
-// indices     [N, C, out_H, out_W]  — from st_maxpool2d_nchw forward
+// indices     [N, C, out_H, out_W]  — F32 tensor from st_maxpool2d_nchw forward
 // grad_input  [N, C, H, W]         — accumulated gradients (zeroed by caller)
 bool st_maxpool2d_backward_nchw(const FloatTensor *grad_output,
                                 const FloatTensor *indices, size_t input_h,

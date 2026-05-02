@@ -32,6 +32,15 @@ static bool st_buffer_num_floats_to_bytes(size_t num_floats,
   return true;
 }
 
+static bool st_buffer_align_bytes(size_t num_bytes, size_t *out_aligned_bytes) {
+  if (out_aligned_bytes == NULL || num_bytes == 0 || num_bytes > SIZE_MAX - 63u) {
+    return false;
+  }
+
+  *out_aligned_bytes = (num_bytes + 63u) & ~(size_t)63u;
+  return true;
+}
+
 StBuffer *st_buffer_alloc_cpu(size_t num_floats) {
   if (num_floats == 0) {
     log_error("Error: st_buffer_alloc_cpu zero size.");
@@ -86,8 +95,12 @@ StBuffer *st_buffer_alloc_bytes_cpu(size_t num_bytes) {
     return NULL;
   }
 
-  /* Round up to 64-byte alignment boundary. */
-  const size_t alloc_bytes = (num_bytes + 63u) & ~(size_t)63u;
+  size_t alloc_bytes = 0;
+  if (!st_buffer_align_bytes(num_bytes, &alloc_bytes)) {
+    log_error("Error: st_buffer_alloc_bytes_cpu size overflow.");
+    free(buf);
+    return NULL;
+  }
 
   void *raw = NULL;
   if (posix_memalign(&raw, 64, alloc_bytes) != 0 || !raw) {

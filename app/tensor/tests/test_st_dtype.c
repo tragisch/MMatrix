@@ -691,6 +691,25 @@ void test_bf16_maxpool2d(void) {
   st_destroy(output);
 }
 
+void test_bf16_maxpool2d_should_reject_bf16_indices(void) {
+  size_t in_shape[4] = {1, 1, 4, 4};
+  size_t out_shape[4] = {1, 1, 2, 2};
+
+  FloatTensor *input = st_create_bf16(4, in_shape);
+  FloatTensor *output = st_create_bf16(4, out_shape);
+  FloatTensor *indices = st_create_bf16(4, out_shape);
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(output);
+  TEST_ASSERT_NOT_NULL(indices);
+
+  bool ok = st_maxpool2d_nchw(input, 2, 2, 2, 2, 0, 0, output, indices);
+  TEST_ASSERT_TRUE(!ok);
+
+  st_destroy(input);
+  st_destroy(output);
+  st_destroy(indices);
+}
+
 /* ================================================================== */
 /*  bf16 avgpool2d forward                                             */
 /* ================================================================== */
@@ -773,6 +792,74 @@ void test_bf16_batchnorm2d_forward(void) {
   st_destroy(output);
   st_destroy(mean);
   st_destroy(var);
+}
+
+void test_bf16_batchnorm2d_forward_should_reject_bf16_mean_var(void) {
+  size_t shape4[4] = {1, 2, 2, 2};
+  size_t shape1[1] = {2};
+
+  FloatTensor *input = st_create_bf16(4, shape4);
+  FloatTensor *output = st_create_bf16(4, shape4);
+  FloatTensor *mean = st_create_bf16(1, shape1);
+  FloatTensor *var = st_create_bf16(1, shape1);
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(output);
+  TEST_ASSERT_NOT_NULL(mean);
+  TEST_ASSERT_NOT_NULL(var);
+
+  bool ok = st_batchnorm2d_forward(input, NULL, NULL, 1e-5f, output, mean,
+                                   var);
+  TEST_ASSERT_TRUE(!ok);
+
+  st_destroy(input);
+  st_destroy(output);
+  st_destroy(mean);
+  st_destroy(var);
+}
+
+void test_bf16_batchnorm2d_backward_should_reject_bf16_mean_var(void) {
+  size_t shape4[4] = {1, 2, 2, 2};
+  size_t shape1[1] = {2};
+
+  FloatTensor *input = st_create_bf16(4, shape4);
+  FloatTensor *grad_output = st_create_bf16(4, shape4);
+  FloatTensor *grad_input = st_create_bf16(4, shape4);
+  FloatTensor *mean = st_create_bf16(1, shape1);
+  FloatTensor *var = st_create_bf16(1, shape1);
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(grad_output);
+  TEST_ASSERT_NOT_NULL(grad_input);
+  TEST_ASSERT_NOT_NULL(mean);
+  TEST_ASSERT_NOT_NULL(var);
+
+  bool ok = st_batchnorm2d_backward(grad_output, input, mean, var, NULL,
+                                    1e-5f, grad_input, NULL, NULL);
+  TEST_ASSERT_TRUE(!ok);
+
+  st_destroy(input);
+  st_destroy(grad_output);
+  st_destroy(grad_input);
+  st_destroy(mean);
+  st_destroy(var);
+}
+
+void test_bf16_maxpool2d_backward_should_reject_bf16_indices(void) {
+  size_t shape4[4] = {1, 1, 2, 2};
+  size_t grad_shape[4] = {1, 1, 4, 4};
+
+  FloatTensor *grad_output = st_create_bf16(4, shape4);
+  FloatTensor *indices = st_create_bf16(4, shape4);
+  FloatTensor *grad_input = st_create_bf16(4, grad_shape);
+  TEST_ASSERT_NOT_NULL(grad_output);
+  TEST_ASSERT_NOT_NULL(indices);
+  TEST_ASSERT_NOT_NULL(grad_input);
+
+  bool ok = st_maxpool2d_backward_nchw(grad_output, indices, 4, 4, grad_input);
+  TEST_ASSERT_TRUE(!ok);
+
+  st_destroy(grad_output);
+  st_destroy(indices);
+  st_destroy(grad_input);
 }
 
 /* ================================================================== */

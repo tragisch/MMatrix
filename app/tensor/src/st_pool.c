@@ -31,6 +31,10 @@ static bool st_pool_is_valid_4d(const FloatTensor *t) {
          st_is_contiguous(t);
 }
 
+static bool st_pool_is_valid_indices_tensor(const FloatTensor *t) {
+  return st_pool_is_valid_4d(t) && t->dtype == ST_DTYPE_F32;
+}
+
 static void st_pool_indices_free(void *ptr) {
   free(ptr);
 }
@@ -117,8 +121,9 @@ bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
     log_error("Error: st_maxpool2d_nchw expects valid contiguous 4D tensors.");
     return false;
   }
-  if (indices && !st_pool_is_valid_4d(indices)) {
-    log_error("Error: st_maxpool2d_nchw indices must be valid contiguous 4D.");
+  if (indices && !st_pool_is_valid_indices_tensor(indices)) {
+    log_error(
+        "Error: st_maxpool2d_nchw indices must be valid contiguous 4D F32.");
     return false;
   }
 
@@ -421,11 +426,12 @@ bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
 bool st_maxpool2d_backward_nchw(const FloatTensor *grad_output,
                                 const FloatTensor *indices, size_t input_h,
                                 size_t input_w, FloatTensor *grad_input) {
-  if (!st_pool_is_valid_4d(grad_output) || !st_pool_is_valid_4d(indices) ||
+  if (!st_pool_is_valid_4d(grad_output) ||
+      !st_pool_is_valid_indices_tensor(indices) ||
       !st_pool_is_valid_4d(grad_input)) {
     log_error(
         "Error: st_maxpool2d_backward_nchw expects valid contiguous 4D "
-        "tensors.");
+        "tensors and F32 indices.");
     return false;
   }
 
