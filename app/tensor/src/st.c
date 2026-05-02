@@ -19,9 +19,6 @@
 #if defined(USE_ACCELERATE)
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
-#elif defined(USE_OPENBLAS)
-#define BLASINT int
-#include <cblas.h>
 #endif
 
 static bool st_validate_shape(size_t ndim, const size_t *shape) {
@@ -683,7 +680,7 @@ bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {
     return ok;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+#if defined(USE_ACCELERATE)
   cblas_saxpy((BLASINT)a->numel, 1.0f, b->values, 1, a->values, 1);
 #else
 #pragma omp parallel for schedule(static) if (a->numel > 10000)
@@ -728,7 +725,7 @@ bool st_inplace_sub(FloatTensor *a, const FloatTensor *b) {
     return ok;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+#if defined(USE_ACCELERATE)
   cblas_saxpy((BLASINT)a->numel, -1.0f, b->values, 1, a->values, 1);
 #else
 #pragma omp parallel for schedule(static) if (a->numel > 10000)
@@ -760,7 +757,7 @@ bool st_inplace_scale(FloatTensor *t, float scalar) {
     return ok;
   }
 
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+#if defined(USE_ACCELERATE)
   cblas_sscal((BLASINT)t->numel, scalar, t->values, 1);
 #else
 #pragma omp parallel for schedule(static) if (t->numel > 10000)
@@ -1034,7 +1031,7 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
     const size_t cols = t->shape[1];
     for (size_t r = 0; r < rows; ++r) {
       const float *row = t->values + r * cols;
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+#if defined(USE_ACCELERATE)
       cblas_saxpy((BLASINT)cols, 1.0f, row, 1, result->values, 1);
 #else
       for (size_t j = 0; j < cols; ++j) {

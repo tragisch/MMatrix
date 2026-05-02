@@ -613,7 +613,7 @@ static bool st_conv2d_should_use_gemm(size_t n, size_t c_in, size_t c_out,
   /* When BLAS is available, sm_gemm delegates to cblas_sgemm which is
    * highly optimised — a lower threshold pays off.  Without BLAS the
    * naive OMP fallback makes im2col + GEMM less attractive. */
-#if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
+#if defined(USE_ACCELERATE)
   const double threshold = 1.0e6;
 #else
   const double threshold = 2.0e8;

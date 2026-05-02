@@ -1,5 +1,5 @@
-load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//tools:unity_test.bzl", "unity_test")
 
@@ -24,44 +24,11 @@ config_setting(
 )
 
 config_setting(
-    name = "linux_x86_64",
-    constraint_values = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
-)
-
-config_setting(
-    name = "linux",
-    constraint_values = [
-        "@platforms//os:linux",
-    ],
-)
-
-config_setting(
-    name = "backend_accelerate",
-    values = {"define": "MATRIX_BACKEND=accelerate"},
-)
-
-config_setting(
-    name = "backend_openblas",
-    values = {"define": "MATRIX_BACKEND=openblas"},
-)
-
-config_setting(
     name = "backend_accelerate_macos",
     constraint_values = [
         "@platforms//os:macos",
     ],
     values = {"define": "MATRIX_BACKEND=accelerate"},
-)
-
-config_setting(
-    name = "backend_openblas_linux",
-    constraint_values = [
-        "@platforms//os:linux",
-    ],
-    values = {"define": "MATRIX_BACKEND=openblas"},
 )
 
 default_copts = [
@@ -83,63 +50,31 @@ perf_copts = select({
         "-fomit-frame-pointer",
         "-march=native",
     ],
-    ":linux_x86_64": [
-        "-O3",
-        "-ffast-math",
-        "-funsafe-math-optimizations",
-        "-funroll-loops",
-        "-fomit-frame-pointer",
-        "-march=native",
-        "-mtune=native",
-        "-flto",
-        "-fno-math-errno",
-        "-fno-trapping-math",
-        "-falign-functions=32",
-    ],
     "//conditions:default": [],
 })
 
-package_copts = select({
-    ":backend_accelerate_macos": [
-        "-DUSE_ACCELERATE",
-        "-DACCELERATE_NEW_LAPACK",
-    ],
-    ":backend_openblas_linux": [
-        "-DUSE_OPENBLAS",
-    ],
-    "//conditions:default": [],
-})
+package_copts = [
+    "-DUSE_ACCELERATE",
+    "-DACCELERATE_NEW_LAPACK",
+]
 
-openmp_copts = select({
-    ":macos": [
-        "-Xpreprocessor",
-        "-fopenmp",
-    ],
-    ":linux": ["-fopenmp"],
-    "//conditions:default": [],
-})
+openmp_copts = [
+    "-Xpreprocessor",
+    "-fopenmp",
+]
 
-openmp_linkopts = select({
-    ":linux": [],
-    "//conditions:default": [],
-})
+openmp_linkopts = []
 
-accelerate_linkopts = select({
-    ":backend_accelerate_macos": [
-        "-framework Accelerate",
-        "-lc++abi",
-    ],
-    "//conditions:default": [],
-})
+accelerate_linkopts = [
+    "-framework Accelerate",
+    "-lc++abi",
+]
 
-mps_linkopts = select({
-    ":backend_accelerate_macos": [
-        "-framework Metal",
-        "-framework MetalPerformanceShaders",
-        "-framework MetalPerformanceShadersGraph",
-    ],
-    "//conditions:default": [],
-})
+mps_linkopts = [
+    "-framework Metal",
+    "-framework MetalPerformanceShaders",
+    "-framework MetalPerformanceShadersGraph",
+]
 
 default_deps = [
     "@openmp//:libomp",
@@ -171,19 +106,13 @@ cc_library(
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    target_compatible_with = select({
-        ":backend_accelerate": ["@platforms//os:macos"],
-        ":backend_openblas": ["@platforms//os:linux"],
-        "//conditions:default": [],
-    }),
+    target_compatible_with = ["@platforms//os:macos"],
     visibility = ["//visibility:public"],
-    deps = default_deps + ["//app/matrix:sm"] + select({
-        ":backend_accelerate_macos": [
-            ":st_mps_objc",
-            "//app/matrix:sm_mps_objc",
-        ],
-        "//conditions:default": [],
-    }),
+    deps = default_deps + [
+        ":st_mps_objc",
+        "//app/matrix:sm",
+        "//app/matrix:sm_mps_objc",
+    ],
 )
 
 objc_library(
@@ -209,10 +138,7 @@ objc_library(
         "include",
         "src",
     ],
-    target_compatible_with = select({
-        ":backend_accelerate": ["@platforms//os:macos"],
-        "//conditions:default": ["@platforms//:incompatible"],
-    }),
+    target_compatible_with = ["@platforms//os:macos"],
     deps = ["//app/matrix:sm_mps_objc"],
 )
 
