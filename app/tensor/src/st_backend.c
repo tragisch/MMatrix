@@ -5,6 +5,8 @@
 
 #include "st_backend.h"
 
+#include <log.h>
+#include <stdatomic.h>
 #include <stddef.h>
 
 /* ------------------------------------------------------------------ */
@@ -20,6 +22,74 @@ void st_set_default_backend(const StBackend *backend) {
 const StBackend *st_get_default_backend(void) { return g_default_backend; }
 
 /* ------------------------------------------------------------------ */
+/*  Fallback reason (thread-local)                                     */
+/* ------------------------------------------------------------------ */
+
+static _Thread_local StBackendFallbackReason g_last_fallback_reason =
+    ST_FALLBACK_NONE;
+
+void st_set_last_fallback_reason(StBackendFallbackReason reason) {
+  g_last_fallback_reason = reason;
+}
+
+StBackendFallbackReason st_get_last_fallback_reason(void) {
+  return g_last_fallback_reason;
+}
+
+const char *st_fallback_reason_str(StBackendFallbackReason reason) {
+  switch (reason) {
+    case ST_FALLBACK_NONE:              return "none";
+    case ST_FALLBACK_NO_MPS_DEVICE:     return "no_mps_device";
+    case ST_FALLBACK_BACKEND_FORCED_CPU:return "backend_forced_cpu";
+    case ST_FALLBACK_THRESHOLD:         return "threshold";
+    case ST_FALLBACK_MPS_ERROR:         return "mps_error";
+    case ST_FALLBACK_DTYPE_UNSUPPORTED: return "dtype_unsupported";
+    default:                            return "unknown";
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Backend dispatch counters                                          */
+/* ------------------------------------------------------------------ */
+
+static atomic_long g_counter_mps_hit      = 0;
+static atomic_long g_counter_mps_miss     = 0;
+static atomic_long g_counter_fallback_gemm = 0;
+static atomic_long g_counter_fallback_ref  = 0;
+
+void st_backend_counter_mps_hit(void) {
+  atomic_fetch_add_explicit(&g_counter_mps_hit, 1L, memory_order_relaxed);
+}
+
+void st_backend_counter_mps_miss(void) {
+  atomic_fetch_add_explicit(&g_counter_mps_miss, 1L, memory_order_relaxed);
+}
+
+void st_backend_counter_fallback_gemm(void) {
+  atomic_fetch_add_explicit(&g_counter_fallback_gemm, 1L, memory_order_relaxed);
+}
+
+void st_backend_counter_fallback_ref(void) {
+  atomic_fetch_add_explicit(&g_counter_fallback_ref, 1L, memory_order_relaxed);
+}
+
+StBackendCounters st_backend_get_counters(void) {
+  StBackendCounters c;
+  c.mps_hit       = atomic_load_explicit(&g_counter_mps_hit,       memory_order_relaxed);
+  c.mps_miss      = atomic_load_explicit(&g_counter_mps_miss,      memory_order_relaxed);
+  c.fallback_gemm = atomic_load_explicit(&g_counter_fallback_gemm, memory_order_relaxed);
+  c.fallback_ref  = atomic_load_explicit(&g_counter_fallback_ref,  memory_order_relaxed);
+  return c;
+}
+
+void st_backend_reset_counters(void) {
+  atomic_store_explicit(&g_counter_mps_hit,       0L, memory_order_relaxed);
+  atomic_store_explicit(&g_counter_mps_miss,      0L, memory_order_relaxed);
+  atomic_store_explicit(&g_counter_fallback_gemm, 0L, memory_order_relaxed);
+  atomic_store_explicit(&g_counter_fallback_ref,  0L, memory_order_relaxed);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Auto-select                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -30,21 +100,40 @@ const StBackend *st_select_backend(StOp op, const FloatTensor *tensor) {
         g_default_backend->supports_op(
             op, tensor ? tensor->numel : 0,
             (tensor && tensor->buf) ? tensor->buf->type : ST_BUFFER_CPU)) {
+      g_last_fallback_reason = ST_FALLBACK_NONE;
       return g_default_backend;
     }
     /* Explicit backend doesn't support this op → fall through to CPU. */
+    g_last_fallback_reason = ST_FALLBACK_BACKEND_FORCED_CPU;
+    log_debug("backend: op=%d forced backend '%s' does not support op → CPU "
+              "(reason=%s)", op,
+              g_default_backend->name ? g_default_backend->name : "?",
+              st_fallback_reason_str(ST_FALLBACK_BACKEND_FORCED_CPU));
     return NULL;
   }
 
   /* Auto mode: try MPS first. */
   const StBackend *mps = st_backend_mps();
-  if (mps && mps->supports_op) {
+  if (!mps) {
+    g_last_fallback_reason = ST_FALLBACK_NO_MPS_DEVICE;
+    return NULL;
+  }
+
+  if (mps->supports_op) {
     StBufferType bt =
         (tensor && tensor->buf) ? tensor->buf->type : ST_BUFFER_CPU;
     if (mps->supports_op(op, tensor ? tensor->numel : 0, bt)) {
+      g_last_fallback_reason = ST_FALLBACK_NONE;
+      atomic_fetch_add_explicit(&g_counter_mps_hit, 1L, memory_order_relaxed);
       return mps;
     }
   }
+
+  /* MPS available but declined this op (threshold / dtype). */
+  g_last_fallback_reason = ST_FALLBACK_THRESHOLD;
+  atomic_fetch_add_explicit(&g_counter_mps_miss, 1L, memory_order_relaxed);
+  log_debug("backend: op=%d MPS declined → CPU (reason=%s)", op,
+            st_fallback_reason_str(ST_FALLBACK_THRESHOLD));
 
   /* CPU fallback — caller uses existing implementation directly. */
   return NULL;

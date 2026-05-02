@@ -7,6 +7,7 @@
  */
 
 #include "st_batchnorm.h"
+#include "st.h"
 
 #include <math.h>
 #include <string.h>
@@ -240,4 +241,51 @@ void test_st_batchnorm2d_backward_gradient_consistency(void) {
   st_destroy(mean);
   st_destroy(output);
   st_destroy(input);
+}
+
+/* ------------------------------------------------------------------ */
+/*  BF16 promotion test (Item #8 — BF16 policy)                       */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Verify that st_batchnorm2d_forward auto-promotes BF16 input/output
+ * and gamma/beta tensors to F32 for computation.
+ *
+ * Input: 2×2×2×2 (N=2, C=2, H=2, W=2) with alternating +1 / -1 (BF16).
+ * gamma=1, beta=0 (F32 default).
+ * After BN: output should be normalised; all values within F32 tolerance.
+ */
+void test_st_batchnorm2d_bf16_promotion(void) {
+  /* N=2, C=2, H=2, W=2 → numel=16 */
+  size_t shape4[4] = {2, 2, 2, 2};
+  size_t shape1[1] = {2};
+  const size_t numel = 16;
+
+  FloatTensor *input  = st_create_bf16(4, shape4);
+  FloatTensor *output = st_create_bf16(4, shape4);
+  FloatTensor *mean   = st_create(1, shape1);
+  FloatTensor *var    = st_create(1, shape1);
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(output);
+  TEST_ASSERT_NOT_NULL(mean);
+  TEST_ASSERT_NOT_NULL(var);
+
+  /* Fill alternating +1 / -1 in BF16 (numel elements, not 32) */
+  for (size_t i = 0; i < numel; ++i)
+    ((uint16_t *)input->values)[i] = st_f32_to_bf16(i % 2 == 0 ? 1.0f : -1.0f);
+
+  bool ok = st_batchnorm2d_forward(input, NULL, NULL, 1e-5f, output, mean, var);
+  TEST_ASSERT_TRUE(ok);
+
+  /* Mean of ±1 alternating sequence is ~0; output should be normalised near ±1 */
+  for (size_t i = 0; i < numel; ++i) {
+    float v = st_bf16_to_f32(((uint16_t *)output->values)[i]);
+    TEST_ASSERT_FALSE(v != v);  /* no NaN */
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, (i % 2 == 0 ? 1.0f : -1.0f), v);
+  }
+
+  st_destroy(input);
+  st_destroy(output);
+  st_destroy(mean);
+  st_destroy(var);
 }

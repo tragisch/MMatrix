@@ -70,6 +70,26 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
                                 float *output, float *mean_out,
                                 float *var_out);
 
+/* ---- Warmup: pre-populate MPSGraph cache (reduce first-run latency) ---- */
+
+/// Pre-compiles the MPSGraph for MaxPool2D at the given shape/stride/pad.
+/// Safe to call from any thread; no-op if MPS is unavailable.
+void st_mps_warmup_maxpool2d(size_t n, size_t c, size_t h, size_t w,
+                              size_t kh, size_t kw,
+                              size_t sh, size_t sw,
+                              size_t ph, size_t pw,
+                              size_t oh, size_t ow);
+
+/// Pre-compiles the MPSGraph for AvgPool2D at the given shape/stride/pad.
+void st_mps_warmup_avgpool2d(size_t n, size_t c, size_t h, size_t w,
+                              size_t kh, size_t kw,
+                              size_t sh, size_t sw,
+                              size_t ph, size_t pw,
+                              size_t oh, size_t ow);
+
+/// Pre-compiles the MPSGraph for BatchNorm2D at the given shape.
+void st_mps_warmup_batchnorm2d(size_t n, size_t c, size_t h, size_t w);
+
 #ifdef __cplusplus
 }
 #endif

@@ -137,5 +137,23 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
 // Returns a new tensor with shape [N, C, H+2*pad_h, W+2*pad_w].
 FloatTensor *st_pad_nchw(const FloatTensor *input, size_t pad_h, size_t pad_w,
                          float value);
+/* ---- MPSGraph warmup (shape-aware, reduces first-run latency) ---- */
 
+/// Shape descriptor for st_mps_warmup_shapes().
+/// Set c_out=0 to skip Conv2D warmup for this entry.
+typedef struct {
+  size_t n, c_in, h, w;    /* input: batch, channels, height, width */
+  size_t c_out;             /* conv: output channels (0 = conv skipped) */
+  size_t kh, kw;            /* conv/pool: kernel size                   */
+  size_t sh, sw;            /* stride                                   */
+  size_t ph, pw;            /* padding                                  */
+} StWarmupShape;
+
+/// Pre-compiles MPSGraph for each shape in `shapes[0..count-1]`.
+/// Warms up Conv2D (if c_out>0), MaxPool2D, AvgPool2D and BatchNorm2D.
+/// Safe to call from any thread; silently skips shapes where MPS is not
+/// the selected backend or where any allocation fails.
+/// Activated automatically when MMATRIX_ST_MPS_WARMUP=1 is set; callers
+/// can also invoke this function directly with custom shape lists.
+void st_mps_warmup_shapes(const StWarmupShape *shapes, size_t count);
 #endif  // ST_H

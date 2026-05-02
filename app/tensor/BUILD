@@ -91,6 +91,7 @@ cc_library(
         "src/st_conv.c",
         "src/st_dtype.c",
         "src/st_pool.c",
+        "src/st_warmup.c",
         "src/st_workspace.c",
     ],
     hdrs = [
@@ -235,6 +236,38 @@ unity_test(
 cc_binary(
     name = "bench_st_conv_backward_gemm",
     srcs = ["tests/bench_st_conv_backward_gemm.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)
+
+cc_binary(
+    name = "bench_st_single_op",
+    srcs = ["tests/bench_st_single_op.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)
+
+cc_binary(
+    name = "bench_st_pipeline",
+    srcs = ["tests/bench_st_pipeline.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)
+
+cc_binary(
+    name = "bench_st_transfer",
+    srcs = ["tests/bench_st_transfer.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)
+
+cc_binary(
+    name = "bench_st_warmup",
+    srcs = ["tests/bench_st_warmup.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
     deps = [":st"],

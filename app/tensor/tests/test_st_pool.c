@@ -7,6 +7,7 @@
  */
 
 #include "st_pool.h"
+#include "st.h"
 
 #include <math.h>
 
@@ -335,4 +336,73 @@ void test_st_global_avgpool2d_backward_nchw_basic(void) {
 
   st_destroy(grad_input);
   st_destroy(grad_output);
+}
+
+/* ------------------------------------------------------------------ */
+/*  BF16 promotion tests (Item #8 — BF16 policy)                      */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Verify that st_maxpool2d_nchw auto-promotes BF16 input/output tensors
+ * to F32 for computation and the result matches the F32 reference.
+ *
+ * Input: 1×1×4×4 with values 1..16 (as BF16)
+ * Pool:  2×2 kernel, stride 2, no padding  → 1×1×2×2 output
+ * Expected max values: 6, 8, 14, 16
+ */
+void test_st_maxpool2d_bf16_promotion(void) {
+  size_t in_shape[4]  = {1, 1, 4, 4};
+  size_t out_shape[4] = {1, 1, 2, 2};
+
+  FloatTensor *input  = st_create_bf16(4, in_shape);
+  FloatTensor *output = st_create_bf16(4, out_shape);
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(output);
+
+  for (size_t i = 0; i < 16; ++i)
+    ((uint16_t *)input->values)[i] = st_f32_to_bf16((float)(i + 1));
+
+  bool ok = st_maxpool2d_nchw(input, 2, 2, 2, 2, 0, 0, output, NULL);
+  TEST_ASSERT_TRUE(ok);
+
+  const float expected[4] = {6.0f, 8.0f, 14.0f, 16.0f};
+  for (size_t i = 0; i < 4; ++i) {
+    float v = st_bf16_to_f32(((uint16_t *)output->values)[i]);
+    TEST_ASSERT_FLOAT_WITHIN(1e-2f, expected[i], v);
+  }
+
+  st_destroy(input);
+  st_destroy(output);
+}
+
+/*
+ * Verify that st_avgpool2d_nchw auto-promotes BF16 input/output tensors.
+ *
+ * Input: 1×1×4×4 with constant value 3.0 (as BF16)
+ * Pool:  2×2 kernel, stride 2, no padding
+ * Expected: all output cells = 3.0
+ */
+void test_st_avgpool2d_bf16_promotion(void) {
+  size_t in_shape[4]  = {1, 1, 4, 4};
+  size_t out_shape[4] = {1, 1, 2, 2};
+
+  FloatTensor *input  = st_create_bf16(4, in_shape);
+  FloatTensor *output = st_create_bf16(4, out_shape);
+  TEST_ASSERT_NOT_NULL(input);
+  TEST_ASSERT_NOT_NULL(output);
+
+  uint16_t v3 = st_f32_to_bf16(3.0f);
+  for (size_t i = 0; i < 16; ++i)
+    ((uint16_t *)input->values)[i] = v3;
+
+  bool ok = st_avgpool2d_nchw(input, 2, 2, 2, 2, 0, 0, output);
+  TEST_ASSERT_TRUE(ok);
+
+  for (size_t i = 0; i < 4; ++i) {
+    float v = st_bf16_to_f32(((uint16_t *)output->values)[i]);
+    TEST_ASSERT_FLOAT_WITHIN(5e-2f, 3.0f, v);
+  }
+
+  st_destroy(input);
+  st_destroy(output);
 }

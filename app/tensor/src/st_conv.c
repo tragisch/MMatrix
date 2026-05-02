@@ -847,11 +847,17 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
       ok = st_conv2d_mps_nchw(input, weight, bias, &local, output);
       if (ok) {
         g_last_backend = "mps";
+        st_backend_counter_mps_hit();
         return true;
       }
+      st_set_last_fallback_reason(ST_FALLBACK_MPS_ERROR);
+      st_backend_counter_mps_miss();
+      log_debug("conv2d: MPS backend failed → fallback to gemm (reason=%s)",
+                st_fallback_reason_str(ST_FALLBACK_MPS_ERROR));
       ok = st_conv2d_gemm_nchw(input, weight, bias, &local, output);
       if (ok) {
         g_last_backend = "mps_fallback_gemm";
+        st_backend_counter_fallback_gemm();
         return true;
       }
       ok = st_conv2d_reference_nchw(input, weight, bias, &local, output);
@@ -860,6 +866,7 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
         return false;
       }
       g_last_backend = "mps_fallback_reference";
+      st_backend_counter_fallback_ref();
       return true;
 
     case ST_CONV_BACKEND_BNNS:
@@ -890,8 +897,28 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
         ok = st_conv2d_mps_nchw(input, weight, bias, &local, output);
         if (ok) {
           g_last_backend = "mps";
+          st_set_last_fallback_reason(ST_FALLBACK_NONE);
+          st_backend_counter_mps_hit();
           return true;
         }
+        st_set_last_fallback_reason(ST_FALLBACK_MPS_ERROR);
+        st_backend_counter_mps_miss();
+        log_debug("conv2d: MPS backend failed → CPU fallback (reason=%s)",
+                  st_fallback_reason_str(ST_FALLBACK_MPS_ERROR));
+      } else {
+        /* MPS threshold not met or MPS not available. */
+        if (!st_backend_mps()) {
+          st_set_last_fallback_reason(ST_FALLBACK_NO_MPS_DEVICE);
+        } else {
+          const StBackend *dflt = st_get_default_backend();
+          if (dflt && dflt != st_backend_mps()) {
+            st_set_last_fallback_reason(ST_FALLBACK_BACKEND_FORCED_CPU);
+          } else {
+            st_set_last_fallback_reason(ST_FALLBACK_THRESHOLD);
+          }
+        }
+        log_debug("conv2d: MPS not selected (reason=%s)",
+                  st_fallback_reason_str(st_get_last_fallback_reason()));
       }
 
       ok = st_conv2d_bnns_nchw(input, weight, bias, &local, output);
@@ -903,6 +930,7 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
       if (st_conv2d_should_use_gemm(n, c_in, c_out, out_h, out_w, k_h, k_w)) {
         ok = st_conv2d_gemm_nchw(input, weight, bias, &local, output);
         if (ok) {
+          st_backend_counter_fallback_gemm();
           return true;
         }
       }
@@ -920,6 +948,7 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
         log_error("Error: st_conv2d_nchw reference path failed.");
         return false;
       }
+      st_backend_counter_fallback_ref();
       return true;
   }
 }

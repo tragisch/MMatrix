@@ -598,3 +598,38 @@ static const StBackend s_mps_backend = {
 };
 
 const StBackend *st_backend_mps(void) { return &s_mps_backend; }
+
+/* ================================================================== */
+/*  Conv2D warmup: pre-populate MPSGraph cache for a given shape       */
+/* ================================================================== */
+
+void st_backend_mps_warmup_conv2d(size_t n, size_t c_in, size_t h, size_t w,
+                                   size_t c_out, size_t kh, size_t kw,
+                                   size_t sh, size_t sw, size_t ph, size_t pw,
+                                   size_t dh, size_t dw) {
+  size_t out_h = (h + 2 * ph - dh * (kh - 1) - 1) / sh + 1;
+  size_t out_w = (w + 2 * pw - dw * (kw - 1) - 1) / sw + 1;
+
+  size_t shape_in[4]  = {n, c_in,  h,    w};
+  size_t shape_w[4]   = {c_out, c_in, kh, kw};
+  size_t shape_out[4] = {n, c_out, out_h, out_w};
+
+  FloatTensor *tin  = st_create(4, shape_in);
+  FloatTensor *tw   = st_create(4, shape_w);
+  FloatTensor *tout = st_create(4, shape_out);
+  if (!tin || !tw || !tout) {
+    st_destroy(tin); st_destroy(tw); st_destroy(tout);
+    return;
+  }
+
+  StConv2dParams params = {
+    .stride_h   = sh, .stride_w   = sw,
+    .pad_h      = ph, .pad_w      = pw,
+    .dilation_h = dh, .dilation_w = dw,
+    .backend    = ST_CONV_BACKEND_MPS,
+  };
+
+  mps_conv2d_forward(tin, tw, NULL, &params, tout);
+
+  st_destroy(tin); st_destroy(tw); st_destroy(tout);
+}

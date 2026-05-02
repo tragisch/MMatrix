@@ -409,3 +409,51 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
 
   } // @autoreleasepool
 }
+
+/* ================================================================== */
+/*  Warmup helpers: pre-populate MPSGraph cache for given shapes       */
+/*  These run the graph once with zeroed CPU buffers and discard the   */
+/*  result, leaving the compiled graph in the NSCache for reuse.       */
+/* ================================================================== */
+
+void st_mps_warmup_maxpool2d(size_t n, size_t c, size_t h, size_t w,
+                              size_t kh, size_t kw,
+                              size_t sh, size_t sw,
+                              size_t ph, size_t pw,
+                              size_t oh, size_t ow) {
+  const size_t in_elems  = n * c * h * w;
+  const size_t out_elems = n * c * oh * ow;
+  float *in  = (float *)calloc(in_elems,  sizeof(float));
+  float *out = (float *)calloc(out_elems, sizeof(float));
+  if (in && out)
+    st_maxpool2d_mps(in, NULL, n, c, h, w, kh, kw, sh, sw, ph, pw, out, oh, ow);
+  free(in);
+  free(out);
+}
+
+void st_mps_warmup_avgpool2d(size_t n, size_t c, size_t h, size_t w,
+                              size_t kh, size_t kw,
+                              size_t sh, size_t sw,
+                              size_t ph, size_t pw,
+                              size_t oh, size_t ow) {
+  const size_t in_elems  = n * c * h * w;
+  const size_t out_elems = n * c * oh * ow;
+  float *in  = (float *)calloc(in_elems,  sizeof(float));
+  float *out = (float *)calloc(out_elems, sizeof(float));
+  if (in && out)
+    st_avgpool2d_mps(in, NULL, n, c, h, w, kh, kw, sh, sw, ph, pw, out, oh, ow);
+  free(in);
+  free(out);
+}
+
+void st_mps_warmup_batchnorm2d(size_t n, size_t c, size_t h, size_t w) {
+  const size_t in_elems = n * c * h * w;
+  float *in    = (float *)calloc(in_elems, sizeof(float));
+  float *out   = (float *)calloc(in_elems, sizeof(float));
+  float *mean  = (float *)calloc(c,        sizeof(float));
+  float *var   = (float *)calloc(c,        sizeof(float));
+  if (in && out && mean && var)
+    st_batchnorm2d_forward_mps(in, NULL, n, c, h, w,
+                               NULL, NULL, 1e-5f, out, mean, var);
+  free(in); free(out); free(mean); free(var);
+}

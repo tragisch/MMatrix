@@ -94,6 +94,63 @@ typedef struct StBackend {
 } StBackend;
 
 /* ------------------------------------------------------------------ */
+/*  Fallback reason codes                                              */
+/* ------------------------------------------------------------------ */
+
+/// Reason why a backend selection fell back to CPU.
+/// Updated by st_select_backend() and by individual dispatch sites.
+/// Per-thread: each thread maintains its own last reason.
+typedef enum StBackendFallbackReason {
+  ST_FALLBACK_NONE = 0,           /**< No fallback — preferred backend used. */
+  ST_FALLBACK_NO_MPS_DEVICE,      /**< MPS not compiled or no Metal device.  */
+  ST_FALLBACK_BACKEND_FORCED_CPU, /**< User-set override does not support op. */
+  ST_FALLBACK_THRESHOLD,          /**< Below MACs / element-count threshold.  */
+  ST_FALLBACK_MPS_ERROR,          /**< MPS backend returned false at runtime. */
+  ST_FALLBACK_DTYPE_UNSUPPORTED,  /**< dtype not supported by backend.        */
+} StBackendFallbackReason;
+
+/// Set the thread-local last fallback reason.
+void st_set_last_fallback_reason(StBackendFallbackReason reason);
+
+/// Get the thread-local last fallback reason.
+StBackendFallbackReason st_get_last_fallback_reason(void);
+
+/// Human-readable name for a fallback reason (never NULL).
+const char *st_fallback_reason_str(StBackendFallbackReason reason);
+
+/* ------------------------------------------------------------------ */
+/*  Backend dispatch counters                                          */
+/* ------------------------------------------------------------------ */
+
+/// Counters for backend dispatch decisions.  All fields are process-wide
+/// atomics (stdatomic) so they are safe to read/write from any thread.
+/// Overhead in hot paths is a single atomic_fetch_add (≈1 cycle on TSO).
+typedef struct StBackendCounters {
+  long mps_hit;         /**< Op successfully handled by MPS.               */
+  long mps_miss;        /**< MPS declined or unavailable, fell to CPU.      */
+  long fallback_gemm;   /**< CPU fallback routed to GEMM path.              */
+  long fallback_ref;    /**< CPU fallback routed to reference path.         */
+} StBackendCounters;
+
+/// Increment the mps_hit counter by 1.
+void st_backend_counter_mps_hit(void);
+
+/// Increment the mps_miss counter by 1.
+void st_backend_counter_mps_miss(void);
+
+/// Increment the fallback_gemm counter by 1.
+void st_backend_counter_fallback_gemm(void);
+
+/// Increment the fallback_ref counter by 1.
+void st_backend_counter_fallback_ref(void);
+
+/// Snapshot of all counters at the time of the call (non-atomic snapshot).
+StBackendCounters st_backend_get_counters(void);
+
+/// Reset all counters to zero.
+void st_backend_reset_counters(void);
+
+/* ------------------------------------------------------------------ */
 /*  Global dispatch                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -121,6 +178,13 @@ const StBackend *st_get_default_backend(void);
 /// for the tensor's numel and buffer type; otherwise returns NULL
 /// (meaning: use the existing CPU code path).
 const StBackend *st_select_backend(StOp op, const FloatTensor *tensor);
+
+/// Pre-compile the MPS conv2D graph for the given shape.
+/// Called by st_mps_warmup_shapes(); no-op if MPS unavailable.
+void st_backend_mps_warmup_conv2d(size_t n, size_t c_in, size_t h, size_t w,
+                                   size_t c_out, size_t kh, size_t kw,
+                                   size_t sh, size_t sw, size_t ph, size_t pw,
+                                   size_t dh, size_t dw);
 
 #ifdef __cplusplus
 }
