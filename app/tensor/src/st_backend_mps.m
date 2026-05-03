@@ -646,7 +646,7 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
     }
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
-    if (executable && output->buf) {
+    if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
       /* Build feedMap for order-independent inputsArray construction. */
       NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
           [NSMutableDictionary dictionaryWithDictionary:feeds];
@@ -1003,7 +1003,7 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
     }
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
-    if (executable && output->buf) {
+    if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
       NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
           [NSMutableDictionary dictionaryWithDictionary:feeds];
       NSMutableArray<MPSGraphTensorData *> *inputsArray =

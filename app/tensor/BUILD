@@ -243,6 +243,14 @@ cc_binary(
 )
 
 cc_binary(
+    name = "bench_st_ab_conv",
+    srcs = ["tests/bench_st_ab_conv.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)
+
+cc_binary(
     name = "bench_st_conv_backward_gemm",
     srcs = ["tests/bench_st_conv_backward_gemm.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
