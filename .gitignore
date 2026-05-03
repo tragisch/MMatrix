@@ -134,3 +134,4 @@ profile.gz
 docs/*
 docs/
 
+/.venv-bench/
