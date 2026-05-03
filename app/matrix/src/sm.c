@@ -110,7 +110,7 @@ SmBackend sm_get_backend(void) { return sm_current_backend; }
 
 bool sm_mps_available(void) {
 #if defined(SM_HAS_MPS)
-  return true;
+  return mps_get_shared_device() != NULL;
 #else
   return false;
 #endif
