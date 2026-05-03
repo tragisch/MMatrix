@@ -104,7 +104,7 @@ static const StWeightPack *st_weight_prepack(const FloatTensor *weight,
 }
 
 static const double ST_CONV_MPS_MACS_THRESHOLD_DEFAULT = 2.0e8;
-static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 1000000u;
+static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 800000u;
 
 static double g_mps_macs_threshold = ST_CONV_MPS_MACS_THRESHOLD_DEFAULT;
 static size_t g_mps_out_elems_threshold =
