@@ -129,6 +129,7 @@ objc_library(
         "include/st_buffer.h",
         "include/st_conv.h",
         "include/st_dtype.h",
+        "include/st_pool.h",
         "src/st_buffer_metal.h",
         "src/st_mps.h",
     ],
@@ -230,6 +231,14 @@ unity_test(
     srcs = ["tests/test_st_dtype.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
+    deps = [":st"],
+)
+
+cc_binary(
+    name = "bench_st_canonical",
+    srcs = ["tests/bench_st_canonical.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
     deps = [":st"],
 )
 

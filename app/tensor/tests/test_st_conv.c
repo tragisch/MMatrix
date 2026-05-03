@@ -8,6 +8,7 @@
 
 #include "st_conv.h"
 #include "st_batchnorm.h"
+#include "st_backend.h"
 
 #define UNITY_INCLUDE_FLOAT
 #define UNITY_FLOAT_PRECISION 6
@@ -85,6 +86,18 @@ void test_st_conv2d_output_hw_should_compute_expected_shape(void) {
   TEST_ASSERT_TRUE(ok);
   TEST_ASSERT_EQUAL(3, out_h);
   TEST_ASSERT_EQUAL(3, out_w);
+}
+
+void test_st_conv2d_output_hw_should_fail_on_padding_overflow(void) {
+  StConv2dParams p = st_conv2d_default_params();
+  p.pad_h = (SIZE_MAX / 2u) + 1u;
+  p.pad_w = (SIZE_MAX / 2u) + 1u;
+
+  size_t out_h = 0;
+  size_t out_w = 0;
+  bool ok = st_conv2d_output_hw(5, 5, 3, 3, &p, &out_h, &out_w);
+
+  TEST_ASSERT_FALSE(ok);
 }
 
 void test_st_conv2d_nchw_reference_without_bias(void) {
@@ -447,6 +460,37 @@ void test_st_conv_mps_thresholds_should_reject_invalid_values(void) {
   TEST_ASSERT_EQUAL_size_t(12345u, out_elems);
 }
 
+void test_st_backend_mps_thresholds_should_be_settable_and_queryable(void) {
+  bool ok = st_backend_set_mps_thresholds(8192u, 16384u);
+  TEST_ASSERT_TRUE(ok);
+
+  size_t pool_threshold = 0;
+  size_t bn_threshold = 0;
+  st_backend_get_mps_thresholds(&pool_threshold, &bn_threshold);
+
+  TEST_ASSERT_EQUAL_size_t(8192u, pool_threshold);
+  TEST_ASSERT_EQUAL_size_t(16384u, bn_threshold);
+}
+
+void test_st_backend_mps_thresholds_should_reject_invalid_values(void) {
+  size_t pool_threshold = 0;
+  size_t bn_threshold = 0;
+  st_backend_get_mps_thresholds(&pool_threshold, &bn_threshold);
+
+  bool ok = st_backend_set_mps_thresholds(0u, bn_threshold);
+  TEST_ASSERT_FALSE(ok);
+
+  ok = st_backend_set_mps_thresholds(pool_threshold, 0u);
+  TEST_ASSERT_FALSE(ok);
+
+  size_t pool_after = 0;
+  size_t bn_after = 0;
+  st_backend_get_mps_thresholds(&pool_after, &bn_after);
+
+  TEST_ASSERT_EQUAL_size_t(pool_threshold, pool_after);
+  TEST_ASSERT_EQUAL_size_t(bn_threshold, bn_after);
+}
+
 void test_st_conv2d_1x1_gemm_should_match_reference(void) {
   FloatTensor *input = create_tensor_4d(1, 3, 4, 4);
   FloatTensor *weight = create_tensor_4d(2, 3, 1, 1);
@@ -610,7 +654,7 @@ void test_st_conv2d_batchnorm2d_forward_should_match_separate_ops(void) {
 
   bool ok = st_conv2d_batchnorm2d_forward_nchw(
       input, weight, bias, &p, gamma, beta, 1e-5f,
-      fused_out, fused_mean, fused_var);
+      fused_out, fused_mean, fused_var, false);
   TEST_ASSERT_TRUE(ok);
 
   p.backend = ST_CONV_BACKEND_REFERENCE;
@@ -675,7 +719,7 @@ void test_st_conv2d_batchnorm2d_forward_without_optional_tensors_should_match_se
 
   bool ok = st_conv2d_batchnorm2d_forward_nchw(
       input, weight, NULL, &p, NULL, NULL, 1e-5f,
-      fused_out, fused_mean, fused_var);
+      fused_out, fused_mean, fused_var, false);
   TEST_ASSERT_TRUE(ok);
 
   p.backend = ST_CONV_BACKEND_REFERENCE;

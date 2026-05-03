@@ -10,6 +10,7 @@
 #include "st_backend.h"
 #include "st_batchnorm.h"
 #include "st_dtype.h"
+#include "st_pool.h"
 #include "st_workspace.h"
 #include "sm.h"
 
@@ -171,6 +172,14 @@ static inline bool st_safe_mul(size_t a, size_t b, size_t *out) {
     return false;
   }
   *out = a * b;
+  return true;
+}
+
+static inline bool st_safe_add(size_t a, size_t b, size_t *out) {
+  if (out == NULL || a > SIZE_MAX - b) {
+    return false;
+  }
+  *out = a + b;
   return true;
 }
 
@@ -697,12 +706,23 @@ bool st_conv2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
   const size_t eff_h = dil_km1_h + 1;
   const size_t eff_w = dil_km1_w + 1;
 
-  if (in_h + 2 * params->pad_h < eff_h || in_w + 2 * params->pad_w < eff_w) {
+  size_t pad2_h = 0;
+  size_t pad2_w = 0;
+  size_t padded_h = 0;
+  size_t padded_w = 0;
+  if (!st_safe_mul(params->pad_h, 2, &pad2_h) ||
+      !st_safe_mul(params->pad_w, 2, &pad2_w) ||
+      !st_safe_add(in_h, pad2_h, &padded_h) ||
+      !st_safe_add(in_w, pad2_w, &padded_w)) {
     return false;
   }
 
-  *out_h = (in_h + 2 * params->pad_h - eff_h) / params->stride_h + 1;
-  *out_w = (in_w + 2 * params->pad_w - eff_w) / params->stride_w + 1;
+  if (padded_h < eff_h || padded_w < eff_w) {
+    return false;
+  }
+
+  *out_h = (padded_h - eff_h) / params->stride_h + 1;
+  *out_w = (padded_w - eff_w) / params->stride_w + 1;
   return true;
 }
 
@@ -957,8 +977,9 @@ bool st_conv2d_batchnorm2d_forward_nchw(
     const FloatTensor *input, const FloatTensor *weight,
     const FloatTensor *bias, const StConv2dParams *params,
     const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
-    FloatTensor *output, FloatTensor *mean, FloatTensor *var) {
-  if (!input || !weight || !params || !output || !mean || !var) {
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu) {
+  if (!input || !weight || !params || !output) {
     log_error("Error: st_conv2d_batchnorm2d_forward_nchw received NULL required argument.");
     return false;
   }
@@ -970,16 +991,16 @@ bool st_conv2d_batchnorm2d_forward_nchw(
       (!gamma || gamma->dtype == ST_DTYPE_F32) &&
       (!beta || beta->dtype == ST_DTYPE_F32) &&
       output->dtype == ST_DTYPE_F32 &&
-      mean->dtype == ST_DTYPE_F32 &&
-      var->dtype == ST_DTYPE_F32 &&
+      (!mean || mean->dtype == ST_DTYPE_F32) &&
+      (!var  || var->dtype  == ST_DTYPE_F32) &&
       (params->backend == ST_CONV_BACKEND_AUTO ||
        params->backend == ST_CONV_BACKEND_MPS);
 
   if (can_try_mps &&
       st_backend_conv2d_batchnorm2d_forward_mps(
           input, weight, bias, params, gamma, beta, epsilon,
-          output, mean, var)) {
-    g_last_backend = "mps_conv_bn";
+          output, mean, var, apply_relu)) {
+    g_last_backend = apply_relu ? "mps_conv_bn_relu" : "mps_conv_bn";
     return true;
   }
 
@@ -991,11 +1012,87 @@ bool st_conv2d_batchnorm2d_forward_nchw(
 
   bool ok = st_conv2d_nchw(input, weight, bias, params, conv_out);
   if (ok) {
-    ok = st_batchnorm2d_forward(conv_out, gamma, beta, epsilon,
-                                output, mean, var);
+    ok = apply_relu
+        ? st_batchnorm2d_forward_relu(conv_out, gamma, beta, epsilon, output, mean, var)
+        : st_batchnorm2d_forward(conv_out, gamma, beta, epsilon, output, mean, var);
   }
 
   st_destroy(conv_out);
+  return ok;
+}
+
+bool st_conv2d_batchnorm2d_pool_forward_nchw(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *conv_params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    const StPool2dParams *pool_params,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu) {
+  if (!input || !weight || !conv_params || !pool_params || !output) {
+    log_error("Error: st_conv2d_batchnorm2d_pool_forward_nchw received NULL required argument.");
+    return false;
+  }
+
+  const bool can_try_mps =
+      input->dtype == ST_DTYPE_F32 &&
+      weight->dtype == ST_DTYPE_F32 &&
+      (!bias  || bias->dtype  == ST_DTYPE_F32) &&
+      (!gamma || gamma->dtype == ST_DTYPE_F32) &&
+      (!beta  || beta->dtype  == ST_DTYPE_F32) &&
+      output->dtype == ST_DTYPE_F32 &&
+      (!mean || mean->dtype == ST_DTYPE_F32) &&
+      (!var  || var->dtype  == ST_DTYPE_F32) &&
+      (conv_params->backend == ST_CONV_BACKEND_AUTO ||
+       conv_params->backend == ST_CONV_BACKEND_MPS);
+
+  if (can_try_mps &&
+      st_backend_conv2d_batchnorm2d_pool_forward_mps(
+          input, weight, bias, conv_params,
+          gamma, beta, epsilon, pool_params,
+          output, mean, var, apply_relu)) {
+    g_last_backend = apply_relu ? "mps_conv_bn_pool_relu" : "mps_conv_bn_pool";
+    return true;
+  }
+
+  /* CPU fallback: fused conv+bn, then pool separately. */
+  const size_t c_in  = input->shape[1];
+  const size_t h_in  = input->shape[2];
+  const size_t w_in  = input->shape[3];
+  const size_t c_out = weight->shape[0];
+  const size_t k_h   = weight->shape[2];
+  const size_t k_w   = weight->shape[3];
+  size_t bn_h = 0, bn_w = 0;
+  if (!st_conv2d_output_hw(h_in, w_in, k_h, k_w, conv_params, &bn_h, &bn_w))
+    return false;
+
+  const size_t n = input->shape[0];
+  const size_t bn_shape[4] = { n, c_out, bn_h, bn_w };
+  FloatTensor *bn_out = st_create(4, bn_shape);
+  if (!bn_out) {
+    log_error("Error: st_conv2d_batchnorm2d_pool_forward_nchw temporary allocation failed.");
+    return false;
+  }
+
+  bool ok = st_conv2d_batchnorm2d_forward_nchw(
+      input, weight, bias, conv_params, gamma, beta, epsilon,
+      bn_out, mean, var, apply_relu);
+  if (ok) {
+    if (pool_params->pool_type == ST_POOL_MAX) {
+      ok = st_maxpool2d_nchw(bn_out,
+          pool_params->kernel_h, pool_params->kernel_w,
+          pool_params->stride_h, pool_params->stride_w,
+          pool_params->pad_h, pool_params->pad_w,
+          output, NULL);
+    } else {
+      ok = st_avgpool2d_nchw(bn_out,
+          pool_params->kernel_h, pool_params->kernel_w,
+          pool_params->stride_h, pool_params->stride_w,
+          pool_params->pad_h, pool_params->pad_w,
+          output);
+    }
+  }
+
+  st_destroy(bn_out);
   return ok;
 }
 

@@ -22,8 +22,10 @@
 // beta    [C] — learnable shift (may be NULL for beta=0)
 // epsilon  small constant for numerical stability (e.g. 1e-5)
 // output  [N, C, H, W] — normalized, scaled, shifted
-// mean    [C] — computed channel means in f32 (must be pre-allocated, written)
-// var     [C] — computed channel variances in f32 (must be pre-allocated, written)
+// mean    [C] — computed channel means in f32 (pre-allocated, written).
+//             May be NULL in inference mode: value computed internally but not saved.
+// var     [C] — computed channel variances in f32 (pre-allocated, written).
+//             May be NULL in inference mode: value computed internally but not saved.
 bool st_batchnorm2d_forward(const FloatTensor *input,
                             const FloatTensor *gamma,
                             const FloatTensor *beta, float epsilon,
@@ -52,6 +54,7 @@ bool st_batchnorm2d_backward(const FloatTensor *grad_output,
 // Forward pass for fused BatchNorm + ReLU.
 // Identical to st_batchnorm2d_forward but applies ReLU (max(0,x)) in the same pass.
 // output  [N, C, H, W] — normalized, scaled, shifted, then ReLU'd
+// mean/var: same NULL semantics as st_batchnorm2d_forward.
 bool st_batchnorm2d_forward_relu(const FloatTensor *input,
                                  const FloatTensor *gamma,
                                  const FloatTensor *beta, float epsilon,

@@ -234,7 +234,7 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
                                 const float *beta, float epsilon,
                                 float *output, float *mean_out,
                                 float *var_out) {
-  if (!input || !output || !mean_out || !var_out) return false;
+  if (!input || !output) return false;
   if (n == 0 || c == 0 || h == 0 || w == 0) return false;
 
   @autoreleasepool {
@@ -374,9 +374,11 @@ bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
     feeds[betaT] = bData;
   }
 
-  /* Run graph: get output, mean, and variance. */
+  /* Run graph: output always; mean/var only when caller wants them. */
   NSMutableArray<MPSGraphTensor *> *targets =
-      [NSMutableArray arrayWithObjects:resultT, meanT, varT, nil];
+      [NSMutableArray arrayWithObject:resultT];
+  if (mean_out && meanT) [targets addObject:meanT];
+  if (var_out  && varT)  [targets addObject:varT];
 
   NSDictionary<MPSGraphTensor *, MPSGraphTensorData *> *results = nil;
   @try {

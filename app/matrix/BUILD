@@ -1,4 +1,3 @@
-load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//tools:unity_test.bzl", "unity_test")
@@ -198,16 +197,6 @@ filegroup(
     name = "matrix_header",
     srcs = glob(["include/*.h"]),
     visibility = ["//visibility:public"],
-)
-
-#############################
-# Simple Example
-#############################
-
-cc_binary(
-    name = "matrix_example",
-    srcs = ["matrix_example.c"],
-    deps = [":sm"],
 )
 
 #############################

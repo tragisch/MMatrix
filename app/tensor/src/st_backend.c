@@ -149,7 +149,8 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
     const FloatTensor *input, const FloatTensor *weight,
     const FloatTensor *bias, const StConv2dParams *params,
     const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
-    FloatTensor *output, FloatTensor *mean, FloatTensor *var) {
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu) {
   (void)input;
   (void)weight;
   (void)bias;
@@ -160,6 +161,48 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
   (void)output;
   (void)mean;
   (void)var;
+  (void)apply_relu;
   return false;
 }
+
+bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *conv_params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    const StPool2dParams *pool_params,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu) {
+  (void)input;
+  (void)weight;
+  (void)bias;
+  (void)conv_params;
+  (void)gamma;
+  (void)beta;
+  (void)epsilon;
+  (void)pool_params;
+  (void)output;
+  (void)mean;
+  (void)var;
+  (void)apply_relu;
+  return false;
+}
+
+bool st_backend_set_mps_thresholds(size_t pool_threshold,
+                                   size_t batchnorm_threshold) {
+  (void)pool_threshold;
+  (void)batchnorm_threshold;
+  return false;
+}
+
+void st_backend_get_mps_thresholds(size_t *out_pool_threshold,
+                                   size_t *out_batchnorm_threshold) {
+  if (out_pool_threshold != NULL) {
+    *out_pool_threshold = 0u;
+  }
+  if (out_batchnorm_threshold != NULL) {
+    *out_batchnorm_threshold = 0u;
+  }
+}
+
+void st_backend_reload_mps_thresholds_from_env(void) {}
 #endif

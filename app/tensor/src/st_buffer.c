@@ -210,6 +210,10 @@ void st_buffer_release(StBuffer *buf) {
 
   /* Refcount reached 0 — free backing storage. */
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
+  if (buf->_async_cmd_buf) {
+    /* Wait for and release any pending GPU command buffer first. */
+    st_buffer_metal_wait(buf);
+  }
   if (buf->_backend_handle) {
     /* Metal buffer: release the MTLBuffer; data pointer is owned by it. */
     st_buffer_release_metal_handle(buf->_backend_handle);
@@ -224,4 +228,13 @@ void st_buffer_release(StBuffer *buf) {
   buf->data = NULL;
   buf->_backend_handle = NULL;
   free(buf);
+}
+
+void st_buffer_wait_gpu(StBuffer *buf) {
+  if (!buf || !buf->_async_cmd_buf) {
+    return;
+  }
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
+  st_buffer_metal_wait(buf);
+#endif
 }

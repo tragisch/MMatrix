@@ -69,3 +69,15 @@ void st_buffer_release_metal_handle(void *handle) {
   id<MTLBuffer> __unused mtl_buf = (__bridge_transfer id<MTLBuffer>)handle;
   /* mtl_buf goes out of scope here → ARC releases it. */
 }
+
+void st_buffer_metal_wait(StBuffer *buf) {
+  if (!buf || !buf->_async_cmd_buf) {
+    return;
+  }
+  void *handle = buf->_async_cmd_buf;
+  buf->_async_cmd_buf = NULL;
+  /* Transfer ownership to ARC so the command buffer is released after wait. */
+  id<MTLCommandBuffer> cmdBuf = (__bridge_transfer id<MTLCommandBuffer>)handle;
+  [cmdBuf waitUntilCompleted];
+  /* cmdBuf released by ARC here. */
+}

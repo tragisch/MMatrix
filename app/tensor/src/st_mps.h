@@ -62,7 +62,8 @@ bool st_avgpool2d_mps(const float *input, void *input_metal_handle,
 
 /// MPS-accelerated BatchNorm2D forward (NCHW layout).
 /// gamma and beta may be NULL (defaults: gamma=1, beta=0).
-/// mean and var are computed and written (pre-allocated, size C).
+/// mean_out and var_out may be NULL (inference mode: not read back).
+/// When non-NULL they must point to pre-allocated C-element f32 arrays.
 bool st_batchnorm2d_forward_mps(const float *input, void *input_metal_handle,
                                 size_t n, size_t c,
                                 size_t h, size_t w, const float *gamma,

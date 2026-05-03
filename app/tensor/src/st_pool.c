@@ -91,6 +91,22 @@ static bool st_pool_float_indices_are_exact(size_t spatial_in) {
   return spatial_in > 0 && spatial_in - 1 <= max_exact_index;
 }
 
+static bool st_pool_safe_mul(size_t a, size_t b, size_t *out) {
+  if (out == NULL || (a != 0 && b > SIZE_MAX / a)) {
+    return false;
+  }
+  *out = a * b;
+  return true;
+}
+
+static bool st_pool_safe_add(size_t a, size_t b, size_t *out) {
+  if (out == NULL || a > SIZE_MAX - b) {
+    return false;
+  }
+  *out = a + b;
+  return true;
+}
+
 /* ---- Output size computation ---- */
 
 bool st_pool2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
@@ -102,12 +118,23 @@ bool st_pool2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
     return false;
   }
 
-  if (in_h + 2 * pad_h < kernel_h || in_w + 2 * pad_w < kernel_w) {
+  size_t pad2_h = 0;
+  size_t pad2_w = 0;
+  size_t padded_h = 0;
+  size_t padded_w = 0;
+  if (!st_pool_safe_mul(pad_h, 2, &pad2_h) ||
+      !st_pool_safe_mul(pad_w, 2, &pad2_w) ||
+      !st_pool_safe_add(in_h, pad2_h, &padded_h) ||
+      !st_pool_safe_add(in_w, pad2_w, &padded_w)) {
     return false;
   }
 
-  *out_h = (in_h + 2 * pad_h - kernel_h) / stride_h + 1;
-  *out_w = (in_w + 2 * pad_w - kernel_w) / stride_w + 1;
+  if (padded_h < kernel_h || padded_w < kernel_w) {
+    return false;
+  }
+
+  *out_h = (padded_h - kernel_h) / stride_h + 1;
+  *out_w = (padded_w - kernel_w) / stride_w + 1;
   return true;
 }
 

@@ -49,6 +49,7 @@ typedef enum StOp {
 /* ------------------------------------------------------------------ */
 
 typedef struct StConv2dParams StConv2dParams;  /* defined in st_conv.h */
+typedef struct StPool2dParams StPool2dParams;  /* defined in st_conv.h */
 
 /* ------------------------------------------------------------------ */
 /*  Backend vtable                                                     */
@@ -160,11 +161,39 @@ const StBackend *st_backend_mps(void);
 /// MPS-specific fused Conv2D + BatchNorm2D forward helper.
 /// Returns true when MPS handled the full fused path, false when caller
 /// should fall back to the regular sequential implementation.
+/// mean and var may be NULL (inference mode: GPU result not read back).
+/// apply_relu: appends a ReLU op to the MPSGraph subgraph when true.
 bool st_backend_conv2d_batchnorm2d_forward_mps(
     const FloatTensor *input, const FloatTensor *weight,
     const FloatTensor *bias, const StConv2dParams *params,
     const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
-    FloatTensor *output, FloatTensor *mean, FloatTensor *var);
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu);
+
+/// MPS-specific fused Conv2D + BatchNorm2D + Pool2D forward helper.
+/// pool_params->pool_type selects MaxPool (ST_POOL_MAX) or AvgPool (ST_POOL_AVG).
+/// mean and var may be NULL (inference mode). apply_relu: ReLU after BN, before Pool.
+bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *conv_params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    const StPool2dParams *pool_params,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu);
+
+/// Override MPS AUTO dispatch thresholds for pool and batchnorm.
+/// Returns false on invalid input.
+bool st_backend_set_mps_thresholds(size_t pool_threshold,
+                                   size_t batchnorm_threshold);
+
+/// Query currently active MPS AUTO dispatch thresholds for pool and batchnorm.
+void st_backend_get_mps_thresholds(size_t *out_pool_threshold,
+                                   size_t *out_batchnorm_threshold);
+
+/// Reload MPS AUTO dispatch thresholds for pool and batchnorm from environment:
+/// `MMATRIX_ST_POOL_MPS_THRESHOLD`
+/// `MMATRIX_ST_BN_MPS_THRESHOLD`
+void st_backend_reload_mps_thresholds_from_env(void);
 
 /// Set the default backend used by tensor dispatch.
 /// Pass NULL to reset to auto-dispatch (tries MPS, falls back to CPU).

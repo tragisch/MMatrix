@@ -27,6 +27,11 @@ StBuffer *st_buffer_alloc_metal_impl(size_t num_floats);
 /// Called by st_buffer_release() when _backend_handle is non-NULL.
 void st_buffer_release_metal_handle(void *handle);
 
+/// Wait for a pending GPU command buffer (bridge-retained id<MTLCommandBuffer>)
+/// stored in buf->_async_cmd_buf, then bridge-transfer ownership back to ARC.
+/// No-op if buf->_async_cmd_buf is NULL.
+void st_buffer_metal_wait(StBuffer *buf);
+
 #ifdef __cplusplus
 }
 #endif

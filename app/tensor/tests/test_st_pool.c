@@ -81,6 +81,13 @@ void test_st_pool2d_output_hw_with_padding(void) {
   TEST_ASSERT_EQUAL(4, out_w);
 }
 
+void test_st_pool2d_output_hw_should_fail_on_padding_overflow(void) {
+  size_t out_h = 0, out_w = 0;
+  bool ok = st_pool2d_output_hw(5, 5, 3, 3, 1, 1, (SIZE_MAX / 2u) + 1u,
+                                (SIZE_MAX / 2u) + 1u, &out_h, &out_w);
+  TEST_ASSERT_FALSE(ok);
+}
+
 void test_st_maxpool2d_nchw_basic(void) {
   FloatTensor *input = create_tensor_4d(1, 1, 4, 4);
   TEST_ASSERT_NOT_NULL(input);

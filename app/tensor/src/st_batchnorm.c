@@ -75,7 +75,8 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
     return false;
   }
 
-  if (!st_bn_is_valid_1d_f32(mean, c) || !st_bn_is_valid_1d_f32(var, c)) {
+  if ((mean && !st_bn_is_valid_1d_f32(mean, c)) ||
+      (var  && !st_bn_is_valid_1d_f32(var,  c))) {
     log_error(
         "Error: st_batchnorm2d_forward mean/var must be contiguous f32 [C].");
     return false;
@@ -162,7 +163,7 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
     }
 
     const float mu = sum * inv_m;
-    mean->values[ci] = mu;
+    if (mean) mean->values[ci] = mu;
 
     float sum_sq = 0.0f;
     for (size_t ni = 0; ni < n; ++ni) {
@@ -174,7 +175,7 @@ bool st_batchnorm2d_forward(const FloatTensor *input,
     }
 
     const float variance = sum_sq * inv_m;
-    var->values[ci] = variance;
+    if (var) var->values[ci] = variance;
 
     const float inv_std = 1.0f / sqrtf(variance + epsilon);
     const float g = gamma ? gamma->values[ci] : 1.0f;
@@ -394,7 +395,8 @@ bool st_batchnorm2d_forward_relu(const FloatTensor *input,
     return false;
   }
 
-  if (!st_bn_is_valid_1d_f32(mean, c) || !st_bn_is_valid_1d_f32(var, c)) {
+  if ((mean && !st_bn_is_valid_1d_f32(mean, c)) ||
+      (var  && !st_bn_is_valid_1d_f32(var,  c))) {
     log_error(
         "Error: st_batchnorm2d_forward_relu mean/var must be contiguous f32 [C].");
     return false;
@@ -472,7 +474,7 @@ bool st_batchnorm2d_forward_relu(const FloatTensor *input,
     }
 
     const float mu = sum * inv_m;
-    mean->values[ci] = mu;
+    if (mean) mean->values[ci] = mu;
 
     float sum_sq = 0.0f;
     for (size_t ni = 0; ni < n; ++ni) {
@@ -484,7 +486,7 @@ bool st_batchnorm2d_forward_relu(const FloatTensor *input,
     }
 
     const float variance = sum_sq * inv_m;
-    var->values[ci] = variance;
+    if (var) var->values[ci] = variance;
 
     const float inv_std = 1.0f / sqrtf(variance + epsilon);
     const float g = gamma ? gamma->values[ci] : 1.0f;

@@ -48,11 +48,41 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
 
 // Fused Conv2D + BatchNorm2D forward for NCHW tensors.
 // Semantics match `st_conv2d_nchw` followed by `st_batchnorm2d_forward`.
+// mean and var may be NULL (inference mode: not saved, GPU readback skipped).
+// apply_relu: when true, applies ReLU after BatchNorm (fused in the MPS graph;
+//             falls back to a separate st_apply_relu call on the CPU path).
 bool st_conv2d_batchnorm2d_forward_nchw(
     const FloatTensor *input, const FloatTensor *weight,
     const FloatTensor *bias, const StConv2dParams *params,
     const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
-    FloatTensor *output, FloatTensor *mean, FloatTensor *var);
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu);
+
+typedef enum StPoolType {
+  ST_POOL_MAX = 0,
+  ST_POOL_AVG = 1,
+} StPoolType;
+
+typedef struct StPool2dParams {
+  StPoolType pool_type;
+  size_t kernel_h;
+  size_t kernel_w;
+  size_t stride_h;
+  size_t stride_w;
+  size_t pad_h;
+  size_t pad_w;
+} StPool2dParams;
+
+// Fused Conv2D + BatchNorm2D + Pool2D forward for NCHW tensors.
+// mean and var may be NULL (inference mode).
+// apply_relu: ReLU after BatchNorm, before Pool (fused in the MPS graph).
+bool st_conv2d_batchnorm2d_pool_forward_nchw(
+    const FloatTensor *input, const FloatTensor *weight,
+    const FloatTensor *bias, const StConv2dParams *conv_params,
+    const FloatTensor *gamma, const FloatTensor *beta, float epsilon,
+    const StPool2dParams *pool_params,
+    FloatTensor *output, FloatTensor *mean, FloatTensor *var,
+    bool apply_relu);
 
 // Override MPS AUTO dispatch thresholds at runtime. Returns false on invalid input.
 bool st_conv_set_mps_thresholds(double macs_threshold,

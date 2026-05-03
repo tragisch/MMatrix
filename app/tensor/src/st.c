@@ -641,6 +641,12 @@ void st_destroy(FloatTensor *tensor) {
   free(tensor);
 }
 
+void st_tensor_sync(FloatTensor *tensor) {
+  if (tensor && tensor->buf) {
+    st_buffer_wait_gpu(tensor->buf);
+  }
+}
+
 /* ---- Element-wise in-place operations ---- */
 
 bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {

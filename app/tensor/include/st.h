@@ -98,6 +98,11 @@ bool st_as_sm_view(const FloatTensor *tensor, FloatMatrix *out_view);
 // Destroy tensor and owned data when owns_data == true.
 void st_destroy(FloatTensor *tensor);
 
+// Wait for any pending async GPU work on tensor->buf to complete.
+// Must be called before reading tensor->values after an async MPS dispatch.
+// No-op when no work is pending or tensor is NULL.
+void st_tensor_sync(FloatTensor *tensor);
+
 // ---- Element-wise in-place operations ----
 
 // a[i] += b[i] for all elements (broadcast: b may be NULL → no-op).

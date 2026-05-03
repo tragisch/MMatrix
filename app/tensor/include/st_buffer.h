@@ -65,6 +65,12 @@ typedef struct StBuffer {
    * ST_BUFFER_METAL: __bridge-retained id<MTLBuffer>                  */
   void *_backend_handle;
 
+  /* Opaque pointer to a pending GPU command buffer.
+   * Non-NULL when GPU work writing to this buffer has been committed
+   * but not yet waited on (async dispatch).  Callers must invoke
+   * st_buffer_wait_gpu() / st_tensor_sync() before reading ->data.    */
+  void *_async_cmd_buf;
+
 } StBuffer;
 
 /* ------------------------------------------------------------------ */
@@ -117,6 +123,11 @@ static inline bool st_buffer_is_device(const StBuffer *buf) {
 static inline void *st_buffer_metal_handle(const StBuffer *buf) {
   return buf ? buf->_backend_handle : NULL;
 }
+
+/// Wait for any pending async GPU work on `buf` to complete, then clear
+/// the pending marker.  No-op when no work is pending or buf is NULL.
+/// Must be called before reading buf->data after an async GPU dispatch.
+void st_buffer_wait_gpu(StBuffer *buf);
 
 #ifdef __cplusplus
 }
