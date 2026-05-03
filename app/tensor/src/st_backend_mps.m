@@ -10,6 +10,7 @@
 
 #import "st_backend.h"
 #import "st_buffer.h"
+#import "st_buffer_metal.h"
 #import "st_conv.h"
 #import "st_mps.h"
 #import "st_pool.h"
@@ -678,6 +679,11 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
         return false;
       }
       [cmdBuf commit];
+      /* Drain any previously-pending cmd buffer for this output before
+         overwriting (prevents orphaned cmd buffers in iterative loops). */
+      if (output->buf->_async_cmd_buf) {
+        st_buffer_metal_wait(output->buf);
+      }
       /* Store bridge-retained command buffer; st_buffer_metal_wait releases. */
       output->buf->_async_cmd_buf = (__bridge_retained void *)cmdBuf;
       /* Output is already in output->values via shared MTLBuffer — no readBytes. */
@@ -1028,6 +1034,11 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
         return false;
       }
       [cmdBuf commit];
+      /* Drain any previously-pending cmd buffer for this output before
+         overwriting (prevents orphaned cmd buffers in iterative loops). */
+      if (output->buf->_async_cmd_buf) {
+        st_buffer_metal_wait(output->buf);
+      }
       output->buf->_async_cmd_buf = (__bridge_retained void *)cmdBuf;
       return true;
     }

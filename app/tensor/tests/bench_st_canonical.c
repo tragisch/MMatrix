@@ -1,3 +1,4 @@
+#include "st.h"
 #include "st_backend.h"
 #include "st_batchnorm.h"
 #include "st_conv.h"
@@ -179,6 +180,7 @@ static int bench_conv_case(const char *case_name,
       goto cleanup;
     }
   }
+  st_tensor_sync(output);
   uint64_t t1 = now_ns();
   StBackendCounters after = st_backend_get_counters();
   BenchCountersDelta delta = counters_delta(before, after);
@@ -237,6 +239,7 @@ static int bench_maxpool_case(const char *case_name,
       goto cleanup;
     }
   }
+  st_tensor_sync(output);
   uint64_t t1 = now_ns();
   StBackendCounters after = st_backend_get_counters();
   BenchCountersDelta delta = counters_delta(before, after);
@@ -278,6 +281,7 @@ static int bench_batchnorm_case(const char *case_name,
       goto cleanup;
     }
   }
+  st_tensor_sync(output);
   uint64_t t1 = now_ns();
   StBackendCounters after = st_backend_get_counters();
   BenchCountersDelta delta = counters_delta(before, after);
@@ -363,6 +367,7 @@ static int bench_conv_bn_case(const char *case_name,
       goto cleanup;
     }
   }
+  st_tensor_sync(sep_out);
   uint64_t t1 = now_ns();
   StBackendCounters after_sep = st_backend_get_counters();
   BenchCountersDelta delta_sep = counters_delta(before_sep, after_sep);
@@ -378,6 +383,7 @@ static int bench_conv_bn_case(const char *case_name,
       goto cleanup;
     }
   }
+  st_tensor_sync(fused_out);
   uint64_t t3 = now_ns();
   StBackendCounters after_fused = st_backend_get_counters();
   BenchCountersDelta delta_fused = counters_delta(before_fused, after_fused);
