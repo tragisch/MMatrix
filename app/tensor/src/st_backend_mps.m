@@ -19,6 +19,7 @@
 #import <Metal/Metal.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
+#include <objc/message.h>
 #include <errno.h>
 #include <math.h>
 #include <stdatomic.h>
@@ -156,15 +157,18 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   NSDictionary *cached = [cache objectForKey:cacheKey];
 
   MPSGraph *graph;
+  MPSGraphExecutable *executable = nil;
   MPSGraphTensor *inT, *wT, *biasT, *resultT;
 
   if (cached) {
     /* Cache hit — reuse compiled graph. */
-    graph   = cached[@"graph"];
-    inT     = cached[@"inT"];
-    wT      = cached[@"wT"];
-    biasT   = cached[@"biasT"];   /* may be NSNull */
-    resultT = cached[@"resultT"];
+    graph      = cached[@"graph"];
+    executable = cached[@"executable"];
+    if ([executable isEqual:[NSNull null]]) executable = nil;
+    inT        = cached[@"inT"];
+    wT         = cached[@"wT"];
+    biasT      = cached[@"biasT"];   /* may be NSNull */
+    resultT    = cached[@"resultT"];
     if ([biasT isEqual:[NSNull null]]) biasT = nil;
   } else {
     /* Cache miss — build graph. */
@@ -212,13 +216,33 @@ static bool mps_conv2d_forward(const FloatTensor *input,
                                             name:@"add_bias"];
     }
 
+    /* Compile executable for async inference path. */
+    NSMutableDictionary<MPSGraphTensor *, MPSGraphShapedType *> *feedShapes =
+        [NSMutableDictionary dictionaryWithCapacity:3];
+    feedShapes[inT] = [[MPSGraphShapedType alloc]
+        initWithShape:inShape dataType:MPSDataTypeFloat32];
+    feedShapes[wT] = [[MPSGraphShapedType alloc]
+        initWithShape:wShape dataType:MPSDataTypeFloat32];
+    if (biasT) {
+      feedShapes[biasT] = [[MPSGraphShapedType alloc]
+          initWithShape:@[ @1, @(c_out), @1, @1 ]
+                dataType:MPSDataTypeFloat32];
+    }
+    executable = [graph
+        compileWithDevice:[MPSGraphDevice deviceWithMTLDevice:device]
+                    feeds:feedShapes
+            targetTensors:@[ resultT ]
+         targetOperations:nil
+     compilationDescriptor:nil];
+
     /* Store into cache. */
     [cache setObject:@{
-      @"graph"   : graph,
-      @"inT"     : inT,
-      @"wT"      : wT,
-      @"biasT"   : biasT   ?: [NSNull null],
-      @"resultT" : resultT,
+      @"graph"      : graph,
+      @"executable" : executable ?: [NSNull null],
+      @"inT"        : inT,
+      @"wT"         : wT,
+      @"biasT"      : biasT   ?: [NSNull null],
+      @"resultT"    : resultT,
     } forKey:cacheKey];
   }
 
@@ -252,7 +276,108 @@ static bool mps_conv2d_forward(const FloatTensor *input,
     feeds[biasT] = bData;
   }
 
-  /* ---- Run graph synchronously ---- */
+  const bool wants_fastpath =
+      (output->buf && st_buffer_metal_handle(output->buf));
+  if (wants_fastpath && !executable) {
+    st_backend_counter_conv_fastpath_executable_nil();
+  }
+
+  /* ---- Fastpath: executable + pre-allocated output MTLBuffer ---- */
+  if (executable && wants_fastpath) {
+    bool fastpath_ok = true;
+    NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
+        [NSMutableDictionary dictionaryWithDictionary:feeds];
+    NSMutableArray<MPSGraphTensorData *> *inputsArray =
+        [NSMutableArray arrayWithCapacity:executable.feedTensors.count];
+    for (MPSGraphTensor *ft in executable.feedTensors) {
+      MPSGraphTensorData *td = feedMap[ft];
+      if (!td) {
+        fastpath_ok = false;
+        st_backend_counter_conv_fastpath_missing_feed();
+        break;
+      }
+      [inputsArray addObject:td];
+    }
+
+    if (fastpath_ok) {
+      MPSShape *outShape = @[ @(output->shape[0]), @(output->shape[1]),
+                              @(output->shape[2]), @(output->shape[3]) ];
+      id<MTLBuffer> outBuf =
+          (__bridge id<MTLBuffer>)st_buffer_metal_handle(output->buf);
+      MPSGraphTensorData *preOutData =
+          [[MPSGraphTensorData alloc] initWithMTLBuffer:outBuf
+                                                  shape:outShape
+                                               dataType:MPSDataTypeFloat32];
+      id<MTLCommandBuffer> cmdBuf = nil;
+      id mpsCmdBuf = nil;
+      if ([queue respondsToSelector:@selector(commandBufferWithDescriptor:)]) {
+        MTLCommandBufferDescriptor *cbDesc = [[MTLCommandBufferDescriptor alloc] init];
+        cmdBuf = [queue commandBufferWithDescriptor:cbDesc];
+      }
+      if (!cmdBuf) {
+        cmdBuf = [queue commandBuffer];
+      }
+
+      /* On some runtimes MPSGraphExecutable encode expects an MPSCommandBuffer
+         wrapper (selector mpsCommandBufferDescriptor). Create it dynamically
+         when available, but keep fallback to plain MTLCommandBuffer. */
+      Class MPSCBClass = NSClassFromString(@"MPSCommandBuffer");
+      if (MPSCBClass && [MPSCBClass respondsToSelector:@selector(commandBufferFromCommandQueue:)]) {
+        id (*msgSendCB)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
+        mpsCmdBuf = msgSendCB(MPSCBClass, @selector(commandBufferFromCommandQueue:), queue);
+      }
+
+      if (!preOutData) {
+        st_backend_counter_conv_fastpath_preout_nil();
+        fastpath_ok = false;
+      }
+      if (!cmdBuf) {
+        st_backend_counter_conv_fastpath_cmd_buf_nil();
+        fastpath_ok = false;
+      }
+      if (fastpath_ok) {
+        @try {
+          id encodeCmdBuf = mpsCmdBuf ? mpsCmdBuf : (id)cmdBuf;
+          [executable encodeToCommandBuffer:encodeCmdBuf
+                                 inputsArray:inputsArray
+                                resultsArray:@[ preOutData ]
+                         executionDescriptor:nil];
+        } @catch (NSException *exception) {
+          st_backend_counter_conv_fastpath_encode_exception();
+          NSLog(@"mps_conv2d fastpath encode exception: %@ (%@)",
+                exception.name, exception.reason);
+          fastpath_ok = false;
+        }
+        if (fastpath_ok) {
+          if (mpsCmdBuf && [mpsCmdBuf respondsToSelector:@selector(commit)]) {
+            void (*msgSendVoid)(id, SEL) = (void (*)(id, SEL))objc_msgSend;
+            msgSendVoid(mpsCmdBuf, @selector(commit));
+          } else {
+            [cmdBuf commit];
+          }
+
+          id<MTLCommandBuffer> pendingCmdBuf = cmdBuf;
+          if (mpsCmdBuf && [mpsCmdBuf respondsToSelector:@selector(commandBuffer)]) {
+            id (*msgSendCBObj)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+            id raw = msgSendCBObj(mpsCmdBuf, @selector(commandBuffer));
+            if (raw) pendingCmdBuf = (id<MTLCommandBuffer>)raw;
+          }
+
+          if (output->buf->_async_cmd_buf) {
+            st_buffer_metal_wait(output->buf);
+          }
+          output->buf->_async_cmd_buf = (__bridge_retained void *)pendingCmdBuf;
+          /* Standalone conv API is expected to be synchronous by tests/callers.
+             Keep zero-copy/no-readBytes fastpath but wait for completion here. */
+          st_buffer_metal_wait(output->buf);
+          st_backend_counter_conv_fastpath_hit();
+          return true;
+        }
+      }
+    }
+  }
+
+  /* ---- Fallback: run graph synchronously + readback ---- */
   NSDictionary<MPSGraphTensor *, MPSGraphTensorData *> *results = nil;
 
   @try {
@@ -267,6 +392,7 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   MPSGraphTensorData *outData = results[resultT];
   if (!outData) return false;
 
+  st_backend_counter_conv_readbytes();
   [outData.mpsndarray readBytes:output->values strideBytes:nil];
   return true;
 

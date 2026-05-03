@@ -131,6 +131,13 @@ typedef struct StBackendCounters {
   long mps_miss;        /**< MPS declined or unavailable, fell to CPU.      */
   long fallback_gemm;   /**< CPU fallback routed to GEMM path.              */
   long fallback_ref;    /**< CPU fallback routed to reference path.         */
+  long conv_readbytes;  /**< Standalone MPS conv used sync readBytes path.  */
+  long conv_fastpath_hit; /**< Standalone MPS conv async fastpath hit.       */
+  long conv_fastpath_executable_nil; /**< Fastpath skipped: executable nil. */
+  long conv_fastpath_missing_feed;   /**< Fastpath failed: missing feed td. */
+  long conv_fastpath_preout_nil;     /**< Fastpath failed: preOutData nil.  */
+  long conv_fastpath_cmd_buf_nil;    /**< Fastpath failed: commandBuffer nil. */
+  long conv_fastpath_encode_exception; /**< Fastpath failed: encode exception. */
 } StBackendCounters;
 
 /// Increment the mps_hit counter by 1.
@@ -144,6 +151,27 @@ void st_backend_counter_fallback_gemm(void);
 
 /// Increment the fallback_ref counter by 1.
 void st_backend_counter_fallback_ref(void);
+
+/// Increment the standalone conv readBytes counter by 1.
+void st_backend_counter_conv_readbytes(void);
+
+/// Increment the standalone conv async fastpath hit counter by 1.
+void st_backend_counter_conv_fastpath_hit(void);
+
+/// Increment when standalone conv fastpath is skipped because executable is nil.
+void st_backend_counter_conv_fastpath_executable_nil(void);
+
+/// Increment when standalone conv fastpath cannot map executable feed tensors.
+void st_backend_counter_conv_fastpath_missing_feed(void);
+
+/// Increment when standalone conv fastpath pre-allocated output TensorData is nil.
+void st_backend_counter_conv_fastpath_preout_nil(void);
+
+/// Increment when standalone conv fastpath command buffer creation fails.
+void st_backend_counter_conv_fastpath_cmd_buf_nil(void);
+
+/// Increment when standalone conv fastpath encode throws an exception.
+void st_backend_counter_conv_fastpath_encode_exception(void);
 
 /// Snapshot of all counters at the time of the call (non-atomic snapshot).
 StBackendCounters st_backend_get_counters(void);

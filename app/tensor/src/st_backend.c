@@ -56,6 +56,13 @@ static atomic_long g_counter_mps_hit      = 0;
 static atomic_long g_counter_mps_miss     = 0;
 static atomic_long g_counter_fallback_gemm = 0;
 static atomic_long g_counter_fallback_ref  = 0;
+static atomic_long g_counter_conv_readbytes = 0;
+static atomic_long g_counter_conv_fastpath_hit = 0;
+static atomic_long g_counter_conv_fastpath_executable_nil = 0;
+static atomic_long g_counter_conv_fastpath_missing_feed = 0;
+static atomic_long g_counter_conv_fastpath_preout_nil = 0;
+static atomic_long g_counter_conv_fastpath_cmd_buf_nil = 0;
+static atomic_long g_counter_conv_fastpath_encode_exception = 0;
 
 void st_backend_counter_mps_hit(void) {
   atomic_fetch_add_explicit(&g_counter_mps_hit, 1L, memory_order_relaxed);
@@ -73,12 +80,62 @@ void st_backend_counter_fallback_ref(void) {
   atomic_fetch_add_explicit(&g_counter_fallback_ref, 1L, memory_order_relaxed);
 }
 
+void st_backend_counter_conv_readbytes(void) {
+  atomic_fetch_add_explicit(&g_counter_conv_readbytes, 1L, memory_order_relaxed);
+}
+
+void st_backend_counter_conv_fastpath_hit(void) {
+  atomic_fetch_add_explicit(&g_counter_conv_fastpath_hit, 1L, memory_order_relaxed);
+}
+
+void st_backend_counter_conv_fastpath_executable_nil(void) {
+  atomic_fetch_add_explicit(&g_counter_conv_fastpath_executable_nil, 1L,
+                            memory_order_relaxed);
+}
+
+void st_backend_counter_conv_fastpath_missing_feed(void) {
+  atomic_fetch_add_explicit(&g_counter_conv_fastpath_missing_feed, 1L,
+                            memory_order_relaxed);
+}
+
+void st_backend_counter_conv_fastpath_preout_nil(void) {
+  atomic_fetch_add_explicit(&g_counter_conv_fastpath_preout_nil, 1L,
+                            memory_order_relaxed);
+}
+
+void st_backend_counter_conv_fastpath_cmd_buf_nil(void) {
+  atomic_fetch_add_explicit(&g_counter_conv_fastpath_cmd_buf_nil, 1L,
+                            memory_order_relaxed);
+}
+
+void st_backend_counter_conv_fastpath_encode_exception(void) {
+  atomic_fetch_add_explicit(&g_counter_conv_fastpath_encode_exception, 1L,
+                            memory_order_relaxed);
+}
+
 StBackendCounters st_backend_get_counters(void) {
   StBackendCounters c;
   c.mps_hit       = atomic_load_explicit(&g_counter_mps_hit,       memory_order_relaxed);
   c.mps_miss      = atomic_load_explicit(&g_counter_mps_miss,      memory_order_relaxed);
   c.fallback_gemm = atomic_load_explicit(&g_counter_fallback_gemm, memory_order_relaxed);
   c.fallback_ref  = atomic_load_explicit(&g_counter_fallback_ref,  memory_order_relaxed);
+  c.conv_readbytes = atomic_load_explicit(&g_counter_conv_readbytes, memory_order_relaxed);
+  c.conv_fastpath_hit = atomic_load_explicit(&g_counter_conv_fastpath_hit, memory_order_relaxed);
+    c.conv_fastpath_executable_nil =
+      atomic_load_explicit(&g_counter_conv_fastpath_executable_nil,
+                 memory_order_relaxed);
+    c.conv_fastpath_missing_feed =
+      atomic_load_explicit(&g_counter_conv_fastpath_missing_feed,
+                 memory_order_relaxed);
+    c.conv_fastpath_preout_nil =
+      atomic_load_explicit(&g_counter_conv_fastpath_preout_nil,
+                 memory_order_relaxed);
+    c.conv_fastpath_cmd_buf_nil =
+      atomic_load_explicit(&g_counter_conv_fastpath_cmd_buf_nil,
+                 memory_order_relaxed);
+    c.conv_fastpath_encode_exception =
+      atomic_load_explicit(&g_counter_conv_fastpath_encode_exception,
+                 memory_order_relaxed);
   return c;
 }
 
@@ -87,6 +144,18 @@ void st_backend_reset_counters(void) {
   atomic_store_explicit(&g_counter_mps_miss,      0L, memory_order_relaxed);
   atomic_store_explicit(&g_counter_fallback_gemm, 0L, memory_order_relaxed);
   atomic_store_explicit(&g_counter_fallback_ref,  0L, memory_order_relaxed);
+  atomic_store_explicit(&g_counter_conv_readbytes, 0L, memory_order_relaxed);
+  atomic_store_explicit(&g_counter_conv_fastpath_hit, 0L, memory_order_relaxed);
+  atomic_store_explicit(&g_counter_conv_fastpath_executable_nil, 0L,
+                        memory_order_relaxed);
+  atomic_store_explicit(&g_counter_conv_fastpath_missing_feed, 0L,
+                        memory_order_relaxed);
+  atomic_store_explicit(&g_counter_conv_fastpath_preout_nil, 0L,
+                        memory_order_relaxed);
+  atomic_store_explicit(&g_counter_conv_fastpath_cmd_buf_nil, 0L,
+                        memory_order_relaxed);
+  atomic_store_explicit(&g_counter_conv_fastpath_encode_exception, 0L,
+                        memory_order_relaxed);
 }
 
 /* ------------------------------------------------------------------ */
