@@ -103,8 +103,13 @@ static const StWeightPack *st_weight_prepack(const FloatTensor *weight,
   return wp;
 }
 
-static const double ST_CONV_MPS_MACS_THRESHOLD_DEFAULT = 2.0e8;
-static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 800000u;
+/*
+ * AUTO routing defaults tuned against bench_st_ab_conv (3 MPS modes) and
+ * bench_st_pipeline. Goal: admit medium/high-value 3x3 convs (e.g. ResNet s1)
+ * while still keeping tiny workloads on CPU paths.
+ */
+static const double ST_CONV_MPS_MACS_THRESHOLD_DEFAULT = 1.0e8;
+static const size_t ST_CONV_MPS_OUT_ELEMS_THRESHOLD_DEFAULT = 200000u;
 
 static double g_mps_macs_threshold = ST_CONV_MPS_MACS_THRESHOLD_DEFAULT;
 static size_t g_mps_out_elems_threshold =

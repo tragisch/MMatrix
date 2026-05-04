@@ -2,22 +2,20 @@
  * Copyright (c) 2026 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
  *
- * bench_st_pipeline — pipeline benchmarks for chained tensor ops.
+ * bench_st_pipeline — fused pipeline benchmarks for chained tensor ops.
  *
- * Category: Pipeline
+ * Goal:
+ *   Measure GPU-resident pipeline behavior with sync only at boundary,
+ *   and compare against per-iteration sync.
+ *
  * Pipelines:
- *   1. Conv2D → BatchNorm2D          (standard CNN block)
- *   2. Conv2D → BatchNorm2D → ReLU   (fused BN+ReLU variant)
- *
- * Output format per case:
- *   [pipeline] <name>  N=.. Cin=.. Cout=.. H=.. W=..
- *     <pipeline>: <ms/iter> ms/iter
- *     counters: mps_hit=<n> mps_miss=<n> ...
+ *   1) fused Conv2D + BatchNorm2D
+ *   2) fused Conv2D + BatchNorm2D + Pool2D
  */
 
 #include "st_backend.h"
-#include "st_batchnorm.h"
 #include "st_conv.h"
+#include "st_pool.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -56,11 +54,19 @@ static void fill_rand(FloatTensor *t, uint32_t seed) {
   }
 }
 
+static const char *buf_type(const FloatTensor *t) {
+  if (t && t->buf && st_buffer_metal_handle(t->buf) != NULL) {
+    return "metal";
+  }
+  return "cpu";
+}
+
 static void print_counters(void) {
   StBackendCounters c = st_backend_get_counters();
   printf("    counters: mps_hit=%ld  mps_miss=%ld  fallback_gemm=%ld"
-         "  fallback_ref=%ld\n",
-         c.mps_hit, c.mps_miss, c.fallback_gemm, c.fallback_ref);
+         "  fallback_ref=%ld  readbytes=%ld  fastpath=%ld\n",
+         c.mps_hit, c.mps_miss, c.fallback_gemm, c.fallback_ref,
+         c.conv_readbytes, c.conv_fastpath_hit);
 }
 
 /* ------------------------------------------------------------------ */
@@ -73,11 +79,22 @@ typedef struct PipelineCase {
   size_t warmup, iters;
 } PipelineCase;
 
+static void print_case_header(const char *pipeline,
+                              const char *variant,
+                              const PipelineCase *cfg,
+                              const FloatTensor *out) {
+  printf("[pipeline] %s  %s  %s\n", pipeline, variant, cfg->name);
+  printf("    N=%zu Cin=%zu Cout=%zu H=%zu W=%zu K=%zu s=%zu p=%zu  out_buf=%s\n",
+         cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k,
+         cfg->stride, cfg->pad, buf_type(out));
+}
+
 /* ------------------------------------------------------------------ */
-/*  Pipeline 1: Conv2D → BatchNorm2D                                   */
+/*  Pipeline 1: fused Conv2D + BatchNorm2D                             */
 /* ------------------------------------------------------------------ */
 
-static void bench_conv_bn(const PipelineCase *cfg) {
+static void bench_fused_conv_bn(const PipelineCase *cfg,
+                                bool sync_each_iter) {
   StConv2dParams p = st_conv2d_default_params();
   p.stride_h = p.stride_w = cfg->stride;
   p.pad_h    = p.pad_w    = cfg->pad;
@@ -90,17 +107,13 @@ static void bench_conv_bn(const PipelineCase *cfg) {
     return;
   }
 
-  FloatTensor *input   = make4d(cfg->n, cfg->c_in, cfg->h, cfg->w);
-  FloatTensor *weight  = make4d(cfg->c_out, cfg->c_in, cfg->k, cfg->k);
-  FloatTensor *conv_out = make4d(cfg->n, cfg->c_out, out_h, out_w);
-  FloatTensor *bn_out  = make4d(cfg->n, cfg->c_out, out_h, out_w);
-  FloatTensor *gamma   = make1d(cfg->c_out);
-  FloatTensor *beta    = make1d(cfg->c_out);
-  FloatTensor *mean    = make1d(cfg->c_out);
-  FloatTensor *var_out = make1d(cfg->c_out);
+  FloatTensor *input  = make4d(cfg->n, cfg->c_in, cfg->h, cfg->w);
+  FloatTensor *weight = make4d(cfg->c_out, cfg->c_in, cfg->k, cfg->k);
+  FloatTensor *out    = make4d(cfg->n, cfg->c_out, out_h, out_w);
+  FloatTensor *gamma  = make1d(cfg->c_out);
+  FloatTensor *beta   = make1d(cfg->c_out);
 
-  if (!input || !weight || !conv_out || !bn_out ||
-      !gamma || !beta || !mean || !var_out) {
+  if (!input || !weight || !out || !gamma || !beta) {
     fprintf(stderr, "  [OOM] %s\n", cfg->name);
     goto cleanup_conv_bn;
   }
@@ -112,41 +125,72 @@ static void bench_conv_bn(const PipelineCase *cfg) {
 
   /* warmup */
   for (size_t i = 0; i < cfg->warmup; ++i) {
-    st_conv2d_nchw(input, weight, NULL, &p, conv_out);
-    st_batchnorm2d_forward(conv_out, gamma, beta, 1e-5f, bn_out, mean, var_out);
+    if (!st_conv2d_batchnorm2d_forward_nchw(
+            input, weight, NULL, &p,
+            gamma, beta, 1e-5f,
+            out, NULL, NULL,
+            false)) {
+      fprintf(stderr, "  [SKIP] fused conv+bn unavailable: %s\n", cfg->name);
+      goto cleanup_conv_bn;
+    }
+    if (sync_each_iter) {
+      st_tensor_sync(out);
+    }
   }
 
   st_backend_reset_counters();
   uint64_t t0 = now_ns();
   for (size_t i = 0; i < cfg->iters; ++i) {
-    st_conv2d_nchw(input, weight, NULL, &p, conv_out);
-    st_batchnorm2d_forward(conv_out, gamma, beta, 1e-5f, bn_out, mean, var_out);
+    if (!st_conv2d_batchnorm2d_forward_nchw(
+            input, weight, NULL, &p,
+            gamma, beta, 1e-5f,
+            out, NULL, NULL,
+            false)) {
+      fprintf(stderr, "  [SKIP] fused conv+bn unavailable: %s\n", cfg->name);
+      goto cleanup_conv_bn;
+    }
+    if (sync_each_iter) {
+      st_tensor_sync(out);
+    }
+  }
+  if (!sync_each_iter) {
+    st_tensor_sync(out);
   }
   uint64_t t1 = now_ns();
 
-  printf("[pipeline] conv→bn  %s\n", cfg->name);
-  printf("    N=%zu Cin=%zu Cout=%zu H=%zu W=%zu K=%zu s=%zu p=%zu\n",
-         cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k,
-         cfg->stride, cfg->pad);
-  printf("    conv→bn: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
+  print_case_header("conv+bn(fused)",
+                    sync_each_iter ? "sync_each_iter" : "boundary_sync_only",
+                    cfg, out);
+  printf("    time: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
   print_counters();
 
 cleanup_conv_bn:
-  st_destroy(input);    st_destroy(weight);
-  st_destroy(conv_out); st_destroy(bn_out);
-  st_destroy(gamma);    st_destroy(beta);
-  st_destroy(mean);     st_destroy(var_out);
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(out);
+  st_destroy(gamma);
+  st_destroy(beta);
 }
 
 /* ------------------------------------------------------------------ */
-/*  Pipeline 2: Conv2D → BatchNorm2D+ReLU (fused forward)             */
+/*  Pipeline 2: fused Conv2D + BatchNorm2D + Pool2D                    */
 /* ------------------------------------------------------------------ */
 
-static void bench_conv_bn_relu(const PipelineCase *cfg) {
+static void bench_fused_conv_bn_pool(const PipelineCase *cfg,
+                                     bool sync_each_iter) {
   StConv2dParams p = st_conv2d_default_params();
   p.stride_h = p.stride_w = cfg->stride;
   p.pad_h    = p.pad_w    = cfg->pad;
   p.backend  = ST_CONV_BACKEND_AUTO;
+
+  StPool2dParams pool;
+  pool.pool_type = ST_POOL_MAX;
+  pool.kernel_h = 2;
+  pool.kernel_w = 2;
+  pool.stride_h = 2;
+  pool.stride_w = 2;
+  pool.pad_h = 0;
+  pool.pad_w = 0;
 
   size_t out_h = 0, out_w = 0;
   if (!st_conv2d_output_hw(cfg->h, cfg->w, cfg->k, cfg->k, &p, &out_h,
@@ -155,17 +199,23 @@ static void bench_conv_bn_relu(const PipelineCase *cfg) {
     return;
   }
 
-  FloatTensor *input    = make4d(cfg->n, cfg->c_in, cfg->h, cfg->w);
-  FloatTensor *weight   = make4d(cfg->c_out, cfg->c_in, cfg->k, cfg->k);
-  FloatTensor *conv_out = make4d(cfg->n, cfg->c_out, out_h, out_w);
-  FloatTensor *bn_out   = make4d(cfg->n, cfg->c_out, out_h, out_w);
-  FloatTensor *gamma    = make1d(cfg->c_out);
-  FloatTensor *beta     = make1d(cfg->c_out);
-  FloatTensor *mean     = make1d(cfg->c_out);
-  FloatTensor *var_out  = make1d(cfg->c_out);
+  size_t pool_out_h = 0, pool_out_w = 0;
+  if (!st_pool2d_output_hw(out_h, out_w,
+                           pool.kernel_h, pool.kernel_w,
+                           pool.stride_h, pool.stride_w,
+                           pool.pad_h, pool.pad_w,
+                           &pool_out_h, &pool_out_w)) {
+    fprintf(stderr, "  [SKIP] invalid pool shape: %s\n", cfg->name);
+    return;
+  }
 
-  if (!input || !weight || !conv_out || !bn_out ||
-      !gamma || !beta || !mean || !var_out) {
+  FloatTensor *input  = make4d(cfg->n, cfg->c_in, cfg->h, cfg->w);
+  FloatTensor *weight = make4d(cfg->c_out, cfg->c_in, cfg->k, cfg->k);
+  FloatTensor *out    = make4d(cfg->n, cfg->c_out, pool_out_h, pool_out_w);
+  FloatTensor *gamma  = make1d(cfg->c_out);
+  FloatTensor *beta   = make1d(cfg->c_out);
+
+  if (!input || !weight || !out || !gamma || !beta) {
     fprintf(stderr, "  [OOM] %s\n", cfg->name);
     goto cleanup_conv_bn_relu;
   }
@@ -177,32 +227,53 @@ static void bench_conv_bn_relu(const PipelineCase *cfg) {
 
   /* warmup */
   for (size_t i = 0; i < cfg->warmup; ++i) {
-    st_conv2d_nchw(input, weight, NULL, &p, conv_out);
-    st_batchnorm2d_forward_relu(conv_out, gamma, beta, 1e-5f, bn_out, mean,
-                                var_out);
+    if (!st_conv2d_batchnorm2d_pool_forward_nchw(
+            input, weight, NULL, &p,
+            gamma, beta, 1e-5f,
+            &pool,
+            out, NULL, NULL,
+            false)) {
+      fprintf(stderr, "  [SKIP] fused conv+bn+pool unavailable: %s\n", cfg->name);
+      goto cleanup_conv_bn_relu;
+    }
+    if (sync_each_iter) {
+      st_tensor_sync(out);
+    }
   }
 
   st_backend_reset_counters();
   uint64_t t0 = now_ns();
   for (size_t i = 0; i < cfg->iters; ++i) {
-    st_conv2d_nchw(input, weight, NULL, &p, conv_out);
-    st_batchnorm2d_forward_relu(conv_out, gamma, beta, 1e-5f, bn_out, mean,
-                                var_out);
+    if (!st_conv2d_batchnorm2d_pool_forward_nchw(
+            input, weight, NULL, &p,
+            gamma, beta, 1e-5f,
+            &pool,
+            out, NULL, NULL,
+            false)) {
+      fprintf(stderr, "  [SKIP] fused conv+bn+pool unavailable: %s\n", cfg->name);
+      goto cleanup_conv_bn_relu;
+    }
+    if (sync_each_iter) {
+      st_tensor_sync(out);
+    }
+  }
+  if (!sync_each_iter) {
+    st_tensor_sync(out);
   }
   uint64_t t1 = now_ns();
 
-  printf("[pipeline] conv→bn+relu  %s\n", cfg->name);
-  printf("    N=%zu Cin=%zu Cout=%zu H=%zu W=%zu K=%zu s=%zu p=%zu\n",
-         cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k,
-         cfg->stride, cfg->pad);
-  printf("    conv→bn+relu: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
+  print_case_header("conv+bn+pool(fused)",
+                    sync_each_iter ? "sync_each_iter" : "boundary_sync_only",
+                    cfg, out);
+  printf("    time: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
   print_counters();
 
 cleanup_conv_bn_relu:
-  st_destroy(input);    st_destroy(weight);
-  st_destroy(conv_out); st_destroy(bn_out);
-  st_destroy(gamma);    st_destroy(beta);
-  st_destroy(mean);     st_destroy(var_out);
+  st_destroy(input);
+  st_destroy(weight);
+  st_destroy(out);
+  st_destroy(gamma);
+  st_destroy(beta);
 }
 
 /* ------------------------------------------------------------------ */
@@ -221,13 +292,21 @@ int main(void) {
     { "pipe-large",  8, 64,128,112,112, 3, 1, 1, 2,  5 },
   };
 
-  printf("-- Conv → BN --\n");
+  printf("-- Fused Conv+BN --\n");
   for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
-    bench_conv_bn(&cases[i]);
+    bench_fused_conv_bn(&cases[i], false); /* boundary sync only */
 
-  printf("\n-- Conv → BN+ReLU --\n");
+  printf("\n-- Fused Conv+BN (sync each iter) --\n");
   for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
-    bench_conv_bn_relu(&cases[i]);
+    bench_fused_conv_bn(&cases[i], true);
+
+  printf("\n-- Fused Conv+BN+Pool --\n");
+  for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
+    bench_fused_conv_bn_pool(&cases[i], false); /* boundary sync only */
+
+  printf("\n-- Fused Conv+BN+Pool (sync each iter) --\n");
+  for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
+    bench_fused_conv_bn_pool(&cases[i], true);
 
   printf("\n=== done ===\n");
   return 0;

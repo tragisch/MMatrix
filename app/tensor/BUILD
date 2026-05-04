@@ -275,6 +275,22 @@ cc_binary(
 )
 
 cc_binary(
+    name = "bench_st_layout",
+    srcs = ["tests/bench_st_layout.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)
+
+cc_binary(
+    name = "bench_st_nhwc_vs_nchw",
+    srcs = ["tests/bench_st_nhwc_vs_nchw.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)
+
+cc_binary(
     name = "bench_st_transfer",
     srcs = ["tests/bench_st_transfer.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,

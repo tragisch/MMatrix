@@ -223,6 +223,31 @@ void st_backend_get_mps_thresholds(size_t *out_pool_threshold,
 /// `MMATRIX_ST_BN_MPS_THRESHOLD`
 void st_backend_reload_mps_thresholds_from_env(void);
 
+/// Enable/disable standalone Conv2D MPS async return behavior.
+/// false (default): conv waits before return (fully synchronous API behavior).
+/// true: conv returns after command-buffer commit; caller must use st_tensor_sync().
+bool st_backend_set_conv_mps_async(bool enabled);
+
+/// Query current standalone Conv2D MPS async mode.
+bool st_backend_get_conv_mps_async(void);
+
+/// Reload standalone Conv2D MPS async mode from environment:
+/// `MMATRIX_ST_CONV_MPS_ASYNC` (accepted true: 1/true/yes/on, false: 0/false/no/off)
+void st_backend_reload_conv_mps_async_from_env(void);
+
+/// Enable/disable NHWC data-layout experiment for standalone Conv2D on MPS.
+/// false (default): input passed as NCHW (current behavior).
+/// true: graph-level NCHW→NHWC transpose added before conv and NHWC→NCHW after;
+///       no host-side copy; tests whether GPU NHWC conv is faster end-to-end.
+bool st_backend_set_conv_mps_nhwc(bool enabled);
+
+/// Query current NHWC experiment mode for standalone Conv2D on MPS.
+bool st_backend_get_conv_mps_nhwc(void);
+
+/// Reload NHWC experiment mode from environment:
+/// `MMATRIX_ST_CONV_MPS_NHWC` (accepted true: 1/true/yes/on, false: 0/false/no/off)
+void st_backend_reload_conv_mps_nhwc_from_env(void);
+
 /// Set the default backend used by tensor dispatch.
 /// Pass NULL to reset to auto-dispatch (tries MPS, falls back to CPU).
 void st_set_default_backend(const StBackend *backend);

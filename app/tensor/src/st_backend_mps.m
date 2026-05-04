@@ -24,6 +24,7 @@
 #include <math.h>
 #include <stdatomic.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ---- Shared device / queue (reuse from sm_mps) ---- */
 
@@ -41,10 +42,16 @@ static id<MTLCommandQueue> _st_be_mps_queue(void) {
 
 #define ST_MPS_POOL_THRESHOLD_DEFAULT 4096u
 #define ST_MPS_BN_THRESHOLD_DEFAULT   4096u
+#define ST_MPS_CONV_ASYNC_DEFAULT     false
+#define ST_MPS_CONV_NHWC_DEFAULT      false
 
 static size_t g_mps_pool_threshold = ST_MPS_POOL_THRESHOLD_DEFAULT;
 static size_t g_mps_bn_threshold = ST_MPS_BN_THRESHOLD_DEFAULT;
 static atomic_bool g_mps_thresholds_initialized = false;
+static atomic_bool g_mps_conv_async_enabled = ST_MPS_CONV_ASYNC_DEFAULT;
+static atomic_bool g_mps_conv_async_initialized = false;
+static atomic_bool g_mps_conv_nhwc_enabled = ST_MPS_CONV_NHWC_DEFAULT;
+static atomic_bool g_mps_conv_nhwc_initialized = false;
 
 /* Conv thresholds are read from st_conv via the public threshold API. */
 
@@ -68,12 +75,52 @@ static bool st_backend_parse_positive_size_t(const char *text,
   return true;
 }
 
+static bool st_backend_parse_bool(const char *text, bool *out_value) {
+  if (text == NULL || out_value == NULL) {
+    return false;
+  }
+
+  if (strcmp(text, "1") == 0 || strcmp(text, "true") == 0 ||
+      strcmp(text, "TRUE") == 0 || strcmp(text, "yes") == 0 ||
+      strcmp(text, "YES") == 0 || strcmp(text, "on") == 0 ||
+      strcmp(text, "ON") == 0) {
+    *out_value = true;
+    return true;
+  }
+
+  if (strcmp(text, "0") == 0 || strcmp(text, "false") == 0 ||
+      strcmp(text, "FALSE") == 0 || strcmp(text, "no") == 0 ||
+      strcmp(text, "NO") == 0 || strcmp(text, "off") == 0 ||
+      strcmp(text, "OFF") == 0) {
+    *out_value = false;
+    return true;
+  }
+
+  return false;
+}
+
 static void st_backend_init_mps_thresholds_once(void) {
   if (atomic_load_explicit(&g_mps_thresholds_initialized,
                            memory_order_acquire)) {
     return;
   }
   st_backend_reload_mps_thresholds_from_env();
+}
+
+static void st_backend_init_conv_async_once(void) {
+  if (atomic_load_explicit(&g_mps_conv_async_initialized,
+                           memory_order_acquire)) {
+    return;
+  }
+  st_backend_reload_conv_mps_async_from_env();
+}
+
+static void st_backend_init_conv_nhwc_once(void) {
+  if (atomic_load_explicit(&g_mps_conv_nhwc_initialized,
+                           memory_order_acquire)) {
+    return;
+  }
+  st_backend_reload_conv_mps_nhwc_from_env();
 }
 
 /* ================================================================== */
@@ -144,14 +191,19 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   id<MTLCommandQueue> queue = _st_be_mps_queue();
   if (!device || !queue) return false;
 
+  st_backend_init_conv_async_once();
+  st_backend_init_conv_nhwc_once();
+  const bool use_nhwc = atomic_load_explicit(&g_mps_conv_nhwc_enabled,
+                                             memory_order_acquire);
+
   /* ---- Cache lookup by shape signature ---- */
   const int has_bias = (bias != NULL) ? 1 : 0;
   NSString *cacheKey = [NSString stringWithFormat:
-      @"conv:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%d",
+      @"conv:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%d,nhwc=%d",
       n, c_in, h_in, w_in, c_out, k_h, k_w,
       params->stride_h, params->stride_w,
       params->pad_h, params->pad_w,
-      params->dilation_h, params->dilation_w, has_bias];
+      params->dilation_h, params->dilation_w, has_bias, (int)use_nhwc];
 
   NSCache *cache = _st_mps_graph_cache();
   NSDictionary *cached = [cache objectForKey:cacheKey];
@@ -184,6 +236,19 @@ static bool mps_conv2d_forward(const FloatTensor *input,
                              dataType:MPSDataTypeFloat32
                                  name:@"weight"];
 
+    /* Optional NCHW→NHWC transpose inside the graph (no host copy). */
+    MPSGraphTensor *convSrcT;
+    if (use_nhwc) {
+      MPSGraphTensor *t1 = [graph transposeTensor:inT
+                                        dimension:1 withDimension:2
+                                             name:@"nchw2nhwc_1"];
+      convSrcT = [graph transposeTensor:t1
+                              dimension:2 withDimension:3
+                                   name:@"nchw2nhwc_2"];
+    } else {
+      convSrcT = inT;
+    }
+
     MPSGraphConvolution2DOpDescriptor *convDesc =
         [MPSGraphConvolution2DOpDescriptor
             descriptorWithStrideInX:(NSUInteger)params->stride_w
@@ -196,15 +261,30 @@ static bool mps_conv2d_forward(const FloatTensor *input,
                          paddingTop:(NSUInteger)params->pad_h
                       paddingBottom:(NSUInteger)params->pad_h
                        paddingStyle:MPSGraphPaddingStyleExplicit
-                         dataLayout:MPSGraphTensorNamedDataLayoutNCHW
+                         dataLayout:(use_nhwc ? MPSGraphTensorNamedDataLayoutNHWC
+                                             : MPSGraphTensorNamedDataLayoutNCHW)
                       weightsLayout:MPSGraphTensorNamedDataLayoutOIHW];
 
-    MPSGraphTensor *convT = [graph convolution2DWithSourceTensor:inT
+    MPSGraphTensor *convT = [graph convolution2DWithSourceTensor:convSrcT
                                                    weightsTensor:wT
                                                       descriptor:convDesc
                                                             name:@"conv2d"];
 
-    resultT = convT;
+    /* Optional NHWC→NCHW transpose back after conv. */
+    MPSGraphTensor *convOutT;
+    if (use_nhwc) {
+      /* conv output is [N, H_out, W_out, C_out] (NHWC) — transpose back */
+      MPSGraphTensor *t1 = [graph transposeTensor:convT
+                                        dimension:2 withDimension:3
+                                             name:@"nhwc2nchw_1"];
+      convOutT = [graph transposeTensor:t1
+                              dimension:1 withDimension:2
+                                   name:@"nhwc2nchw_2"];
+    } else {
+      convOutT = convT;
+    }
+
+    resultT = convOutT;
     biasT   = nil;
 
     if (bias) {
@@ -336,6 +416,12 @@ static bool mps_conv2d_forward(const FloatTensor *input,
         fastpath_ok = false;
       }
       if (fastpath_ok) {
+        /* Standalone async-safe rule: before writing to the same output
+           buffer again, drain the previous pending command buffer. */
+        if (output->buf->_async_cmd_buf) {
+          st_buffer_metal_wait(output->buf);
+        }
+
         @try {
           id encodeCmdBuf = mpsCmdBuf ? mpsCmdBuf : (id)cmdBuf;
           [executable encodeToCommandBuffer:encodeCmdBuf
@@ -363,13 +449,11 @@ static bool mps_conv2d_forward(const FloatTensor *input,
             if (raw) pendingCmdBuf = (id<MTLCommandBuffer>)raw;
           }
 
-          if (output->buf->_async_cmd_buf) {
-            st_buffer_metal_wait(output->buf);
+          if (st_backend_get_conv_mps_async()) {
+            output->buf->_async_cmd_buf = (__bridge_retained void *)pendingCmdBuf;
+          } else {
+            [pendingCmdBuf waitUntilCompleted];
           }
-          output->buf->_async_cmd_buf = (__bridge_retained void *)pendingCmdBuf;
-          /* Standalone conv API is expected to be synchronous by tests/callers.
-             Keep zero-copy/no-readBytes fastpath but wait for completion here. */
-          st_buffer_metal_wait(output->buf);
           st_backend_counter_conv_fastpath_hit();
           return true;
         }
@@ -1245,6 +1329,65 @@ void st_backend_reload_mps_thresholds_from_env(void) {
   }
 
   atomic_store_explicit(&g_mps_thresholds_initialized, true,
+                        memory_order_release);
+}
+
+bool st_backend_set_conv_mps_async(bool enabled) {
+  atomic_store_explicit(&g_mps_conv_async_enabled, enabled,
+                        memory_order_release);
+  atomic_store_explicit(&g_mps_conv_async_initialized, true,
+                        memory_order_release);
+  return true;
+}
+
+bool st_backend_get_conv_mps_async(void) {
+  st_backend_init_conv_async_once();
+  return atomic_load_explicit(&g_mps_conv_async_enabled,
+                              memory_order_acquire);
+}
+
+void st_backend_reload_conv_mps_async_from_env(void) {
+  bool async_enabled = ST_MPS_CONV_ASYNC_DEFAULT;
+  const char *async_env = getenv("MMATRIX_ST_CONV_MPS_ASYNC");
+  if (async_env != NULL) {
+    bool parsed = false;
+    if (st_backend_parse_bool(async_env, &parsed)) {
+      async_enabled = parsed;
+    }
+  }
+
+  atomic_store_explicit(&g_mps_conv_async_enabled, async_enabled,
+                        memory_order_release);
+  atomic_store_explicit(&g_mps_conv_async_initialized, true,
+                        memory_order_release);
+}
+
+bool st_backend_set_conv_mps_nhwc(bool enabled) {
+  atomic_store_explicit(&g_mps_conv_nhwc_enabled, enabled,
+                        memory_order_release);
+  atomic_store_explicit(&g_mps_conv_nhwc_initialized, true,
+                        memory_order_release);
+  return true;
+}
+
+bool st_backend_get_conv_mps_nhwc(void) {
+  st_backend_init_conv_nhwc_once();
+  return atomic_load_explicit(&g_mps_conv_nhwc_enabled, memory_order_acquire);
+}
+
+void st_backend_reload_conv_mps_nhwc_from_env(void) {
+  bool nhwc_enabled = ST_MPS_CONV_NHWC_DEFAULT;
+  const char *env = getenv("MMATRIX_ST_CONV_MPS_NHWC");
+  if (env != NULL) {
+    bool parsed = false;
+    if (st_backend_parse_bool(env, &parsed)) {
+      nhwc_enabled = parsed;
+    }
+  }
+
+  atomic_store_explicit(&g_mps_conv_nhwc_enabled, nhwc_enabled,
+                        memory_order_release);
+  atomic_store_explicit(&g_mps_conv_nhwc_initialized, true,
                         memory_order_release);
 }
 

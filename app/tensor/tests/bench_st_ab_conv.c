@@ -37,6 +37,14 @@ static FloatTensor *make4d(size_t n, size_t c, size_t h, size_t w) {
   return st_create(4, shape);
 }
 
+static FloatTensor *make4d_cpu(size_t n, size_t c, size_t h, size_t w) {
+  size_t shape[4] = {n, c, h, w};
+  size_t numel = n * c * h * w;
+  float *data = (float *)calloc(numel, sizeof(float));
+  if (!data) return NULL;
+  return st_create_with_data(4, shape, data, numel, true);
+}
+
 static void fill_rand(FloatTensor *t, uint32_t seed) {
   for (size_t i = 0; i < t->numel; ++i) {
     seed = seed * 1664525u + 1013904223u;
@@ -97,6 +105,90 @@ static void print_row(const char *case_name, const char *variant,
          fp_cmd_buf_nil_delta, fp_encode_exc_delta);
 }
 
+static int run_mps_variant(const char *case_name, const char *variant,
+                           const StConv2dParams *mps_params,
+                           const FloatTensor *input,
+                           const FloatTensor *weight,
+                           const FloatTensor *out_ref,
+                           FloatTensor *out,
+                           size_t warmup, size_t iters,
+                           bool sync_each_iter,
+                           bool sync_at_end) {
+  const bool out_is_metal =
+      (out->buf && st_buffer_metal_handle(out->buf) != NULL);
+  const char *out_buf_type = out_is_metal ? "metal" : "cpu";
+
+  StBackendCounters probe_before = st_backend_get_counters();
+  if (!st_conv2d_nchw(input, weight, NULL, mps_params, out)) {
+    printf("conv_ab,%s,%s,mps,mps_hard_fail,0,0,na,0,0,0,0,na,%s,na,na,na,na,na,na,na\n",
+           case_name, variant, out_buf_type);
+    return 0;
+  }
+  if (sync_each_iter) st_tensor_sync(out);
+  StBackendCounters probe_after = st_backend_get_counters();
+  BenchCountersDelta probe_delta = counters_delta(probe_before, probe_after);
+  bool probe_pure_mps = (probe_delta.mps_hit > 0 &&
+                         probe_delta.mps_miss == 0 &&
+                         probe_delta.fallback_gemm == 0 &&
+                         probe_delta.fallback_ref == 0);
+  if (!probe_pure_mps) {
+    printf("conv_ab,%s,%s,mps,%s,0,0,na,%ld,%ld,%ld,%ld,na,%s,na,na,na,na,na,na,na\n",
+           case_name, variant, st_conv2d_last_backend(),
+           probe_delta.mps_hit, probe_delta.mps_miss,
+           probe_delta.fallback_gemm, probe_delta.fallback_ref,
+           out_buf_type);
+    return 0;
+  }
+
+  for (size_t i = 1; i < warmup; ++i) {
+    if (!st_conv2d_nchw(input, weight, NULL, mps_params, out)) return 1;
+    if (sync_each_iter) st_tensor_sync(out);
+  }
+
+  StBackendCounters c0 = st_backend_get_counters();
+  uint64_t t0 = now_ns();
+  for (size_t i = 0; i < iters; ++i) {
+    if (!st_conv2d_nchw(input, weight, NULL, mps_params, out)) return 1;
+    if (sync_each_iter) st_tensor_sync(out);
+  }
+  if (sync_at_end) st_tensor_sync(out);
+  uint64_t t1 = now_ns();
+  StBackendCounters c1 = st_backend_get_counters();
+
+  BenchCountersDelta d = counters_delta(c0, c1);
+  const long readbytes_delta = c1.conv_readbytes - c0.conv_readbytes;
+  const long fastpath_delta = c1.conv_fastpath_hit - c0.conv_fastpath_hit;
+  const long fp_exec_nil_delta =
+      c1.conv_fastpath_executable_nil - c0.conv_fastpath_executable_nil;
+  const long fp_missing_feed_delta =
+      c1.conv_fastpath_missing_feed - c0.conv_fastpath_missing_feed;
+  const long fp_preout_nil_delta =
+      c1.conv_fastpath_preout_nil - c0.conv_fastpath_preout_nil;
+  const long fp_cmd_buf_nil_delta =
+      c1.conv_fastpath_cmd_buf_nil - c0.conv_fastpath_cmd_buf_nil;
+  const long fp_encode_exc_delta =
+      c1.conv_fastpath_encode_exception - c0.conv_fastpath_encode_exception;
+
+  bool timed_pure_mps = (d.mps_hit > 0 &&
+                         d.mps_miss == 0 &&
+                         d.fallback_gemm == 0 &&
+                         d.fallback_ref == 0);
+  const char *mps_obs = st_conv2d_last_backend();
+  if (!timed_pure_mps) {
+    fprintf(stderr, "WARNING: %s %s loop fell back (%s) — row not a valid MPS comparison\n",
+            case_name, variant, mps_obs);
+  }
+
+  print_row(case_name, variant, "mps", mps_obs,
+            out_buf_type, readbytes_delta, fastpath_delta,
+            fp_exec_nil_delta, fp_missing_feed_delta,
+            fp_preout_nil_delta, fp_cmd_buf_nil_delta,
+            fp_encode_exc_delta,
+            warmup, iters, elapsed_ms(t0, t1, iters),
+            d, timed_pure_mps ? max_abs_diff(out_ref, out) : -1.0f);
+  return 0;
+}
+
 /* ---- single A/B case ----------------------------------------------------- */
 
 static int bench_case(const char *case_name,
@@ -117,7 +209,8 @@ static int bench_case(const char *case_name,
   FloatTensor *weight = make4d(c_out, c_in, k, k);
   FloatTensor *out_cpu = make4d(n, c_out, out_h, out_w);
   FloatTensor *out_mps = make4d(n, c_out, out_h, out_w);
-  if (!input || !weight || !out_cpu || !out_mps) goto cleanup;
+  FloatTensor *out_mps_cpu = make4d_cpu(n, c_out, out_h, out_w);
+  if (!input || !weight || !out_cpu || !out_mps || !out_mps_cpu) goto cleanup;
 
   const bool out_mps_is_metal =
       (out_mps->buf && st_buffer_metal_handle(out_mps->buf) != NULL);
@@ -166,87 +259,35 @@ static int bench_case(const char *case_name,
             warmup, iters, elapsed_ms(t0, t1, iters),
             counters_delta(c0, c1), -1.0f);
 
-  /* ---- B: MPS warmup + timed ------------------------------------------- */
-  /* st_conv2d_nchw returns true even when it internally fell back to GEMM.
-     We therefore validate via backend counters after every call, not just the
-     return value.  A row is only labelled "mps" when ALL of the following
-     hold for the timed loop:
-       mps_hit > 0  &&  mps_miss == 0  &&  fallback_gemm == 0  &&  fallback_ref == 0
-     Otherwise the row is emitted with the actual observed_backend string
-     ("mps_fallback_gemm" etc.) and flagged as "not a valid MPS comparison". */
+  (void)out_mps_buf_type;
 
-  /* Single probe call to detect early hard failure (kernel not compiled). */
-  StBackendCounters probe_before = st_backend_get_counters();
-  if (!st_conv2d_nchw(input, weight, NULL, &mps_params, out_mps)) {
-    printf("conv_ab,%s,mps,mps,mps_hard_fail,0,0,na,0,0,0,0,na,%s,na,na,na,na,na,na,na\n",
-           case_name, out_mps_buf_type);
-    rc = 0;
-    goto cleanup;
-  }
-  StBackendCounters probe_after = st_backend_get_counters();
-  BenchCountersDelta probe_delta = counters_delta(probe_before, probe_after);
-  bool probe_pure_mps = (probe_delta.mps_hit > 0 &&
-                         probe_delta.mps_miss == 0 &&
-                         probe_delta.fallback_gemm == 0 &&
-                         probe_delta.fallback_ref == 0);
-  if (!probe_pure_mps) {
-    /* Warmup already fell back — MPS is not available for this shape. */
-      printf("conv_ab,%s,mps,mps,%s,0,0,na,%ld,%ld,%ld,%ld,na,%s,na,na,na,na,na,na,na\n",
-           case_name, st_conv2d_last_backend(),
-           probe_delta.mps_hit, probe_delta.mps_miss,
-        probe_delta.fallback_gemm, probe_delta.fallback_ref,
-        out_mps_buf_type);
-    rc = 0;
+  /* ---- B: MPS split modes ---------------------------------------------- */
+  st_backend_set_conv_mps_async(true);
+
+  if (run_mps_variant(case_name, "mps_zero_copy_sync", &mps_params,
+                      input, weight, out_cpu, out_mps,
+                      warmup, iters, true, true) != 0) {
     goto cleanup;
   }
 
-  for (size_t i = 1; i < warmup; ++i) {
-    if (!st_conv2d_nchw(input, weight, NULL, &mps_params, out_mps)) goto cleanup;
+  if (run_mps_variant(case_name, "mps_true_async_boundary", &mps_params,
+                      input, weight, out_cpu, out_mps,
+                      warmup, iters, false, true) != 0) {
+    goto cleanup;
   }
 
-  StBackendCounters c2 = st_backend_get_counters();
-  uint64_t t2 = now_ns();
-  for (size_t i = 0; i < iters; ++i) {
-    if (!st_conv2d_nchw(input, weight, NULL, &mps_params, out_mps)) goto cleanup;
+  if (run_mps_variant(case_name, "mps_cpu_materialized", &mps_params,
+                      input, weight, out_cpu, out_mps_cpu,
+                      warmup, iters, false, false) != 0) {
+    goto cleanup;
   }
-  st_tensor_sync(out_mps);
-  uint64_t t3 = now_ns();
-  StBackendCounters c3 = st_backend_get_counters();
-  BenchCountersDelta mps_delta = counters_delta(c2, c3);
-  const long mps_readbytes_delta = c3.conv_readbytes - c2.conv_readbytes;
-  const long mps_fastpath_delta = c3.conv_fastpath_hit - c2.conv_fastpath_hit;
-    const long mps_fp_exec_nil_delta =
-      c3.conv_fastpath_executable_nil - c2.conv_fastpath_executable_nil;
-    const long mps_fp_missing_feed_delta =
-      c3.conv_fastpath_missing_feed - c2.conv_fastpath_missing_feed;
-    const long mps_fp_preout_nil_delta =
-      c3.conv_fastpath_preout_nil - c2.conv_fastpath_preout_nil;
-    const long mps_fp_cmd_buf_nil_delta =
-      c3.conv_fastpath_cmd_buf_nil - c2.conv_fastpath_cmd_buf_nil;
-    const long mps_fp_encode_exc_delta =
-      c3.conv_fastpath_encode_exception - c2.conv_fastpath_encode_exception;
 
-  /* Validate that the timed loop was pure MPS — no silent fallback. */
-  bool timed_pure_mps = (mps_delta.mps_hit > 0 &&
-                         mps_delta.mps_miss == 0 &&
-                         mps_delta.fallback_gemm == 0 &&
-                         mps_delta.fallback_ref == 0);
-  const char *mps_obs = st_conv2d_last_backend();
-  if (!timed_pure_mps) {
-    /* Emit row but mark as invalid comparison. */
-    fprintf(stderr, "WARNING: %s mps loop fell back (%s) — row not a valid MPS comparison\n",
-            case_name, mps_obs);
-  }
-  print_row(case_name, "mps", "mps", mps_obs,
-            out_mps_buf_type, mps_readbytes_delta, mps_fastpath_delta,
-            mps_fp_exec_nil_delta, mps_fp_missing_feed_delta,
-            mps_fp_preout_nil_delta, mps_fp_cmd_buf_nil_delta,
-            mps_fp_encode_exc_delta,
-            warmup, iters, elapsed_ms(t2, t3, iters),
-            mps_delta, timed_pure_mps ? max_abs_diff(out_cpu, out_mps) : -1.0f);
+  st_backend_set_conv_mps_async(false);
 
   rc = 0;
 cleanup:
+  st_backend_set_conv_mps_async(false);
+  st_destroy(out_mps_cpu);
   st_destroy(out_mps);
   st_destroy(out_cpu);
   st_destroy(weight);

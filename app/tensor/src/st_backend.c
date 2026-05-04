@@ -274,4 +274,26 @@ void st_backend_get_mps_thresholds(size_t *out_pool_threshold,
 }
 
 void st_backend_reload_mps_thresholds_from_env(void) {}
+
+bool st_backend_set_conv_mps_async(bool enabled) {
+  (void)enabled;
+  return false;
+}
+
+bool st_backend_get_conv_mps_async(void) {
+  return false;
+}
+
+void st_backend_reload_conv_mps_async_from_env(void) {}
+
+bool st_backend_set_conv_mps_nhwc(bool enabled) {
+  (void)enabled;
+  return false;
+}
+
+bool st_backend_get_conv_mps_nhwc(void) {
+  return false;
+}
+
+void st_backend_reload_conv_mps_nhwc_from_env(void) {}
 #endif
