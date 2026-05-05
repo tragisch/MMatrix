@@ -447,6 +447,9 @@ int main(void) {
   if (bench_conv_case("conv_large", 8, 64, 128, 112, 112, 3, 1, 1, 2, 5) != 0) {
     return 1;
   }
+  if (bench_conv_case("pw_medium", 4, 64, 128, 56, 56, 1, 1, 0, 2, 10) != 0) {
+    return 1;
+  }
   if (bench_maxpool_case("pool_large", 8, 64, 112, 112, 3, 3, 2, 2, 1, 1,
                          2, 10) != 0) {
     return 1;

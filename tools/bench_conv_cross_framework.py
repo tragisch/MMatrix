@@ -86,7 +86,7 @@ def benchmark_c_ab(repo_root: str, repeats: int) -> Dict[Tuple[str, str], float]
             if len(parts) < 8:
                 continue
             case_name = parts[1]
-            variant = parts[2]  # gemm | mps
+            variant = parts[2]  # gemm | mps_* variants
             ms = float(parts[7])
             samples.setdefault((case_name, variant), []).append(ms)
 
@@ -205,14 +205,29 @@ def main() -> int:
     print("\nframework,case,median_ms,GMAC/s")
     for s in SHAPES:
         c_gemm = c_rows.get((s.name, "gemm"))
-        c_mps = c_rows.get((s.name, "mps"))
+        c_mps_zero_copy_sync = c_rows.get((s.name, "mps_zero_copy_sync"))
+        c_mps_true_async_boundary = c_rows.get((s.name, "mps_true_async_boundary"))
+        c_mps_cpu_materialized = c_rows.get((s.name, "mps_cpu_materialized"))
         t_ms = torch_rows.get(s.name)
         m_ms = mlx_rows.get(s.name)
 
         if c_gemm is not None:
             print(f"c_gemm,{s.name},{c_gemm:.6f},{throughput_gmacs_per_s(s, c_gemm):.2f}")
-        if c_mps is not None:
-            print(f"c_mps,{s.name},{c_mps:.6f},{throughput_gmacs_per_s(s, c_mps):.2f}")
+        if c_mps_zero_copy_sync is not None:
+            print(
+                f"c_mps_zero_copy_sync,{s.name},{c_mps_zero_copy_sync:.6f},"
+                f"{throughput_gmacs_per_s(s, c_mps_zero_copy_sync):.2f}"
+            )
+        if c_mps_true_async_boundary is not None:
+            print(
+                f"c_mps_true_async_boundary,{s.name},{c_mps_true_async_boundary:.6f},"
+                f"{throughput_gmacs_per_s(s, c_mps_true_async_boundary):.2f}"
+            )
+        if c_mps_cpu_materialized is not None:
+            print(
+                f"c_mps_cpu_materialized,{s.name},{c_mps_cpu_materialized:.6f},"
+                f"{throughput_gmacs_per_s(s, c_mps_cpu_materialized):.2f}"
+            )
         if t_ms is not None:
             print(f"pytorch_mps,{s.name},{t_ms:.6f},{throughput_gmacs_per_s(s, t_ms):.2f}")
         if m_ms is not None:
