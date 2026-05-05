@@ -20,6 +20,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <float.h>
 #include <string.h>
 #include <time.h>
 
@@ -43,6 +45,16 @@ static void fill_rand(FloatTensor *t, uint32_t seed) {
   }
 }
 
+static float max_abs_diff(const FloatTensor *a, const FloatTensor *b) {
+  float max_abs = 0.0f;
+  if (!a || !b || a->numel != b->numel) return FLT_MAX;
+  for (size_t i = 0; i < a->numel; ++i) {
+    float d = fabsf(a->values[i] - b->values[i]);
+    if (d > max_abs) max_abs = d;
+  }
+  return max_abs;
+}
+
 /* ------------------------------------------------------------------ */
 
 typedef struct Case {
@@ -60,12 +72,13 @@ static void run_case(const Case *c) {
   const size_t H_out  = (c->H + 2 * pad - K) / stride + 1;
   const size_t W_out  = (c->W + 2 * pad - K) / stride + 1;
 
-  FloatTensor *in  = make4d(c->N, c->C_in,  c->H,   c->W);
-  FloatTensor *w   = make4d(c->C_out, c->C_in, K,    K);
-  FloatTensor *out = make4d(c->N, c->C_out, H_out, W_out);
-  if (!in || !w || !out) {
+  FloatTensor *in       = make4d(c->N, c->C_in,  c->H,   c->W);
+  FloatTensor *w        = make4d(c->C_out, c->C_in, K,    K);
+  FloatTensor *out_nchw = make4d(c->N, c->C_out, H_out, W_out);
+  FloatTensor *out_nhwc = make4d(c->N, c->C_out, H_out, W_out);
+  if (!in || !w || !out_nchw || !out_nhwc) {
     fprintf(stderr, "SKIP %s: allocation failed\n", c->name);
-    st_destroy(in); st_destroy(w); st_destroy(out);
+    st_destroy(in); st_destroy(w); st_destroy(out_nchw); st_destroy(out_nhwc);
     return;
   }
 
@@ -83,12 +96,12 @@ static void run_case(const Case *c) {
   st_backend_set_conv_mps_nhwc(false);
 
   for (int i = 0; i < WARMUP; ++i) {
-    st_conv2d_nchw(in, w, NULL, &params, out);
+    st_conv2d_nchw(in, w, NULL, &params, out_nchw);
   }
 
   double nchw_start = now_ms();
   for (int i = 0; i < ITERS; ++i) {
-    st_conv2d_nchw(in, w, NULL, &params, out);
+    st_conv2d_nchw(in, w, NULL, &params, out_nchw);
   }
   double nchw_ms = (now_ms() - nchw_start) / ITERS;
 
@@ -96,17 +109,29 @@ static void run_case(const Case *c) {
   st_backend_set_conv_mps_nhwc(true);
 
   for (int i = 0; i < WARMUP; ++i) {
-    st_conv2d_nchw(in, w, NULL, &params, out);
+    st_conv2d_nchw(in, w, NULL, &params, out_nhwc);
   }
 
   double nhwc_start = now_ms();
   for (int i = 0; i < ITERS; ++i) {
-    st_conv2d_nchw(in, w, NULL, &params, out);
+    st_conv2d_nchw(in, w, NULL, &params, out_nhwc);
   }
   double nhwc_ms = (now_ms() - nhwc_start) / ITERS;
 
   /* Reset to NCHW */
   st_backend_set_conv_mps_nhwc(false);
+
+  const float max_abs = max_abs_diff(out_nchw, out_nhwc);
+  if (!(max_abs <= 1e-3f)) {
+    fprintf(stderr,
+            "SKIP %s: NHWC output mismatch (max_abs=%.8f)\n",
+            c->name, (double)max_abs);
+    st_destroy(in);
+    st_destroy(w);
+    st_destroy(out_nchw);
+    st_destroy(out_nhwc);
+    return;
+  }
 
   double diff_pct = (nhwc_ms - nchw_ms) / nchw_ms * 100.0;
 
@@ -117,7 +142,8 @@ static void run_case(const Case *c) {
 
   st_destroy(in);
   st_destroy(w);
-  st_destroy(out);
+  st_destroy(out_nchw);
+  st_destroy(out_nhwc);
 }
 
 int main(void) {

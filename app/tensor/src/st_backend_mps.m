@@ -291,7 +291,7 @@ static bool mps_conv2d_forward(const FloatTensor *input,
       biasT   = [graph placeholderWithShape:@[ @1, @(c_out), @1, @1 ]
                                    dataType:MPSDataTypeFloat32
                                        name:@"bias"];
-      resultT = [graph additionWithPrimaryTensor:convT
+      resultT = [graph additionWithPrimaryTensor:convOutT
                                  secondaryTensor:biasT
                                             name:@"add_bias"];
     }
