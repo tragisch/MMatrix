@@ -238,3 +238,20 @@ void st_buffer_wait_gpu(StBuffer *buf) {
   st_buffer_metal_wait(buf);
 #endif
 }
+
+bool st_buffer_last_gpu_elapsed_ms(const StBuffer *buf, double *out_ms) {
+  if (!buf || !out_ms || !buf->_last_gpu_elapsed_valid) {
+    return false;
+  }
+  *out_ms = buf->_last_gpu_elapsed_ms;
+  return true;
+}
+
+bool st_buffer_last_gpu_profile(const StBuffer *buf,
+                                StBufferGpuProfile *out_profile) {
+  if (!buf || !out_profile || !buf->_last_gpu_profile_valid) {
+    return false;
+  }
+  *out_profile = buf->_last_gpu_profile;
+  return true;
+}

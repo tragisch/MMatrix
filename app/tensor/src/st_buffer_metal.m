@@ -14,6 +14,13 @@
 #import <Metal/Metal.h>
 #import <stdint.h>
 #import <string.h>
+#import <time.h>
+
+static double st_metal_now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
+}
 
 StBuffer *st_buffer_alloc_metal_impl(size_t num_floats) {
   if (num_floats == 0) {
@@ -76,8 +83,20 @@ void st_buffer_metal_wait(StBuffer *buf) {
   }
   void *handle = buf->_async_cmd_buf;
   buf->_async_cmd_buf = NULL;
+  buf->_last_gpu_elapsed_valid = false;
+  buf->_last_gpu_elapsed_ms = 0.0;
   /* Transfer ownership to ARC so the command buffer is released after wait. */
   id<MTLCommandBuffer> cmdBuf = (__bridge_transfer id<MTLCommandBuffer>)handle;
+  const double wait_start_ms = st_metal_now_ms();
   [cmdBuf waitUntilCompleted];
+  const double wait_end_ms = st_metal_now_ms();
+  buf->_last_gpu_profile.sync_wait_ms = wait_end_ms - wait_start_ms;
+  buf->_last_gpu_profile_valid = true;
+  if (cmdBuf.status == MTLCommandBufferStatusCompleted &&
+      cmdBuf.GPUEndTime > cmdBuf.GPUStartTime) {
+    buf->_last_gpu_elapsed_ms =
+        (cmdBuf.GPUEndTime - cmdBuf.GPUStartTime) * 1000.0;
+    buf->_last_gpu_elapsed_valid = true;
+  }
   /* cmdBuf released by ARC here. */
 }

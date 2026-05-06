@@ -25,6 +25,7 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* ---- Shared device / queue (reuse from sm_mps) ---- */
 
@@ -34,6 +35,12 @@ static id<MTLDevice> _st_be_mps_device(void) {
 
 static id<MTLCommandQueue> _st_be_mps_queue(void) {
   return (__bridge id<MTLCommandQueue>)mps_get_shared_command_queue();
+}
+
+static double st_backend_now_ms(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (double)ts.tv_sec * 1000.0 + (double)ts.tv_nsec / 1000000.0;
 }
 
 /* ================================================================== */
@@ -327,6 +334,7 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   }
 
   /* ---- Prepare feed data ---- */
+  const double feed_start_ms = st_backend_now_ms();
   MPSGraphDevice *gDev = [MPSGraphDevice deviceWithMTLDevice:device];
 
   void *in_mh  = input->buf  ? st_buffer_metal_handle(input->buf)  : NULL;
@@ -388,6 +396,8 @@ static bool mps_conv2d_forward(const FloatTensor *input,
           [[MPSGraphTensorData alloc] initWithMTLBuffer:outBuf
                                                   shape:outShape
                                                dataType:MPSDataTypeFloat32];
+      const double feed_end_ms = st_backend_now_ms();
+      const double command_start_ms = feed_end_ms;
       id<MTLCommandBuffer> cmdBuf = nil;
       id mpsCmdBuf = nil;
       if ([queue respondsToSelector:@selector(commandBufferWithDescriptor:)]) {
@@ -406,6 +416,7 @@ static bool mps_conv2d_forward(const FloatTensor *input,
         id (*msgSendCB)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
         mpsCmdBuf = msgSendCB(MPSCBClass, @selector(commandBufferFromCommandQueue:), queue);
       }
+      const double command_end_ms = st_backend_now_ms();
 
       if (!preOutData) {
         st_backend_counter_conv_fastpath_preout_nil();
@@ -416,12 +427,19 @@ static bool mps_conv2d_forward(const FloatTensor *input,
         fastpath_ok = false;
       }
       if (fastpath_ok) {
+        output->buf->_last_gpu_profile_valid = false;
+        output->buf->_last_gpu_profile = (StBufferGpuProfile){0};
+        output->buf->_last_gpu_profile.feed_ms = feed_end_ms - feed_start_ms;
+        output->buf->_last_gpu_profile.command_ms =
+            command_end_ms - command_start_ms;
+
         /* Standalone async-safe rule: before writing to the same output
            buffer again, drain the previous pending command buffer. */
         if (output->buf->_async_cmd_buf) {
           st_buffer_metal_wait(output->buf);
         }
 
+        const double encode_start_ms = st_backend_now_ms();
         @try {
           id encodeCmdBuf = mpsCmdBuf ? mpsCmdBuf : (id)cmdBuf;
           [executable encodeToCommandBuffer:encodeCmdBuf
@@ -434,7 +452,11 @@ static bool mps_conv2d_forward(const FloatTensor *input,
                 exception.name, exception.reason);
           fastpath_ok = false;
         }
+        const double encode_end_ms = st_backend_now_ms();
+        output->buf->_last_gpu_profile.encode_ms =
+            encode_end_ms - encode_start_ms;
         if (fastpath_ok) {
+          const double commit_start_ms = st_backend_now_ms();
           if (mpsCmdBuf && [mpsCmdBuf respondsToSelector:@selector(commit)]) {
             void (*msgSendVoid)(id, SEL) = (void (*)(id, SEL))objc_msgSend;
             msgSendVoid(mpsCmdBuf, @selector(commit));
@@ -448,6 +470,10 @@ static bool mps_conv2d_forward(const FloatTensor *input,
             id raw = msgSendCBObj(mpsCmdBuf, @selector(commandBuffer));
             if (raw) pendingCmdBuf = (id<MTLCommandBuffer>)raw;
           }
+          const double commit_end_ms = st_backend_now_ms();
+          output->buf->_last_gpu_profile.commit_ms =
+              commit_end_ms - commit_start_ms;
+          output->buf->_last_gpu_profile_valid = true;
 
           if (st_backend_get_conv_mps_async()) {
             output->buf->_async_cmd_buf = (__bridge_retained void *)pendingCmdBuf;

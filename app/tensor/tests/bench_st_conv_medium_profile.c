@@ -17,6 +17,17 @@ typedef struct BenchCountersDelta {
   long fallback_ref;
 } BenchCountersDelta;
 
+typedef struct GpuStats {
+  size_t count;
+  size_t profile_count;
+  double sum_ms;
+  double min_ms;
+  double max_ms;
+  double last_ms;
+  StBufferGpuProfile profile_sum;
+  StBufferGpuProfile profile_last;
+} GpuStats;
+
 static uint64_t now_ns(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -59,12 +70,53 @@ static BenchCountersDelta counters_delta(StBackendCounters before,
   };
 }
 
+static void gpu_stats_add(GpuStats *stats, double ms) {
+  if (!stats) return;
+  if (stats->count == 0 || ms < stats->min_ms) {
+    stats->min_ms = ms;
+  }
+  if (stats->count == 0 || ms > stats->max_ms) {
+    stats->max_ms = ms;
+  }
+  stats->last_ms = ms;
+  stats->sum_ms += ms;
+  stats->count++;
+}
+
+static void gpu_stats_maybe_add(GpuStats *stats, const FloatTensor *out) {
+  double gpu_ms = 0.0;
+  if (out && out->buf && st_buffer_last_gpu_elapsed_ms(out->buf, &gpu_ms)) {
+    gpu_stats_add(stats, gpu_ms);
+  }
+  StBufferGpuProfile profile;
+  if (out && out->buf && st_buffer_last_gpu_profile(out->buf, &profile)) {
+    stats->profile_last = profile;
+    stats->profile_sum.feed_ms += profile.feed_ms;
+    stats->profile_sum.command_ms += profile.command_ms;
+    stats->profile_sum.encode_ms += profile.encode_ms;
+    stats->profile_sum.commit_ms += profile.commit_ms;
+    stats->profile_sum.sync_wait_ms += profile.sync_wait_ms;
+    stats->profile_count++;
+  }
+}
+
+static void print_optional_ms(bool valid, double value) {
+  if (valid) {
+    printf("%.6f", value);
+  } else {
+    printf("na");
+  }
+}
+
 static void print_header(void) {
   printf("suite,case_name,variant,phase,requested_backend,observed_backend,"
          "iters,ms_per_iter,mps_hit,mps_miss,fallback_gemm,fallback_ref,"
          "max_abs_diff,out_buf_type,readbytes_delta,fastpath_delta,"
          "fp_exec_nil_delta,fp_missing_feed_delta,fp_preout_nil_delta,"
-         "fp_cmd_buf_nil_delta,fp_encode_exc_delta\n");
+         "fp_cmd_buf_nil_delta,fp_encode_exc_delta,last_gpu_ms,gpu_samples,"
+         "gpu_avg_ms,gpu_min_ms,gpu_max_ms,cpu_overhead_ms,host_samples,"
+         "feed_avg_ms,command_avg_ms,encode_avg_ms,commit_avg_ms,"
+         "sync_wait_avg_ms\n");
 }
 
 static void print_row(const char *case_name, const char *variant,
@@ -74,7 +126,13 @@ static void print_row(const char *case_name, const char *variant,
                       const char *out_buf_type, long readbytes_delta,
                       long fastpath_delta, long fp_exec_nil_delta,
                       long fp_missing_feed_delta, long fp_preout_nil_delta,
-                      long fp_cmd_buf_nil_delta, long fp_encode_exc_delta) {
+                      long fp_cmd_buf_nil_delta, long fp_encode_exc_delta,
+                      const GpuStats *gpu_stats) {
+  const bool gpu_valid = gpu_stats && gpu_stats->count > 0;
+  const double gpu_avg =
+      gpu_valid ? gpu_stats->sum_ms / (double)gpu_stats->count : 0.0;
+  const double cpu_overhead = gpu_valid ? ms - gpu_avg : 0.0;
+
   printf("conv_medium_profile,%s,%s,%s,%s,%s,%zu,%.6f,%ld,%ld,%ld,%ld,",
          case_name, variant, phase, requested_backend, observed_backend, iters,
          ms, d.mps_hit, d.mps_miss, d.fallback_gemm, d.fallback_ref);
@@ -83,10 +141,38 @@ static void print_row(const char *case_name, const char *variant,
   } else {
     printf("na");
   }
-  printf(",%s,%ld,%ld,%ld,%ld,%ld,%ld,%ld\n",
+  printf(",%s,%ld,%ld,%ld,%ld,%ld,%ld,%ld,",
          out_buf_type, readbytes_delta, fastpath_delta, fp_exec_nil_delta,
          fp_missing_feed_delta, fp_preout_nil_delta, fp_cmd_buf_nil_delta,
          fp_encode_exc_delta);
+  print_optional_ms(gpu_valid, gpu_valid ? gpu_stats->last_ms : 0.0);
+  printf(",%zu,", gpu_valid ? gpu_stats->count : 0);
+  print_optional_ms(gpu_valid, gpu_avg);
+  printf(",");
+  print_optional_ms(gpu_valid, gpu_valid ? gpu_stats->min_ms : 0.0);
+  printf(",");
+  print_optional_ms(gpu_valid, gpu_valid ? gpu_stats->max_ms : 0.0);
+  printf(",");
+  print_optional_ms(gpu_valid, cpu_overhead);
+  const bool profile_valid = gpu_stats && gpu_stats->profile_count > 0;
+  const double profile_count =
+      profile_valid ? (double)gpu_stats->profile_count : 1.0;
+  printf(",%zu,", profile_valid ? gpu_stats->profile_count : 0);
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.feed_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.command_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.encode_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.commit_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.sync_wait_ms / profile_count);
+  printf("\n");
 }
 
 static int run_phase(const char *case_name, const char *variant,
@@ -99,6 +185,7 @@ static int run_phase(const char *case_name, const char *variant,
   const char *out_buf_type = out_is_metal ? "metal" : "cpu";
 
   StBackendCounters c0 = st_backend_get_counters();
+  GpuStats gpu_stats = {0};
   uint64_t t0 = now_ns();
   for (size_t i = 0; i < iters; ++i) {
     if (!st_conv2d_nchw(input, weight, NULL, params, out)) {
@@ -106,10 +193,16 @@ static int run_phase(const char *case_name, const char *variant,
     }
     if (sync_each_iter) {
       st_tensor_sync(out);
+      gpu_stats_maybe_add(&gpu_stats, out);
+    } else if (i > 0) {
+      /* st_conv2d_nchw drains the previous pending command before enqueueing
+       * a new one when reusing the same output buffer. */
+      gpu_stats_maybe_add(&gpu_stats, out);
     }
   }
   if (sync_at_end) {
     st_tensor_sync(out);
+    gpu_stats_maybe_add(&gpu_stats, out);
   }
   uint64_t t1 = now_ns();
   StBackendCounters c1 = st_backend_get_counters();
@@ -132,7 +225,7 @@ static int run_phase(const char *case_name, const char *variant,
             elapsed_ms(t0, t1, iters), d, max_abs_diff(ref, out), out_buf_type,
             readbytes_delta, fastpath_delta, fp_exec_nil_delta,
             fp_missing_feed_delta, fp_preout_nil_delta, fp_cmd_buf_nil_delta,
-            fp_encode_exc_delta);
+            fp_encode_exc_delta, &gpu_stats);
   return 0;
 }
 

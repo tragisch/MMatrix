@@ -32,6 +32,14 @@ typedef enum StBufferType {
   ST_BUFFER_METAL = 1,  // MTLBuffer with StorageModeShared (Apple only)
 } StBufferType;
 
+typedef struct StBufferGpuProfile {
+  double feed_ms;
+  double command_ms;
+  double encode_ms;
+  double commit_ms;
+  double sync_wait_ms;
+} StBufferGpuProfile;
+
 /* ------------------------------------------------------------------ */
 /*  StBuffer                                                           */
 /* ------------------------------------------------------------------ */
@@ -70,6 +78,13 @@ typedef struct StBuffer {
    * but not yet waited on (async dispatch).  Callers must invoke
    * st_buffer_wait_gpu() / st_tensor_sync() before reading ->data.    */
   void *_async_cmd_buf;
+
+  /* Last completed async GPU command duration, if the backend exposes one.
+   * Used by benchmarks/profiling; false when unavailable or not measured. */
+  bool _last_gpu_elapsed_valid;
+  double _last_gpu_elapsed_ms;
+  bool _last_gpu_profile_valid;
+  StBufferGpuProfile _last_gpu_profile;
 
 } StBuffer;
 
@@ -128,6 +143,15 @@ static inline void *st_buffer_metal_handle(const StBuffer *buf) {
 /// the pending marker.  No-op when no work is pending or buf is NULL.
 /// Must be called before reading buf->data after an async GPU dispatch.
 void st_buffer_wait_gpu(StBuffer *buf);
+
+/// Return the last measured GPU command-buffer duration for this buffer.
+/// Returns false when no backend timestamp is available.
+bool st_buffer_last_gpu_elapsed_ms(const StBuffer *buf, double *out_ms);
+
+/// Return the last measured host-side GPU orchestration timings.
+/// Values are best-effort profiling data for benchmarks.
+bool st_buffer_last_gpu_profile(const StBuffer *buf,
+                                StBufferGpuProfile *out_profile);
 
 #ifdef __cplusplus
 }
