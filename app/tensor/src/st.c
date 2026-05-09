@@ -9,6 +9,7 @@
 #include "st.h"
 #include "st_buffer.h"
 #include "st_dtype.h"
+#include "st_gpu_guard.h"
 #include "sm.h"
 
 #include <log.h>
@@ -286,6 +287,7 @@ FloatTensor *st_to_f32(const FloatTensor *src) {
   if (src == NULL || src->values == NULL || src->ndim == 0) {
     return NULL;
   }
+  ST_ASSERT_NOT_PENDING(src);
 
   if (src->dtype == ST_DTYPE_F32) {
     return st_clone(src);
@@ -320,6 +322,7 @@ FloatTensor *st_to_bf16(const FloatTensor *src) {
   if (src == NULL || src->values == NULL || src->ndim == 0) {
     return NULL;
   }
+  ST_ASSERT_NOT_PENDING(src);
 
   if (src->dtype == ST_DTYPE_BF16) {
     return st_clone(src);
@@ -402,6 +405,7 @@ float st_get(const FloatTensor *tensor, const size_t *indices) {
     log_error("Error: st_get index out of bounds or invalid tensor.");
     return 0.0f;
   }
+  ST_ASSERT_NOT_PENDING(tensor);
   if (tensor->dtype == ST_DTYPE_BF16) {
     const uint16_t *bp = (const uint16_t *)tensor->values;
     return st_bf16_to_f32(bp[off]);
@@ -415,6 +419,7 @@ bool st_set(FloatTensor *tensor, const size_t *indices, float value) {
     log_error("Error: st_set index out of bounds or invalid tensor.");
     return false;
   }
+  ST_ASSERT_NOT_PENDING(tensor);
   if (tensor->dtype == ST_DTYPE_BF16) {
     uint16_t *bp = (uint16_t *)tensor->values;
     bp[off] = st_f32_to_bf16(value);
@@ -569,6 +574,7 @@ FloatTensor *st_clone(const FloatTensor *src) {
   if (src == NULL || src->values == NULL || src->ndim == 0) {
     return NULL;
   }
+  ST_ASSERT_NOT_PENDING(src);
 
   /* bf16 clone: byte-copy of the packed storage. */
   if (src->dtype == ST_DTYPE_BF16) {
@@ -664,6 +670,8 @@ bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {
     log_error("Error: st_inplace_add requires contiguous tensors.");
     return false;
   }
+  ST_ASSERT_NOT_PENDING(a);
+  ST_ASSERT_NOT_PENDING(b);
 
   /* ---- bf16 promotion ---- */
   if (a->dtype == ST_DTYPE_BF16 || b->dtype == ST_DTYPE_BF16) {
@@ -709,6 +717,8 @@ bool st_inplace_sub(FloatTensor *a, const FloatTensor *b) {
     log_error("Error: st_inplace_sub requires contiguous tensors.");
     return false;
   }
+  ST_ASSERT_NOT_PENDING(a);
+  ST_ASSERT_NOT_PENDING(b);
 
   /* ---- bf16 promotion ---- */
   if (a->dtype == ST_DTYPE_BF16 || b->dtype == ST_DTYPE_BF16) {
@@ -746,6 +756,7 @@ bool st_inplace_scale(FloatTensor *t, float scalar) {
   if (t == NULL || t->values == NULL) {
     return false;
   }
+  ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
     log_error("Error: st_inplace_scale requires contiguous tensor.");
     return false;
@@ -778,6 +789,8 @@ bool st_inplace_elementwise_multiply(FloatTensor *a, const FloatTensor *b) {
   if (a == NULL || a->values == NULL || b == NULL || b->values == NULL) {
     return false;
   }
+  ST_ASSERT_NOT_PENDING(a);
+  ST_ASSERT_NOT_PENDING(b);
   if (a->numel != b->numel) {
     log_error("Error: st_inplace_elementwise_multiply size mismatch.");
     return false;
@@ -825,6 +838,7 @@ bool st_fill(FloatTensor *t, float value) {
   if (t == NULL || t->values == NULL) {
     return false;
   }
+  ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
     log_error("Error: st_fill requires contiguous tensor.");
     return false;
@@ -864,6 +878,7 @@ bool st_apply_relu(FloatTensor *t) {
   if (t == NULL || t->values == NULL) {
     return false;
   }
+  ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
     log_error("Error: st_apply_relu requires contiguous tensor.");
     return false;
@@ -901,6 +916,8 @@ bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad) {
       grad->values == NULL) {
     return false;
   }
+  ST_ASSERT_NOT_PENDING(activation);
+  ST_ASSERT_NOT_PENDING(grad);
   if (activation->numel != grad->numel) {
     log_error("Error: st_apply_relu_backward size mismatch.");
     return false;
@@ -950,6 +967,7 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
   if (t == NULL || t->values == NULL || axes == NULL || num_axes == 0) {
     return NULL;
   }
+  ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
     log_error("Error: st_sum_axes requires contiguous tensor.");
     return NULL;
@@ -1109,6 +1127,7 @@ FloatTensor *st_pad_nchw(const FloatTensor *input, size_t pad_h, size_t pad_w,
     log_error("Error: st_pad_nchw expects valid 4D tensor.");
     return NULL;
   }
+  ST_ASSERT_NOT_PENDING(input);
   if (!st_is_contiguous(input)) {
     log_error("Error: st_pad_nchw requires contiguous tensor.");
     return NULL;
