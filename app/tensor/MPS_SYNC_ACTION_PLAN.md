@@ -92,13 +92,13 @@ Expected outcome:
 
 Current callsite classification:
 
-| Bucket | Callsites | Interpretation |
-| --- | --- | --- |
-| Intentional | `st_tensor_sync`, `st_buffer_wait_gpu`, `st_buffer_release`, MPS `readBytes` fallback/training paths | These are explicit boundaries or safety drains. |
-| Harmless in current tests | Unit-test and layout-benchmark calls to `st_get`, `st_clone`, `st_to_f32`, `st_sum_axes`, `st_pad_nchw` | CPU tensors or intentional materialization benchmarks. |
-| Watch | BF16 promotion in `st_conv.c`, `st_batchnorm.c`, `st_pool.c`, and `st.c` | These call `st_to_f32` / `st_clone` and therefore read CPU memory. Safe for CPU tensors; expensive or wrong if called on pending GPU tensors. |
-| Watch | CPU fallback path in fused `conv+bn` / `conv+bn+pool` | If MPS fused execution fails after producing or receiving a GPU-resident intermediate, fallback work must not read stale `->values`. |
-| High-risk API contract | `st_get`, `st_set`, `st_clone`, `st_to_f32`, `st_to_bf16`, `st_sum_axes`, `st_pad_nchw`, and CPU inplace ops | These are CPU APIs. Callers must treat them as boundaries when the tensor may be GPU-pending. |
+| Bucket                    | Callsites                                                                                                    | Interpretation                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Intentional               | `st_tensor_sync`, `st_buffer_wait_gpu`, `st_buffer_release`, MPS `readBytes` fallback/training paths         | These are explicit boundaries or safety drains.                                                                                               |
+| Harmless in current tests | Unit-test and layout-benchmark calls to `st_get`, `st_clone`, `st_to_f32`, `st_sum_axes`, `st_pad_nchw`      | CPU tensors or intentional materialization benchmarks.                                                                                        |
+| Watch                     | BF16 promotion in `st_conv.c`, `st_batchnorm.c`, `st_pool.c`, and `st.c`                                     | These call `st_to_f32` / `st_clone` and therefore read CPU memory. Safe for CPU tensors; expensive or wrong if called on pending GPU tensors. |
+| Watch                     | CPU fallback path in fused `conv+bn` / `conv+bn+pool`                                                        | If MPS fused execution fails after producing or receiving a GPU-resident intermediate, fallback work must not read stale `->values`.          |
+| High-risk API contract    | `st_get`, `st_set`, `st_clone`, `st_to_f32`, `st_to_bf16`, `st_sum_axes`, `st_pad_nchw`, and CPU inplace ops | These are CPU APIs. Callers must treat them as boundaries when the tensor may be GPU-pending.                                                 |
 
 Near-term rule:
 
