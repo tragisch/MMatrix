@@ -1,0 +1,57 @@
+name: Benchmark Tensor on macOS (self-hosted)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: "Number of benchmark repeats (median is reported)"
+        required: false
+        default: "5"
+
+jobs:
+  benchmark:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner_class: m2-pro
+            artifact_suffix: m2-pro
+          - runner_class: m3-max
+            artifact_suffix: m3-max
+
+    runs-on:
+      - self-hosted
+      - macOS
+      - ARM64
+      - benchmark
+      - ${{ matrix.runner_class }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r benchmark/requirements.txt
+
+      - name: Ensure benchmark script is executable
+        run: chmod +x benchmark/run_cross_framework.sh
+
+      - name: Run cross-framework benchmark
+        env:
+          REPEATS: ${{ inputs.repeats }}
+        run: benchmark/run_cross_framework.sh
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ matrix.artifact_suffix }}-${{ github.run_id }}
+          path: benchmark/results/*.txt
+          if-no-files-found: error
