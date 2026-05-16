@@ -48,14 +48,13 @@ Unit tests are in `app/matrix/tests/` and `app/tensor/tests/`.
 ## Benchmarks (GitHub / macOS)
 
 For cross-framework tensor benchmarks (C vs PyTorch vs MLX), use the benchmark workflow on a
-powerful Apple Silicon machine via a **self-hosted** GitHub runner.
+GitHub-hosted macOS runner.
 
 - Folder: `benchmark/`
 - Workflow: `.github/workflows/benchmark-macos.yml`
 - Script entrypoint: `benchmark/run_cross_framework.sh`
 
-Why self-hosted? GitHub-hosted macOS runners are convenient but not ideal for stable, high-end
-MPS/Metal performance comparisons. A dedicated runner gives reproducible and realistic numbers.
+This is easy to run without managing your own runner machines.
 
 ## Documentation
 

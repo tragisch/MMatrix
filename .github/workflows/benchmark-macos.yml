@@ -1,4 +1,4 @@
-name: Benchmark Tensor on macOS (self-hosted)
+name: Benchmark Tensor on macOS
 
 on:
   workflow_dispatch:
@@ -10,21 +10,7 @@ on:
 
 jobs:
   benchmark:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner_class: m2-pro
-            artifact_suffix: m2-pro
-          - runner_class: m3-max
-            artifact_suffix: m3-max
-
-    runs-on:
-      - self-hosted
-      - macOS
-      - ARM64
-      - benchmark
-      - ${{ matrix.runner_class }}
+    runs-on: macos-latest
     timeout-minutes: 120
 
     steps:
@@ -52,6 +38,6 @@ jobs:
       - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-results-${{ matrix.artifact_suffix }}-${{ github.run_id }}
+          name: benchmark-results-${{ github.run_id }}
           path: benchmark/results/*.txt
           if-no-files-found: error
