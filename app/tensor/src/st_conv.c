@@ -657,8 +657,18 @@ static bool st_conv2d_should_use_mps(size_t n, size_t c_in, size_t c_out,
                       (double)out_w * (double)c_in * (double)k_h *
                       (double)k_w;
   const size_t out_elems = n * c_out * out_h * out_w;
+  
+  /* Pointwise convolutions (1x1) use a lower MACs threshold since MPS is
+   * highly efficient for matrix operations; even 50-75M MACs benefit from
+   * GPU dispatch. PyTorch MPS shows good performance for 1x1 convs. */
+  if (k_h == 1 && k_w == 1) {
+    const double pw_macs_threshold = 5.0e7;  /* 50M MACs */
+    return macs >= pw_macs_threshold && out_elems >= g_mps_out_elems_threshold;
+  }
+
   return macs >= g_mps_macs_threshold && out_elems >= g_mps_out_elems_threshold;
 }
+
 
 static bool st_conv2d_bnns_nchw(const FloatTensor *input,
                                 const FloatTensor *weight,
@@ -914,17 +924,9 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
 
     case ST_CONV_BACKEND_AUTO:
     default:
-      /* Pointwise convolutions: prefer GEMM over MPS in AUTO mode.
-       * - stride=1/pad=0 uses direct 1x1 GEMM fast path (no im2col)
-       * - other 1x1 variants still use GEMM (im2col/general path) before MPS */
-      if (st_conv2d_is_pointwise_1x1(k_h, k_w)) {
-        ok = st_conv2d_gemm_nchw(input, weight, bias, &local, output);
-        if (ok) {
-          return true;
-        }
-        log_debug("conv2d: pointwise GEMM preferred but failed, trying MPS/CPU fallbacks");
-      }
-
+      /* Route to best available backend: MPS > BNNS > GEMM > CPU-opt > Reference.
+       * MPS is prioritized even for pointwise convs; PyTorch shows MPS is 
+       * competitive for 1x1 convs on Apple Silicon (esp. larger batches). */
       if (st_conv2d_should_use_mps(n, c_in, c_out, out_h, out_w, k_h, k_w)) {
         ok = st_conv2d_mps_nchw(input, weight, bias, &local, output);
         if (ok) {
