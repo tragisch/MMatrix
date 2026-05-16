@@ -99,6 +99,7 @@ cc_library(
         "include/st.h",
         "include/st_backend.h",
         "include/st_batchnorm.h",
+        "include/st_bf16_utils.h",
         "include/st_buffer.h",
         "include/st_conv.h",
         "include/st_dtype.h",

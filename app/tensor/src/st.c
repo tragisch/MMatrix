@@ -6,13 +6,62 @@
  * See the LICENSE file in the root directory for details.
  */
 
+#ifndef ST_CLEANUP_FREE
+#define ST_CLEANUP_FREE(ptr) do { if (ptr) { free(ptr); ptr = NULL; } } while (0)
+#endif
+
+/* ---- Macros for bf16 promotion in element-wise operations ---- */
+
+/* Binary op bf16 promotion: promotes bf16 args to f32, recurses, converts result back. */
+#define ST_INPLACE_BINARY_BF16_PROMOTE(A, B, FUNC_NAME) \
+  do { \
+    if ((A)->dtype == ST_DTYPE_BF16 || (B)->dtype == ST_DTYPE_BF16) { \
+      FloatTensor *a_f32 = st_to_f32(A); \
+      FloatTensor *b_f32 = ((B)->dtype == ST_DTYPE_BF16) ? st_to_f32(B) : (FloatTensor *)(B); \
+      if (!a_f32 || !b_f32) { \
+        st_destroy(a_f32); \
+        if (b_f32 != (B)) st_destroy(b_f32); \
+        return false; \
+      } \
+      bool ok = FUNC_NAME(a_f32, b_f32); \
+      if (ok && (A)->dtype == ST_DTYPE_BF16) { \
+        st_f32_to_bf16_bulk(a_f32->values, (uint16_t *)(A)->values, (A)->numel); \
+      } else if (ok) { \
+        memcpy((A)->values, a_f32->values, (A)->numel * sizeof(float)); \
+      } \
+      st_destroy(a_f32); \
+      if (b_f32 != (B)) st_destroy(b_f32); \
+      return ok; \
+    } \
+  } while (0)
+
+/* Unary op bf16 promotion: promotes bf16 arg to f32, recurses, converts result back. */
+#define ST_INPLACE_UNARY_BF16_PROMOTE(T, FUNC_NAME) \
+  do { \
+    if ((T)->dtype == ST_DTYPE_BF16) { \
+      FloatTensor *t_f32 = st_to_f32(T); \
+      if (!t_f32) return false; \
+      bool ok = FUNC_NAME(t_f32); \
+      if (ok) { \
+        st_f32_to_bf16_bulk(t_f32->values, (uint16_t *)(T)->values, (T)->numel); \
+      } \
+      st_destroy(t_f32); \
+      return ok; \
+    } \
+  } while (0)
+
+
 #include "st.h"
 #include "st_buffer.h"
 #include "st_dtype.h"
 #include "st_gpu_guard.h"
 #include "sm.h"
+#include "st_bf16_utils.h"
 
-#include <log.h>
+#include <stdio.h>
+#ifndef ST_LOG_ERROR
+#define ST_LOG_ERROR(fmt, ...) fprintf(stderr, "[st][error] " fmt "\n", ##__VA_ARGS__)
+#endif
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -127,35 +176,35 @@ bool st_compute_default_strides(size_t ndim, const size_t *shape,
 
 FloatTensor *st_create(size_t ndim, const size_t *shape) {
   if (!st_validate_shape(ndim, shape)) {
-    log_error("Error: st_create invalid shape.");
+    ST_LOG_ERROR("st_create invalid shape.");
     return NULL;
   }
 
   size_t numel = 0;
   if (!st_numel_from_shape(ndim, shape, &numel)) {
-    log_error("Error: st_create shape overflow.");
+    ST_LOG_ERROR("st_create shape overflow.");
     return NULL;
   }
 
   StBuffer *buf = st_buffer_alloc(numel);
   if (!buf) {
-    log_error("Error: st_create buffer allocation failed.");
+    ST_LOG_ERROR("st_create buffer allocation failed.");
     return NULL;
   }
 
   FloatTensor *tensor = (FloatTensor *)calloc(1, sizeof(FloatTensor));
   if (!tensor) {
-    log_error("Error: st_create tensor allocation failed.");
+    ST_LOG_ERROR("st_create tensor allocation failed.");
     st_buffer_release(buf);
     return NULL;
   }
 
+  bool ok = true;
   tensor->ndim = ndim;
   memcpy(tensor->shape, shape, ndim * sizeof(size_t));
   if (!st_compute_default_strides(ndim, shape, tensor->strides)) {
-    st_buffer_release(buf);
-    free(tensor);
-    return NULL;
+    ok = false;
+    goto cleanup;
   }
   tensor->numel = numel;
   tensor->layout = ST_LAYOUT_CONTIGUOUS;
@@ -173,40 +222,47 @@ FloatTensor *st_create(size_t ndim, const size_t *shape) {
   tensor->owns_data = true;
 
   return tensor;
+
+cleanup:
+  if (tensor) {
+    st_buffer_release(buf);
+    ST_CLEANUP_FREE(tensor);
+  }
+  return NULL;
 }
 
 FloatTensor *st_create_with_data(size_t ndim, const size_t *shape, float *data,
                                  size_t capacity, bool take_ownership) {
   if (!st_validate_shape(ndim, shape) || data == NULL) {
-    log_error("Error: st_create_with_data invalid input.");
+    ST_LOG_ERROR("st_create_with_data invalid input.");
     return NULL;
   }
 
   size_t numel = 0;
   if (!st_numel_from_shape(ndim, shape, &numel) || numel > capacity) {
-    log_error("Error: st_create_with_data invalid capacity.");
+    ST_LOG_ERROR("st_create_with_data invalid capacity.");
     return NULL;
   }
 
   StBuffer *buf = st_buffer_from_ptr(data, capacity, take_ownership);
   if (!buf) {
-    log_error("Error: st_create_with_data buffer creation failed.");
+    ST_LOG_ERROR("st_create_with_data buffer creation failed.");
     return NULL;
   }
 
   FloatTensor *tensor = (FloatTensor *)calloc(1, sizeof(FloatTensor));
   if (!tensor) {
-    log_error("Error: st_create_with_data tensor allocation failed.");
+    ST_LOG_ERROR("st_create_with_data tensor allocation failed.");
     st_buffer_release(buf);
     return NULL;
   }
 
+  bool ok = true;
   tensor->ndim = ndim;
   memcpy(tensor->shape, shape, ndim * sizeof(size_t));
   if (!st_compute_default_strides(ndim, shape, tensor->strides)) {
-    st_buffer_release(buf);
-    free(tensor);
-    return NULL;
+    ok = false;
+    goto cleanup;
   }
 
   tensor->numel = numel;
@@ -225,45 +281,52 @@ FloatTensor *st_create_with_data(size_t ndim, const size_t *shape, float *data,
   tensor->owns_data = take_ownership;
 
   return tensor;
+
+cleanup:
+  if (tensor) {
+    st_buffer_release(buf);
+    ST_CLEANUP_FREE(tensor);
+  }
+  return NULL;
 }
 
 FloatTensor *st_create_bf16(size_t ndim, const size_t *shape) {
   if (!st_validate_shape(ndim, shape)) {
-    log_error("Error: st_create_bf16 invalid shape.");
+    ST_LOG_ERROR("st_create_bf16 invalid shape.");
     return NULL;
   }
 
   size_t numel = 0;
   if (!st_numel_from_shape(ndim, shape, &numel)) {
-    log_error("Error: st_create_bf16 shape overflow.");
+    ST_LOG_ERROR("st_create_bf16 shape overflow.");
     return NULL;
   }
 
   const size_t alloc_bytes = numel * st_dtype_size(ST_DTYPE_BF16);
   if (alloc_bytes / st_dtype_size(ST_DTYPE_BF16) != numel) {
-    log_error("Error: st_create_bf16 byte overflow.");
+    ST_LOG_ERROR("st_create_bf16 byte overflow.");
     return NULL;
   }
 
   StBuffer *buf = st_buffer_alloc_bytes(alloc_bytes);
   if (!buf) {
-    log_error("Error: st_create_bf16 buffer allocation failed.");
+    ST_LOG_ERROR("st_create_bf16 buffer allocation failed.");
     return NULL;
   }
 
   FloatTensor *tensor = (FloatTensor *)calloc(1, sizeof(FloatTensor));
   if (!tensor) {
-    log_error("Error: st_create_bf16 tensor allocation failed.");
+    ST_LOG_ERROR("st_create_bf16 tensor allocation failed.");
     st_buffer_release(buf);
     return NULL;
   }
 
+  bool ok = true;
   tensor->ndim = ndim;
   memcpy(tensor->shape, shape, ndim * sizeof(size_t));
   if (!st_compute_default_strides(ndim, shape, tensor->strides)) {
-    st_buffer_release(buf);
-    free(tensor);
-    return NULL;
+    ok = false;
+    goto cleanup;
   }
   tensor->numel = numel;
   tensor->layout = ST_LAYOUT_CONTIGUOUS;
@@ -281,6 +344,13 @@ FloatTensor *st_create_bf16(size_t ndim, const size_t *shape) {
   tensor->owns_data = true;
 
   return tensor;
+
+cleanup:
+  if (tensor) {
+    st_buffer_release(buf);
+    ST_CLEANUP_FREE(tensor);
+  }
+  return NULL;
 }
 
 FloatTensor *st_to_f32(const FloatTensor *src) {
@@ -402,7 +472,7 @@ static bool st_offset_from_indices(const FloatTensor *tensor,
 float st_get(const FloatTensor *tensor, const size_t *indices) {
   size_t off = 0;
   if (!st_offset_from_indices(tensor, indices, &off)) {
-    log_error("Error: st_get index out of bounds or invalid tensor.");
+    ST_LOG_ERROR("st_get index out of bounds or invalid tensor.");
     return 0.0f;
   }
   ST_ASSERT_NOT_PENDING(tensor);
@@ -416,7 +486,7 @@ float st_get(const FloatTensor *tensor, const size_t *indices) {
 bool st_set(FloatTensor *tensor, const size_t *indices, float value) {
   size_t off = 0;
   if (!st_offset_from_indices(tensor, indices, &off)) {
-    log_error("Error: st_set index out of bounds or invalid tensor.");
+    ST_LOG_ERROR("st_set index out of bounds or invalid tensor.");
     return false;
   }
   ST_ASSERT_NOT_PENDING(tensor);
@@ -434,7 +504,7 @@ bool st_as_sm_view(const FloatTensor *tensor, FloatMatrix *out_view) {
     return false;
   }
   if (tensor->dtype != ST_DTYPE_F32) {
-    log_error("Error: st_as_sm_view requires f32 tensor. Use st_to_f32() to convert bf16 tensors first.");
+    ST_LOG_ERROR("st_as_sm_view requires f32 tensor. Use st_to_f32() to convert bf16 tensors first.");
     return false;
   }
   if (tensor->ndim != 2 || !st_is_contiguous(tensor)) {
@@ -663,36 +733,17 @@ bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {
     return true; /* no-op */
   }
   if (b->values == NULL || a->numel != b->numel) {
-    log_error("Error: st_inplace_add size mismatch.");
+    ST_LOG_ERROR("st_inplace_add size mismatch.");
     return false;
   }
   if (!st_is_contiguous(a) || !st_is_contiguous(b)) {
-    log_error("Error: st_inplace_add requires contiguous tensors.");
+    ST_LOG_ERROR("st_inplace_add requires contiguous tensors.");
     return false;
   }
   ST_ASSERT_NOT_PENDING(a);
   ST_ASSERT_NOT_PENDING(b);
 
-  /* ---- bf16 promotion ---- */
-  if (a->dtype == ST_DTYPE_BF16 || b->dtype == ST_DTYPE_BF16) {
-    FloatTensor *a_f32 = st_to_f32(a);
-    FloatTensor *b_f32 = (b->dtype == ST_DTYPE_BF16) ? st_to_f32(b)
-                                                      : (FloatTensor *)b;
-    if (!a_f32 || !b_f32) {
-      st_destroy(a_f32);
-      if (b_f32 != b) st_destroy(b_f32);
-      return false;
-    }
-    bool ok = st_inplace_add(a_f32, b_f32);
-    if (ok && a->dtype == ST_DTYPE_BF16) {
-      st_f32_to_bf16_bulk(a_f32->values, (uint16_t *)a->values, a->numel);
-    } else if (ok) {
-      memcpy(a->values, a_f32->values, a->numel * sizeof(float));
-    }
-    st_destroy(a_f32);
-    if (b_f32 != b) st_destroy(b_f32);
-    return ok;
-  }
+  ST_INPLACE_BINARY_BF16_PROMOTE(a, b, st_inplace_add);
 
 #if defined(USE_ACCELERATE)
   cblas_saxpy((BLASINT)a->numel, 1.0f, b->values, 1, a->values, 1);
@@ -710,36 +761,17 @@ bool st_inplace_sub(FloatTensor *a, const FloatTensor *b) {
     return false;
   }
   if (a->numel != b->numel) {
-    log_error("Error: st_inplace_sub size mismatch.");
+    ST_LOG_ERROR("st_inplace_sub size mismatch.");
     return false;
   }
   if (!st_is_contiguous(a) || !st_is_contiguous(b)) {
-    log_error("Error: st_inplace_sub requires contiguous tensors.");
+    ST_LOG_ERROR("st_inplace_sub requires contiguous tensors.");
     return false;
   }
   ST_ASSERT_NOT_PENDING(a);
   ST_ASSERT_NOT_PENDING(b);
 
-  /* ---- bf16 promotion ---- */
-  if (a->dtype == ST_DTYPE_BF16 || b->dtype == ST_DTYPE_BF16) {
-    FloatTensor *a_f32 = st_to_f32(a);
-    FloatTensor *b_f32 = (b->dtype == ST_DTYPE_BF16) ? st_to_f32(b)
-                                                      : (FloatTensor *)b;
-    if (!a_f32 || !b_f32) {
-      st_destroy(a_f32);
-      if (b_f32 != b) st_destroy(b_f32);
-      return false;
-    }
-    bool ok = st_inplace_sub(a_f32, b_f32);
-    if (ok && a->dtype == ST_DTYPE_BF16) {
-      st_f32_to_bf16_bulk(a_f32->values, (uint16_t *)a->values, a->numel);
-    } else if (ok) {
-      memcpy(a->values, a_f32->values, a->numel * sizeof(float));
-    }
-    st_destroy(a_f32);
-    if (b_f32 != b) st_destroy(b_f32);
-    return ok;
-  }
+  ST_INPLACE_BINARY_BF16_PROMOTE(a, b, st_inplace_sub);
 
 #if defined(USE_ACCELERATE)
   cblas_saxpy((BLASINT)a->numel, -1.0f, b->values, 1, a->values, 1);
@@ -758,7 +790,7 @@ bool st_inplace_scale(FloatTensor *t, float scalar) {
   }
   ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
-    log_error("Error: st_inplace_scale requires contiguous tensor.");
+    ST_LOG_ERROR("st_inplace_scale requires contiguous tensor.");
     return false;
   }
 
@@ -792,35 +824,16 @@ bool st_inplace_elementwise_multiply(FloatTensor *a, const FloatTensor *b) {
   ST_ASSERT_NOT_PENDING(a);
   ST_ASSERT_NOT_PENDING(b);
   if (a->numel != b->numel) {
-    log_error("Error: st_inplace_elementwise_multiply size mismatch.");
+    ST_LOG_ERROR("st_inplace_elementwise_multiply size mismatch.");
     return false;
   }
   if (!st_is_contiguous(a) || !st_is_contiguous(b)) {
-    log_error(
-        "Error: st_inplace_elementwise_multiply requires contiguous tensors.");
+    ST_LOG_ERROR(
+      "st_inplace_elementwise_multiply requires contiguous tensors.");
     return false;
   }
 
-  /* ---- bf16 promotion ---- */
-  if (a->dtype == ST_DTYPE_BF16 || b->dtype == ST_DTYPE_BF16) {
-    FloatTensor *a_f32 = st_to_f32(a);
-    FloatTensor *b_f32 = (b->dtype == ST_DTYPE_BF16) ? st_to_f32(b)
-                                                      : (FloatTensor *)b;
-    if (!a_f32 || !b_f32) {
-      st_destroy(a_f32);
-      if (b_f32 != b) st_destroy(b_f32);
-      return false;
-    }
-    bool ok = st_inplace_elementwise_multiply(a_f32, b_f32);
-    if (ok && a->dtype == ST_DTYPE_BF16) {
-      st_f32_to_bf16_bulk(a_f32->values, (uint16_t *)a->values, a->numel);
-    } else if (ok) {
-      memcpy(a->values, a_f32->values, a->numel * sizeof(float));
-    }
-    st_destroy(a_f32);
-    if (b_f32 != b) st_destroy(b_f32);
-    return ok;
-  }
+  ST_INPLACE_BINARY_BF16_PROMOTE(a, b, st_inplace_elementwise_multiply);
 
 #if defined(USE_ACCELERATE)
   vDSP_vmul(a->values, 1, b->values, 1, a->values, 1,
@@ -840,7 +853,7 @@ bool st_fill(FloatTensor *t, float value) {
   }
   ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
-    log_error("Error: st_fill requires contiguous tensor.");
+    ST_LOG_ERROR("st_fill requires contiguous tensor.");
     return false;
   }
 
@@ -880,21 +893,11 @@ bool st_apply_relu(FloatTensor *t) {
   }
   ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
-    log_error("Error: st_apply_relu requires contiguous tensor.");
+    ST_LOG_ERROR("st_apply_relu requires contiguous tensor.");
     return false;
   }
 
-  /* ---- bf16 promotion ---- */
-  if (t->dtype == ST_DTYPE_BF16) {
-    FloatTensor *t_f32 = st_to_f32(t);
-    if (!t_f32) return false;
-    bool ok = st_apply_relu(t_f32);
-    if (ok) {
-      st_f32_to_bf16_bulk(t_f32->values, (uint16_t *)t->values, t->numel);
-    }
-    st_destroy(t_f32);
-    return ok;
-  }
+  ST_INPLACE_UNARY_BF16_PROMOTE(t, st_apply_relu);
 
 #if defined(USE_ACCELERATE)
   /* vDSP_vthr: t[i] = max(t[i], threshold) */
@@ -919,37 +922,15 @@ bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad) {
   ST_ASSERT_NOT_PENDING(activation);
   ST_ASSERT_NOT_PENDING(grad);
   if (activation->numel != grad->numel) {
-    log_error("Error: st_apply_relu_backward size mismatch.");
+    ST_LOG_ERROR("st_apply_relu_backward size mismatch.");
     return false;
   }
   if (!st_is_contiguous(activation) || !st_is_contiguous(grad)) {
-    log_error(
-        "Error: st_apply_relu_backward requires contiguous tensors.");
+    ST_LOG_ERROR("st_apply_relu_backward requires contiguous tensors.");
     return false;
   }
 
-  /* ---- bf16 promotion ---- */
-  if (activation->dtype == ST_DTYPE_BF16 || grad->dtype == ST_DTYPE_BF16) {
-    FloatTensor *act_f32 = (activation->dtype == ST_DTYPE_BF16)
-                               ? st_to_f32(activation)
-                               : (FloatTensor *)activation;
-    FloatTensor *grad_f32 = st_to_f32(grad);
-    if (!act_f32 || !grad_f32) {
-      if (act_f32 != activation) st_destroy(act_f32);
-      st_destroy(grad_f32);
-      return false;
-    }
-    bool ok = st_apply_relu_backward(act_f32, grad_f32);
-    if (ok && grad->dtype == ST_DTYPE_BF16) {
-      st_f32_to_bf16_bulk(grad_f32->values, (uint16_t *)grad->values,
-                          grad->numel);
-    } else if (ok) {
-      memcpy(grad->values, grad_f32->values, grad->numel * sizeof(float));
-    }
-    if (act_f32 != activation) st_destroy(act_f32);
-    st_destroy(grad_f32);
-    return ok;
-  }
+  ST_INPLACE_BINARY_BF16_PROMOTE(activation, grad, st_apply_relu_backward);
 
 #pragma omp parallel for schedule(static) if (grad->numel > 10000)
   for (size_t i = 0; i < grad->numel; ++i) {
@@ -969,7 +950,7 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
   }
   ST_ASSERT_NOT_PENDING(t);
   if (!st_is_contiguous(t)) {
-    log_error("Error: st_sum_axes requires contiguous tensor.");
+    ST_LOG_ERROR("st_sum_axes requires contiguous tensor.");
     return NULL;
   }
 
@@ -983,7 +964,7 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
   }
 
   if (num_axes > t->ndim) {
-    log_error("Error: st_sum_axes more axes than dimensions.");
+    ST_LOG_ERROR("st_sum_axes more axes than dimensions.");
     return NULL;
   }
 
@@ -991,11 +972,11 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
   bool reduce[ST_MAX_DIMS] = {false};
   for (size_t i = 0; i < num_axes; ++i) {
     if (axes[i] >= t->ndim) {
-      log_error("Error: st_sum_axes axis out of range.");
+      ST_LOG_ERROR("st_sum_axes axis out of range.");
       return NULL;
     }
     if (reduce[axes[i]]) {
-      log_error("Error: st_sum_axes duplicate axis.");
+      ST_LOG_ERROR("st_sum_axes duplicate axis.");
       return NULL;
     }
     reduce[axes[i]] = true;
@@ -1124,12 +1105,12 @@ FloatTensor *st_sum_axes(const FloatTensor *t, const size_t *axes,
 FloatTensor *st_pad_nchw(const FloatTensor *input, size_t pad_h, size_t pad_w,
                          float value) {
   if (input == NULL || input->values == NULL || input->ndim != 4) {
-    log_error("Error: st_pad_nchw expects valid 4D tensor.");
+    ST_LOG_ERROR("st_pad_nchw expects valid 4D tensor.");
     return NULL;
   }
   ST_ASSERT_NOT_PENDING(input);
   if (!st_is_contiguous(input)) {
-    log_error("Error: st_pad_nchw requires contiguous tensor.");
+    ST_LOG_ERROR("st_pad_nchw requires contiguous tensor.");
     return NULL;
   }
 
