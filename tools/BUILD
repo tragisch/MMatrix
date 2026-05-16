@@ -19,6 +19,18 @@ sh_binary(
     visibility = ["//visibility:public"],
 )
 
+sh_binary(
+    name = "generate_matrix_api_docs",
+    srcs = ["doxygen/generate_matrix_api_docs.sh"],
+    visibility = ["//visibility:public"],
+)
+
+sh_binary(
+    name = "generate_api_docs",
+    srcs = ["doxygen/generate_api_docs.sh"],
+    visibility = ["//visibility:public"],
+)
+
 config_setting(
     name = "coverage",
     values = {"collect_code_coverage": "true"},

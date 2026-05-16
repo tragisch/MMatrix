@@ -7,20 +7,39 @@ import textwrap
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-FILE_MAP = {
-    "st.h": "st.md",
-    "st_batchnorm.h": "st_batchnorm.md",
-    "st_conv.h": "st_conv.md",
-    "st_pool.h": "st_pool.md",
-    "st_shape_ops.h": "st_shape_ops.md",
-}
-
-TITLE_MAP = {
-    "st.h": "Public Core Tensor API",
-    "st_batchnorm.h": "BatchNorm API",
-    "st_conv.h": "Convolution API",
-    "st_pool.h": "Pooling API",
-    "st_shape_ops.h": "Shape/View Operations API",
+PROFILE_CONFIG = {
+    "tensor": {
+        "file_map": {
+            "st.h": "st.md",
+            "st_batchnorm.h": "st_batchnorm.md",
+            "st_conv.h": "st_conv.md",
+            "st_pool.h": "st_pool.md",
+            "st_shape_ops.h": "st_shape_ops.md",
+        },
+        "title_map": {
+            "st.h": "Public Core Tensor API",
+            "st_batchnorm.h": "BatchNorm API",
+            "st_conv.h": "Convolution API",
+            "st_pool.h": "Pooling API",
+            "st_shape_ops.h": "Shape/View Operations API",
+        },
+    },
+    "matrix": {
+        "file_map": {
+            "dm.h": "dm.md",
+            "sm.h": "sm.md",
+            "dms.h": "dms.md",
+            "m_io.h": "m_io.md",
+            "m_convert.h": "m_convert.md",
+        },
+        "title_map": {
+            "dm.h": "Dense Double Matrix API",
+            "sm.h": "Dense Float Matrix API",
+            "dms.h": "Sparse Double Matrix API",
+            "m_io.h": "Matrix I/O API",
+            "m_convert.h": "Matrix/Tensor Conversion API",
+        },
+    },
 }
 
 
@@ -71,7 +90,7 @@ def parse_return_doc(member: ET.Element) -> str:
 
 
 def signature(member: ET.Element) -> str:
-    rtype = norm_text("".join((member.findtext("type") or "").split()))
+    rtype = norm_text(member.findtext("type") or "")
     name = norm_text(member.findtext("name") or "")
     args = norm_text(member.findtext("argsstring") or "()")
     if rtype:
@@ -144,13 +163,13 @@ def render_function(member: ET.Element) -> str:
     return "\n".join(lines)
 
 
-def build_markdown(file_name: str, xml_file: Path) -> str:
+def build_markdown(file_name: str, xml_file: Path, title_map: dict[str, str]) -> str:
     root = ET.parse(xml_file).getroot()
     cdef = root.find("compounddef")
     if cdef is None:
         raise ValueError(f"compounddef missing in {xml_file}")
 
-    title = TITLE_MAP.get(file_name, "API")
+    title = title_map.get(file_name, "API")
     brief = collect_text(cdef.find("briefdescription"))
 
     enums: list[ET.Element] = []
@@ -199,7 +218,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Convert Doxygen XML file docs to Markdown pages.")
     ap.add_argument("--xml-dir", required=True, help="Path to Doxygen xml output directory")
     ap.add_argument("--output-dir", required=True, help="Markdown output directory")
+    ap.add_argument(
+        "--profile",
+        choices=sorted(PROFILE_CONFIG.keys()),
+        default="tensor",
+        help="Header-to-page mapping profile",
+    )
     args = ap.parse_args()
+    profile = PROFILE_CONFIG[args.profile]
+    file_map = profile["file_map"]
+    title_map = profile["title_map"]
+
 
     xml_dir = Path(args.xml_dir)
     out_dir = Path(args.output_dir)
@@ -220,7 +249,7 @@ def main() -> int:
             ref_by_name[name] = refid
 
     generated = 0
-    for header, out_name in FILE_MAP.items():
+    for header, out_name in file_map.items():
         refid = ref_by_name.get(header)
         if not refid:
             print(f"[warn] No Doxygen compound found for {header}; skipping")
@@ -230,7 +259,7 @@ def main() -> int:
             print(f"[warn] Missing XML file for {header}: {xml_file}")
             continue
 
-        md = build_markdown(header, xml_file)
+        md = build_markdown(header, xml_file, title_map)
         (out_dir / out_name).write_text(md, encoding="utf-8")
         generated += 1
         print(f"[ok] {header} -> {out_name}")

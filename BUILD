@@ -79,5 +79,5 @@ alias(
 
 alias(
     name = "docs_refresh_api",
-    actual = "//tools:generate_tensor_api_docs",
+    actual = "//tools:generate_api_docs",
 )
