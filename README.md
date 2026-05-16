@@ -45,6 +45,22 @@ bazel test //...
 
 Unit tests are in `app/matrix/tests/` and `app/tensor/tests/`.
 
+## Documentation
+
+Build docs:
+
+`bazel build //:docs`
+
+Serve docs locally:
+
+`bazel run //:docs_serve`
+
+Regenerate Tensor API pages from public header docs (Doxygen XML -> Markdown):
+
+`bazel run //:docs_refresh_api`
+
+The short aliases `//:docs` and `//:docs_serve` are the recommended user entrypoints.
+
 ## Install artifacts
 
 Install headers and libraries to a custom directory:
