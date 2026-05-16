@@ -88,7 +88,7 @@ MODULE.bazel.lock
 # Temporary files
 #-------------------------------------------------------------------------------
 /tmp/*
-/.bgai-db/
+/.bgai-db*/
 
 #-------------------------------------------------------------------------------
 # Sphinx documentation
@@ -124,14 +124,14 @@ MODULE.bazel.lock
 
 #-------------------------------------------------------------------------------
 *.in
-*.clang-tidy
+.clang-tidy
+.clangd
+.envrc
 compile_commands.json
 *.png
 StyleGuide.md
 
 MODULE.bazel.lock
 profile.gz
-docs/*
-docs/
 
 /.venv-bench/
