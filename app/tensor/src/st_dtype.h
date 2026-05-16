@@ -2,17 +2,13 @@
  * Copyright (c) 2026 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
  *
- * st_dtype.h — Element data type enumeration and bf16↔f32 conversion.
- *
- * bfloat16 uses the same exponent range as float32 (8 bits) but only
- * 7 mantissa bits, giving ~3 decimal digits of precision.  Conversion
- * to/from float32 is a pure bit-shift operation — no lookup tables.
- *
- * On Apple Silicon the bulk converters use NEON SIMD for throughput.
+ * st_dtype.h — Internal dtype conversion helpers.
  */
 
 #ifndef ST_DTYPE_H
 #define ST_DTYPE_H
+
+#include "st.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -20,26 +16,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/* ------------------------------------------------------------------ */
-/*  Data-type tag                                                      */
-/* ------------------------------------------------------------------ */
-
-typedef enum StDtype {
-  ST_DTYPE_F32 = 0,   /* IEEE 754 binary32  (4 bytes, default) */
-  ST_DTYPE_BF16 = 1,  /* bfloat16           (2 bytes)          */
-} StDtype;
-
-/* Bytes per element for a given dtype. */
-static inline size_t st_dtype_size(StDtype dtype) {
-  switch (dtype) {
-    case ST_DTYPE_BF16:
-      return 2;
-    case ST_DTYPE_F32:
-    default:
-      return 4;
-  }
-}
 
 /* Human-readable name string. */
 const char *st_dtype_name(StDtype dtype);

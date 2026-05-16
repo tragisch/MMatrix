@@ -1,3 +1,8 @@
+/**
+ * @file st_conv.h
+ * @brief Public API for 2D convolution and fused conv blocks in NCHW layout.
+ */
+
 /*
  * Copyright (c) 2026 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -14,6 +19,7 @@
 
 #include "st.h"
 
+/** @brief Backend selector for convolution execution. */
 typedef enum StConvBackend {
   ST_CONV_BACKEND_AUTO = 0,
   ST_CONV_BACKEND_REFERENCE = 1,
@@ -23,6 +29,7 @@ typedef enum StConvBackend {
   ST_CONV_BACKEND_BNNS = 5,
 } StConvBackend;
 
+/** @brief Parameter bundle for 2D convolution in NCHW layout. */
 typedef struct StConv2dParams {
   size_t stride_h;
   size_t stride_w;
@@ -33,24 +40,58 @@ typedef struct StConv2dParams {
   StConvBackend backend;
 } StConv2dParams;
 
-// Return default 2D convolution parameters (stride=1, pad=0, dilation=1, backend=AUTO).
+/**
+ * @brief Return default convolution parameters.
+ * @return Parameters with stride=1, pad=0, dilation=1, backend=AUTO.
+ */
 StConv2dParams st_conv2d_default_params(void);
 
-// Compute NCHW convolution output size (out_h/out_w) from input, kernel and params.
+/**
+ * @brief Compute NCHW output spatial size for a 2D convolution.
+ * @param in_h Input height.
+ * @param in_w Input width.
+ * @param kernel_h Kernel height.
+ * @param kernel_w Kernel width.
+ * @param params Convolution parameters.
+ * @param out_h Output height.
+ * @param out_w Output width.
+ * @retval true Success.
+ * @retval false Invalid parameters or overflow.
+ */
 bool st_conv2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
                          size_t kernel_w, const StConv2dParams *params,
                          size_t *out_h, size_t *out_w);
 
-// 2D convolution for NCHW tensors: input[N,Cin,H,W], weight[Cout,Cin,Kh,Kw], optional bias[Cout].
+/**
+ * @brief Execute 2D convolution for NCHW tensors.
+ * @param input Input tensor `[N, Cin, H, W]`.
+ * @param weight Weight tensor `[Cout, Cin, Kh, Kw]`.
+ * @param bias Optional bias tensor `[Cout]` (NULL allowed).
+ * @param params Convolution parameters.
+ * @param output Output tensor `[N, Cout, outH, outW]`.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
                     const FloatTensor *bias, const StConv2dParams *params,
                     FloatTensor *output);
 
-// Fused Conv2D + BatchNorm2D forward for NCHW tensors.
-// Semantics match `st_conv2d_nchw` followed by `st_batchnorm2d_forward`.
-// mean and var may be NULL (inference mode: not saved, GPU readback skipped).
-// apply_relu: when true, applies ReLU after BatchNorm (fused in the MPS graph;
-//             falls back to a separate st_apply_relu call on the CPU path).
+/**
+ * @brief Execute fused Conv2D + BatchNorm2D forward.
+ * @param input Input tensor `[N, Cin, H, W]`.
+ * @param weight Weight tensor `[Cout, Cin, Kh, Kw]`.
+ * @param bias Optional bias tensor `[Cout]`.
+ * @param params Convolution parameters.
+ * @param gamma BatchNorm scale `[Cout]` (NULL means identity).
+ * @param beta BatchNorm shift `[Cout]` (NULL means zero).
+ * @param epsilon Numerical stability constant.
+ * @param output Output tensor.
+ * @param mean Optional channel means `[Cout]`.
+ * @param var Optional channel variances `[Cout]`.
+ * @param apply_relu Apply ReLU after BatchNorm.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_conv2d_batchnorm2d_forward_nchw(
     const FloatTensor *input, const FloatTensor *weight,
     const FloatTensor *bias, const StConv2dParams *params,
@@ -58,11 +99,13 @@ bool st_conv2d_batchnorm2d_forward_nchw(
     FloatTensor *output, FloatTensor *mean, FloatTensor *var,
     bool apply_relu);
 
+/** @brief Pooling operator used in fused conv+bn+pool execution. */
 typedef enum StPoolType {
   ST_POOL_MAX = 0,
   ST_POOL_AVG = 1,
 } StPoolType;
 
+/** @brief Parameter bundle for 2D pooling in NCHW layout. */
 typedef struct StPool2dParams {
   StPoolType pool_type;
   size_t kernel_h;
@@ -73,9 +116,23 @@ typedef struct StPool2dParams {
   size_t pad_w;
 } StPool2dParams;
 
-// Fused Conv2D + BatchNorm2D + Pool2D forward for NCHW tensors.
-// mean and var may be NULL (inference mode).
-// apply_relu: ReLU after BatchNorm, before Pool (fused in the MPS graph).
+/**
+ * @brief Execute fused Conv2D + BatchNorm2D + Pool2D forward.
+ * @param input Input tensor.
+ * @param weight Weight tensor.
+ * @param bias Optional bias tensor.
+ * @param conv_params Convolution parameters.
+ * @param gamma BatchNorm scale tensor.
+ * @param beta BatchNorm shift tensor.
+ * @param epsilon Numerical stability constant.
+ * @param pool_params Pooling parameters.
+ * @param output Output tensor.
+ * @param mean Optional channel means tensor.
+ * @param var Optional channel variances tensor.
+ * @param apply_relu Apply ReLU between BatchNorm and Pool.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_conv2d_batchnorm2d_pool_forward_nchw(
     const FloatTensor *input, const FloatTensor *weight,
     const FloatTensor *bias, const StConv2dParams *conv_params,
@@ -84,42 +141,64 @@ bool st_conv2d_batchnorm2d_pool_forward_nchw(
     FloatTensor *output, FloatTensor *mean, FloatTensor *var,
     bool apply_relu);
 
-// Override MPS AUTO dispatch thresholds at runtime. Returns false on invalid input.
+/**
+ * @brief Override MPS AUTO dispatch thresholds for standalone convolution.
+ * @param macs_threshold Minimum MACs to use MPS in AUTO mode.
+ * @param out_elems_threshold Minimum output element count to use MPS in AUTO mode.
+ * @retval true Success.
+ * @retval false Invalid threshold values.
+ */
 bool st_conv_set_mps_thresholds(double macs_threshold,
                                 size_t out_elems_threshold);
 
-// Query currently active MPS AUTO dispatch thresholds.
+/**
+ * @brief Query current MPS AUTO dispatch thresholds.
+ * @param out_macs_threshold Output MAC threshold (nullable).
+ * @param out_out_elems_threshold Output element threshold (nullable).
+ */
 void st_conv_get_mps_thresholds(double *out_macs_threshold,
                                 size_t *out_out_elems_threshold);
 
-// Reload MPS AUTO dispatch thresholds from environment variables:
-// MMATRIX_ST_CONV_MPS_MACS_THRESHOLD
-// MMATRIX_ST_CONV_MPS_OUT_ELEMS_THRESHOLD
+/**
+ * @brief Reload MPS AUTO thresholds from environment variables.
+ *
+ * Variables:
+ * - `MMATRIX_ST_CONV_MPS_MACS_THRESHOLD`
+ * - `MMATRIX_ST_CONV_MPS_OUT_ELEMS_THRESHOLD`
+ */
 void st_conv_reload_mps_thresholds_from_env(void);
 
-// Return backend name used by the last st_conv2d_nchw call.
+/**
+ * @brief Return backend label used by the latest @ref st_conv2d_nchw call.
+ * @return Backend name string (never NULL).
+ */
 const char *st_conv2d_last_backend(void);
 
-// ---- Backward passes for training ----
+/** @name Backward passes (training)
+ *  @{ */
 
-// Gradient w.r.t. input: grad_input[N,Cin,H,W] from grad_output[N,Cout,outH,outW]
-// and weight[Cout,Cin,Kh,Kw].  grad_input must be pre-allocated and will be overwritten.
+/**
+ * @brief Compute gradient with respect to convolution input.
+ */
 bool st_conv2d_backward_data_nchw(const FloatTensor *grad_output,
                                   const FloatTensor *weight,
                                   const StConv2dParams *params,
                                   FloatTensor *grad_input);
 
-// Gradient w.r.t. weight: grad_weight[Cout,Cin,Kh,Kw] from input[N,Cin,H,W]
-// and grad_output[N,Cout,outH,outW].  grad_weight must be pre-allocated and will
-// be overwritten.
+/**
+ * @brief Compute gradient with respect to convolution weights.
+ */
 bool st_conv2d_backward_weight_nchw(const FloatTensor *input,
                                     const FloatTensor *grad_output,
                                     const StConv2dParams *params,
                                     FloatTensor *grad_weight);
 
-// Gradient w.r.t. bias: grad_bias[Cout] = sum of grad_output over N, H, W.
-// grad_bias must be a pre-allocated 1D tensor with shape [Cout].
+/**
+ * @brief Compute gradient with respect to convolution bias.
+ */
 bool st_conv2d_backward_bias(const FloatTensor *grad_output,
                              FloatTensor *grad_bias);
+
+/** @} */
 
 #endif  // ST_CONV_H

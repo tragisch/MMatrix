@@ -2,6 +2,7 @@ load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//tools:unity_test.bzl", "unity_test")
+load("//tools/clang_doc:def.bzl", "clang_doc_target")
 
 config_setting(
     name = "coverage",
@@ -81,37 +82,53 @@ default_deps = [
     "@log",
 ]
 
+clang_doc_target(
+    name = "api_clang_doc",
+    out = "api/st-clang-doc.tar",
+    default_dest = "api/tensor",
+    filter = ".*app/tensor/.*",
+    format = "md",
+    project_name = "MMatrix Tensor API",
+    tags = [
+        "manual",
+        "no-sandbox",
+    ],
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "st",
     srcs = [
         "src/st.c",
         "src/st_backend.c",
+        "src/st_backend.h",
         "src/st_batchnorm.c",
+        "src/st_bf16_utils.h",
         "src/st_buffer.c",
+        "src/st_buffer.h",
         "src/st_conv.c",
         "src/st_dtype.c",
+        "src/st_dtype.h",
         "src/st_gpu_guard.c",
+        "src/st_gpu_guard.h",
         "src/st_pool.c",
         "src/st_shape_ops.c",
         "src/st_warmup.c",
         "src/st_workspace.c",
+        "src/st_workspace.h",
     ],
     hdrs = [
         "include/st.h",
-        "include/st_backend.h",
         "include/st_batchnorm.h",
-        "include/st_bf16_utils.h",
-        "include/st_buffer.h",
         "include/st_conv.h",
-        "include/st_dtype.h",
-        "include/st_gpu_guard.h",
         "include/st_pool.h",
         "include/st_shape_ops.h",
-        "include/st_workspace.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    local_defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
     target_compatible_with = ["@platforms//os:macos"],
     visibility = ["//visibility:public"],
     deps = default_deps + [
@@ -121,21 +138,39 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "st_internal_headers",
+    hdrs = [
+        "src/st_backend.h",
+        "src/st_bf16_utils.h",
+        "src/st_buffer.h",
+        "src/st_dtype.h",
+        "src/st_gpu_guard.h",
+        "src/st_workspace.h",
+    ],
+    defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
+    includes = ["src"],
+    visibility = ["//app/tensor:__pkg__"],
+    deps = [
+        ":st",
+    ],
+)
+
 objc_library(
     name = "st_mps_objc",
     srcs = [
+        "src/st_backend.h",
         "src/st_backend_mps.m",
         "src/st_buffer_metal.m",
         "src/st_mps.m",
     ],
     hdrs = [
         "include/st.h",
-        "include/st_backend.h",
-        "include/st_buffer.h",
         "include/st_conv.h",
-        "include/st_dtype.h",
         "include/st_pool.h",
+        "src/st_buffer.h",
         "src/st_buffer_metal.h",
+        "src/st_dtype.h",
         "src/st_mps.h",
     ],
     copts = [
@@ -156,7 +191,10 @@ unity_test(
     features = ["coverage"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -164,7 +202,10 @@ unity_test(
     srcs = ["tests/test_st_conv.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -172,7 +213,10 @@ unity_test(
     srcs = ["tests/test_st_conv_backward.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -180,7 +224,10 @@ unity_test(
     srcs = ["tests/test_st_pool.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -188,7 +235,10 @@ unity_test(
     srcs = ["tests/test_st_ops.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -196,7 +246,10 @@ unity_test(
     srcs = ["tests/test_st_batchnorm.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -204,7 +257,10 @@ unity_test(
     srcs = ["tests/test_st_conv_backward_gemm.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -212,7 +268,10 @@ unity_test(
     srcs = ["tests/test_st_batchnorm_relu.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -220,7 +279,10 @@ unity_test(
     srcs = ["tests/test_st_buffer.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -228,7 +290,10 @@ unity_test(
     srcs = ["tests/test_st_workspace.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -236,7 +301,10 @@ unity_test(
     srcs = ["tests/test_st_dtype.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -244,7 +312,10 @@ unity_test(
     srcs = ["tests/test_st_gpu_guard.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 unity_test(
@@ -252,7 +323,10 @@ unity_test(
     srcs = ["tests/test_st_shape_ops.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -260,7 +334,10 @@ cc_binary(
     srcs = ["tests/example_cnn_dense_pipeline.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -268,7 +345,10 @@ cc_binary(
     srcs = ["tests/bench_st_canonical.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -276,7 +356,10 @@ cc_binary(
     srcs = ["tests/bench_st_ab_conv.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -284,7 +367,10 @@ cc_binary(
     srcs = ["tests/bench_st_conv_medium_profile.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -292,7 +378,10 @@ cc_binary(
     srcs = ["tests/bench_st_conv_medium_batch_profile.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -300,7 +389,10 @@ cc_binary(
     srcs = ["tests/bench_st_conv_backward_gemm.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -308,7 +400,10 @@ cc_binary(
     srcs = ["tests/bench_st_single_op.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -316,7 +411,10 @@ cc_binary(
     srcs = ["tests/bench_st_pipeline.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -324,7 +422,10 @@ cc_binary(
     srcs = ["tests/bench_st_layout.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -332,7 +433,10 @@ cc_binary(
     srcs = ["tests/bench_st_nhwc_vs_nchw.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -340,7 +444,10 @@ cc_binary(
     srcs = ["tests/bench_st_transfer.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -348,7 +455,10 @@ cc_binary(
     srcs = ["tests/bench_st_warmup.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )
 
 cc_binary(
@@ -356,5 +466,8 @@ cc_binary(
     srcs = ["tests/bench_st_async_release.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    deps = [":st"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
 )

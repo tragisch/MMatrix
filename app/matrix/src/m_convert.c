@@ -99,57 +99,54 @@ FloatTensor *st_from_sm(const FloatMatrix *src) {
     return NULL;
   }
 
-  memcpy(tensor->values, src->values, src->rows * src->cols * sizeof(float));
-  tensor->layout = ST_LAYOUT_CONTIGUOUS;
+  float *dst = st_tensor_mutable_data(tensor);
+  if (!dst) {
+    st_destroy(tensor);
+    return NULL;
+  }
+
+  memcpy(dst, src->values, src->rows * src->cols * sizeof(float));
   return tensor;
 }
 
 FloatMatrix *sm_from_st(const FloatTensor *src) {
-  if (src == NULL || src->values == NULL || src->ndim != 2 || src->numel == 0) {
+  if (src == NULL || st_tensor_ndim(src) != 2 || st_tensor_numel(src) == 0) {
     log_error("Error: sm_from_st requires a valid 2D tensor.");
     return NULL;
   }
 
-  FloatMatrix *sm = sm_create(src->shape[0], src->shape[1]);
+  const size_t *shape = st_tensor_shape(src);
+  if (!shape) {
+    log_error("Error: sm_from_st missing tensor shape.");
+    return NULL;
+  }
+
+  FloatMatrix *sm = sm_create(shape[0], shape[1]);
   if (!sm) {
     return NULL;
   }
 
-  if (st_is_contiguous(src)) {
-    memcpy(sm->values, src->values, src->numel * sizeof(float));
-    return sm;
-  }
-
-  size_t rows = src->shape[0];
-  size_t cols = src->shape[1];
-  ptrdiff_t stride0 = src->strides[0];
-  ptrdiff_t stride1 = src->strides[1];
-
-  // Validate strides once before the loop instead of per-element
-  ptrdiff_t max_off = (ptrdiff_t)(rows - 1) * stride0 +
-                      (ptrdiff_t)(cols - 1) * stride1;
-  ptrdiff_t min_off = 0;
-  // Check all four corners for negative strides
-  ptrdiff_t corners[4] = {
-      0,
-      (ptrdiff_t)(rows - 1) * stride0,
-      (ptrdiff_t)(cols - 1) * stride1,
-      max_off,
-  };
-  for (int c = 0; c < 4; ++c) {
-    if (corners[c] < min_off) min_off = corners[c];
-    if (corners[c] > max_off) max_off = corners[c];
-  }
-  if (min_off < 0 || (size_t)max_off >= src->capacity) {
+  if (st_tensor_dtype(src) != ST_DTYPE_F32) {
+    log_error("Error: sm_from_st currently supports only f32 tensors.");
     sm_destroy(sm);
-    log_error("Error: sm_from_st encountered invalid tensor strides.");
     return NULL;
   }
 
+  const float *src_data = st_tensor_data(src);
+  const size_t rows = shape[0];
+  const size_t cols = shape[1];
+
+  if (src_data && st_is_contiguous(src)) {
+    memcpy(sm->values, src_data, st_tensor_numel(src) * sizeof(float));
+    return sm;
+  }
+
+  size_t idx[2] = {0, 0};
   for (size_t i = 0; i < rows; ++i) {
-    ptrdiff_t row_off = (ptrdiff_t)i * stride0;
+    idx[0] = i;
     for (size_t j = 0; j < cols; ++j) {
-      sm->values[i * cols + j] = src->values[row_off + (ptrdiff_t)j * stride1];
+      idx[1] = j;
+      sm->values[i * cols + j] = st_get(src, idx);
     }
   }
 

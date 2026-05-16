@@ -4,6 +4,7 @@
  */
 
 #include "st_dtype.h"
+#include "st_buffer.h"
 
 #include "st.h"
 #include "st_pool.h"

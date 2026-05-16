@@ -156,19 +156,24 @@ void test_convert_st_from_sm_should_copy_shape_and_values(void) {
 
   FloatTensor *st = st_from_sm(sm);
   TEST_ASSERT_NOT_NULL(st);
-  TEST_ASSERT_EQUAL(2, st->ndim);
-  TEST_ASSERT_EQUAL(2, st->shape[0]);
-  TEST_ASSERT_EQUAL(3, st->shape[1]);
-  TEST_ASSERT_EQUAL(6, st->numel);
+  TEST_ASSERT_EQUAL(2, st_tensor_ndim(st));
+  TEST_ASSERT_EQUAL(2, st_tensor_shape(st)[0]);
+  TEST_ASSERT_EQUAL(3, st_tensor_shape(st)[1]);
+  TEST_ASSERT_EQUAL(6, st_tensor_numel(st));
 
   float expected[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  size_t idx[2] = {0, 0};
   for (size_t i = 0; i < 6; ++i) {
-    TEST_ASSERT_DOUBLE_WITHIN(1e-6, expected[i], st->values[i]);
+    idx[0] = i / 3;
+    idx[1] = i % 3;
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, expected[i], st_get(st, idx));
   }
 
   // Ensure conversion is a deep copy
   sm->values[0] = 99.0f;
-  TEST_ASSERT_DOUBLE_WITHIN(1e-6, 1.0f, st->values[0]);
+  idx[0] = 0;
+  idx[1] = 0;
+  TEST_ASSERT_DOUBLE_WITHIN(1e-6, 1.0f, st_get(st, idx));
 
   sm_destroy(sm);
   st_destroy(st);
@@ -180,8 +185,11 @@ void test_convert_sm_from_st_should_copy_shape_and_values(void) {
   TEST_ASSERT_NOT_NULL(st);
 
   float values[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  size_t idx[2] = {0, 0};
   for (size_t i = 0; i < 6; ++i) {
-    st->values[i] = values[i];
+    idx[0] = i / 3;
+    idx[1] = i % 3;
+    TEST_ASSERT_TRUE(st_set(st, idx, values[i]));
   }
 
   FloatMatrix *sm = sm_from_st(st);
@@ -194,7 +202,9 @@ void test_convert_sm_from_st_should_copy_shape_and_values(void) {
   }
 
   // Ensure conversion is a deep copy
-  st->values[0] = 99.0f;
+  idx[0] = 0;
+  idx[1] = 0;
+  TEST_ASSERT_TRUE(st_set(st, idx, 99.0f));
   TEST_ASSERT_DOUBLE_WITHIN(1e-6, 1.0f, sm->values[0]);
 
   sm_destroy(sm);
@@ -207,8 +217,11 @@ void test_convert_sm_from_st_should_materialize_non_contiguous_2d_view(void) {
   TEST_ASSERT_NOT_NULL(base);
 
   float values[] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
+  size_t idx[2] = {0, 0};
   for (size_t i = 0; i < 6; ++i) {
-    base->values[i] = values[i];
+    idx[0] = i / 3;
+    idx[1] = i % 3;
+    TEST_ASSERT_TRUE(st_set(base, idx, values[i]));
   }
 
   size_t perm[2] = {1, 0};

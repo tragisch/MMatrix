@@ -723,6 +723,30 @@ void st_tensor_sync(FloatTensor *tensor) {
   }
 }
 
+size_t st_tensor_ndim(const FloatTensor *tensor) {
+  return tensor ? tensor->ndim : 0u;
+}
+
+const size_t *st_tensor_shape(const FloatTensor *tensor) {
+  return tensor ? tensor->shape : NULL;
+}
+
+size_t st_tensor_numel(const FloatTensor *tensor) {
+  return tensor ? tensor->numel : 0u;
+}
+
+StDtype st_tensor_dtype(const FloatTensor *tensor) {
+  return tensor ? tensor->dtype : ST_DTYPE_F32;
+}
+
+const float *st_tensor_data(const FloatTensor *tensor) {
+  return tensor ? tensor->values : NULL;
+}
+
+float *st_tensor_mutable_data(FloatTensor *tensor) {
+  return tensor ? tensor->values : NULL;
+}
+
 /* ---- Element-wise in-place operations ---- */
 
 bool st_inplace_add(FloatTensor *a, const FloatTensor *b) {

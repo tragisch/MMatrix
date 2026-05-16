@@ -1,3 +1,8 @@
+/**
+ * @file st_pool.h
+ * @brief Public API for pooling operators in NCHW layout.
+ */
+
 /*
  * Copyright (c) 2026 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -14,57 +19,110 @@
 
 #include "st.h"
 
-// ---- Pooling output size helper ----
-
-// Compute 2D pooling output size (out_h, out_w) from input, kernel and params.
+/**
+ * @brief Compute 2D pooling output size.
+ * @param in_h Input height.
+ * @param in_w Input width.
+ * @param kernel_h Kernel height.
+ * @param kernel_w Kernel width.
+ * @param stride_h Vertical stride.
+ * @param stride_w Horizontal stride.
+ * @param pad_h Vertical symmetric padding.
+ * @param pad_w Horizontal symmetric padding.
+ * @param out_h Output height.
+ * @param out_w Output width.
+ * @retval true Success.
+ * @retval false Invalid parameters or overflow.
+ */
 bool st_pool2d_output_hw(size_t in_h, size_t in_w, size_t kernel_h,
                          size_t kernel_w, size_t stride_h, size_t stride_w,
                          size_t pad_h, size_t pad_w, size_t *out_h,
                          size_t *out_w);
 
-// ---- Forward ----
-
-// Max-pool 2D for NCHW tensors.
-// input  [N, C, H, W]
-// output [N, C, out_H, out_W]
-// indices [N, C, out_H, out_W]  — linear index of max within each window
-//         (must be F32; values are stored as float for API uniformity and
-//         cast to size_t for use).
-//         Pass NULL if indices are not needed (e.g. inference-only).
+/**
+ * @brief Forward max pooling for NCHW tensors.
+ * @param input Input tensor `[N, C, H, W]`.
+ * @param kernel_h Kernel height.
+ * @param kernel_w Kernel width.
+ * @param stride_h Vertical stride.
+ * @param stride_w Horizontal stride.
+ * @param pad_h Vertical symmetric padding.
+ * @param pad_w Horizontal symmetric padding.
+ * @param output Output tensor `[N, C, outH, outW]`.
+ * @param indices Optional tensor `[N, C, outH, outW]` storing max indices.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_maxpool2d_nchw(const FloatTensor *input, size_t kernel_h,
                        size_t kernel_w, size_t stride_h, size_t stride_w,
                        size_t pad_h, size_t pad_w, FloatTensor *output,
                        FloatTensor *indices);
 
-// Average-pool 2D for NCHW tensors.
-// input  [N, C, H, W]
-// output [N, C, out_H, out_W]
+/**
+ * @brief Forward average pooling for NCHW tensors.
+ * @param input Input tensor `[N, C, H, W]`.
+ * @param kernel_h Kernel height.
+ * @param kernel_w Kernel width.
+ * @param stride_h Vertical stride.
+ * @param stride_w Horizontal stride.
+ * @param pad_h Vertical symmetric padding.
+ * @param pad_w Horizontal symmetric padding.
+ * @param output Output tensor `[N, C, outH, outW]`.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_avgpool2d_nchw(const FloatTensor *input, size_t kernel_h,
                        size_t kernel_w, size_t stride_h, size_t stride_w,
                        size_t pad_h, size_t pad_w, FloatTensor *output);
 
-// ---- Backward ----
-
-// Backward pass for max-pool 2D.
-// grad_output [N, C, out_H, out_W]
-// indices     [N, C, out_H, out_W]  — F32 tensor from st_maxpool2d_nchw forward
-// grad_input  [N, C, H, W]         — accumulated gradients (zeroed by caller)
+/**
+ * @brief Backward max pooling for NCHW tensors.
+ * @param grad_output Upstream gradient `[N, C, outH, outW]`.
+ * @param indices Saved max indices from forward pass.
+ * @param input_h Original input height.
+ * @param input_w Original input width.
+ * @param grad_input Output gradient buffer `[N, C, H, W]` (written/accumulated).
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_maxpool2d_backward_nchw(const FloatTensor *grad_output,
                                 const FloatTensor *indices, size_t input_h,
                                 size_t input_w, FloatTensor *grad_input);
 
-// Backward pass for average-pool 2D.
-// grad_output [N, C, out_H, out_W]
-// grad_input  [N, C, H, W]         — accumulated gradients (zeroed by caller)
+/**
+ * @brief Backward average pooling for NCHW tensors.
+ * @param grad_output Upstream gradient `[N, C, outH, outW]`.
+ * @param kernel_h Kernel height.
+ * @param kernel_w Kernel width.
+ * @param stride_h Vertical stride.
+ * @param stride_w Horizontal stride.
+ * @param pad_h Vertical symmetric padding.
+ * @param pad_w Horizontal symmetric padding.
+ * @param grad_input Output gradient buffer `[N, C, H, W]` (written/accumulated).
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_avgpool2d_backward_nchw(const FloatTensor *grad_output,
                                 size_t kernel_h, size_t kernel_w,
                                 size_t stride_h, size_t stride_w, size_t pad_h,
                                 size_t pad_w, FloatTensor *grad_input);
 
-// Global average-pool over spatial dims: [N,C,H,W] → [N,C,1,1].
+/**
+ * @brief Global average pooling over spatial dimensions.
+ * @param input Input tensor `[N, C, H, W]`.
+ * @param output Output tensor `[N, C, 1, 1]`.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_global_avgpool2d_nchw(const FloatTensor *input, FloatTensor *output);
 
-// Backward for global average-pool: [N,C,1,1] → [N,C,H,W].
+/**
+ * @brief Backward global average pooling.
+ * @param grad_output Upstream gradient `[N, C, 1, 1]`.
+ * @param grad_input Output gradient `[N, C, H, W]`.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_global_avgpool2d_backward_nchw(const FloatTensor *grad_output,
                                        FloatTensor *grad_input);
 

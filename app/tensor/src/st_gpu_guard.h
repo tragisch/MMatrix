@@ -55,4 +55,3 @@ void st_gpu_guard_reset_count(void);
 #endif
 
 #endif /* ST_GPU_GUARD_H */
-

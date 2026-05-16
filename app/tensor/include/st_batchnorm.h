@@ -1,3 +1,8 @@
+/**
+ * @file st_batchnorm.h
+ * @brief Public API for BatchNorm2D and fused BatchNorm+ReLU in NCHW layout.
+ */
+
 /*
  * Copyright (c) 2026 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -14,34 +19,38 @@
 
 #include "st.h"
 
-// ---- Batch Normalization 2D (NCHW) ----
-
-// Forward pass for Batch Normalization over channel dimension.
-// input   [N, C, H, W]
-// gamma   [C] — learnable scale (may be NULL for gamma=1)
-// beta    [C] — learnable shift (may be NULL for beta=0)
-// epsilon  small constant for numerical stability (e.g. 1e-5)
-// output  [N, C, H, W] — normalized, scaled, shifted
-// mean    [C] — computed channel means in f32 (pre-allocated, written).
-//             May be NULL in inference mode: value computed internally but not saved.
-// var     [C] — computed channel variances in f32 (pre-allocated, written).
-//             May be NULL in inference mode: value computed internally but not saved.
+/**
+ * @brief Forward BatchNorm2D over channel dimension for NCHW tensors.
+ * @param input Input tensor `[N, C, H, W]`.
+ * @param gamma Optional scale tensor `[C]` (NULL means all ones).
+ * @param beta Optional shift tensor `[C]` (NULL means all zeros).
+ * @param epsilon Numerical stability constant.
+ * @param output Output tensor `[N, C, H, W]`.
+ * @param mean Optional output tensor `[C]` for channel means.
+ * @param var Optional output tensor `[C]` for channel variances.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_batchnorm2d_forward(const FloatTensor *input,
                             const FloatTensor *gamma,
                             const FloatTensor *beta, float epsilon,
                             FloatTensor *output, FloatTensor *mean,
                             FloatTensor *var);
 
-// Backward pass for Batch Normalization.
-// grad_output [N, C, H, W]
-// input       [N, C, H, W] — original input from forward
-// mean        [C] f32 — from forward
-// var         [C] f32 — from forward
-// gamma       [C] — learnable scale (may be NULL for gamma=1)
-// epsilon      same epsilon used in forward
-// grad_input  [N, C, H, W] — gradient w.r.t. input (pre-allocated)
-// grad_gamma  [C]           — gradient w.r.t. gamma (pre-allocated; may be NULL)
-// grad_beta   [C]           — gradient w.r.t. beta  (pre-allocated; may be NULL)
+/**
+ * @brief Backward BatchNorm2D for NCHW tensors.
+ * @param grad_output Upstream gradient `[N, C, H, W]`.
+ * @param input Original forward input `[N, C, H, W]`.
+ * @param mean Channel means from forward pass `[C]`.
+ * @param var Channel variances from forward pass `[C]`.
+ * @param gamma Optional scale tensor `[C]`.
+ * @param epsilon Same epsilon used in forward pass.
+ * @param grad_input Gradient w.r.t. input `[N, C, H, W]`.
+ * @param grad_gamma Optional gradient w.r.t. gamma `[C]`.
+ * @param grad_beta Optional gradient w.r.t. beta `[C]`.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_batchnorm2d_backward(const FloatTensor *grad_output,
                              const FloatTensor *input,
                              const FloatTensor *mean, const FloatTensor *var,
@@ -49,21 +58,39 @@ bool st_batchnorm2d_backward(const FloatTensor *grad_output,
                              FloatTensor *grad_input, FloatTensor *grad_gamma,
                              FloatTensor *grad_beta);
 
-// ---- Fused Batch Normalization + ReLU (single pass) ----
-
-// Forward pass for fused BatchNorm + ReLU.
-// Identical to st_batchnorm2d_forward but applies ReLU (max(0,x)) in the same pass.
-// output  [N, C, H, W] — normalized, scaled, shifted, then ReLU'd
-// mean/var: same NULL semantics as st_batchnorm2d_forward.
+/**
+ * @brief Forward fused BatchNorm2D + ReLU.
+ * @param input Input tensor `[N, C, H, W]`.
+ * @param gamma Optional scale tensor `[C]`.
+ * @param beta Optional shift tensor `[C]`.
+ * @param epsilon Numerical stability constant.
+ * @param output Output tensor `[N, C, H, W]` after ReLU.
+ * @param mean Optional channel means `[C]`.
+ * @param var Optional channel variances `[C]`.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_batchnorm2d_forward_relu(const FloatTensor *input,
                                  const FloatTensor *gamma,
                                  const FloatTensor *beta, float epsilon,
                                  FloatTensor *output, FloatTensor *mean,
                                  FloatTensor *var);
 
-// Backward pass for fused BatchNorm + ReLU.
-// bn_output is the output of st_batchnorm2d_forward_relu (post-ReLU).
-// Uses bn_output > 0 as ReLU mask on grad_output, then performs BN backward.
+/**
+ * @brief Backward fused BatchNorm2D + ReLU.
+ * @param grad_output Upstream gradient.
+ * @param input Original forward input.
+ * @param bn_output Output of @ref st_batchnorm2d_forward_relu (post-ReLU).
+ * @param mean Channel means from forward pass.
+ * @param var Channel variances from forward pass.
+ * @param gamma Optional scale tensor.
+ * @param epsilon Same epsilon used in forward pass.
+ * @param grad_input Gradient w.r.t. input.
+ * @param grad_gamma Optional gradient w.r.t. gamma.
+ * @param grad_beta Optional gradient w.r.t. beta.
+ * @retval true Success.
+ * @retval false Invalid input or execution failure.
+ */
 bool st_batchnorm2d_backward_relu(const FloatTensor *grad_output,
                                   const FloatTensor *input,
                                   const FloatTensor *bn_output,

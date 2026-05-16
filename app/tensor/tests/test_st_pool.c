@@ -8,6 +8,7 @@
 
 #include "st_pool.h"
 #include "st.h"
+#include "st_dtype.h"
 
 #include <math.h>
 
