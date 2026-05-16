@@ -435,6 +435,10 @@ static inline bool st_conv2d_is_1x1_no_pad(const StConv2dParams *params,
          params->stride_h == 1 && params->stride_w == 1;
 }
 
+static inline bool st_conv2d_is_pointwise_1x1(size_t k_h, size_t k_w) {
+  return k_h == 1 && k_w == 1;
+}
+
 static bool st_conv2d_gemm_1x1_nchw(const FloatTensor *input,
                                      const FloatTensor *weight,
                                      const FloatTensor *bias,
@@ -910,12 +914,15 @@ bool st_conv2d_nchw(const FloatTensor *input, const FloatTensor *weight,
 
     case ST_CONV_BACKEND_AUTO:
     default:
-      /* 1x1 convolutions: always prefer direct GEMM (zero im2col cost). */
-      if (st_conv2d_is_1x1_no_pad(&local, k_h, k_w)) {
-        ok = st_conv2d_gemm_1x1_nchw(input, weight, bias, output);
+      /* Pointwise convolutions: prefer GEMM over MPS in AUTO mode.
+       * - stride=1/pad=0 uses direct 1x1 GEMM fast path (no im2col)
+       * - other 1x1 variants still use GEMM (im2col/general path) before MPS */
+      if (st_conv2d_is_pointwise_1x1(k_h, k_w)) {
+        ok = st_conv2d_gemm_nchw(input, weight, bias, &local, output);
         if (ok) {
           return true;
         }
+        log_debug("conv2d: pointwise GEMM preferred but failed, trying MPS/CPU fallbacks");
       }
 
       if (st_conv2d_should_use_mps(n, c_in, c_out, out_h, out_w, k_h, k_w)) {

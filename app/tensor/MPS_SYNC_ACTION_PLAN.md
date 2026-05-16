@@ -275,6 +275,10 @@ Completed in this sprint (2026-05-16):
 - Change: drain `output->buf->_async_cmd_buf` **before** encoding/committing a
   new write to the same output buffer (aligns fused path with conv fastpath
   rule, avoids overlapping writes/orphaned pending states).
+- Pointwise AUTO routing guard in `st_conv2d_nchw`:
+  - For `K=1x1`, AUTO now prefers GEMM path before MPS consideration,
+    including non-`stride=1/pad=0` variants.
+  - Existing direct 1x1 GEMM fastpath (`stride=1,pad=0`) remains unchanged.
 
 Smoke validation after change (`bench_st_pipeline`, opt build):
 
@@ -292,10 +296,23 @@ Next implementation tasks:
 
 1. Add variance-aware repeated pipeline measurement (fixed seed + median +
    p10/p90) before changing fused sync defaults.
-2. Add explicit routing guard for pointwise 1x1 workloads in AUTO mode
-   (documented by parity snapshot where GEMM beats MPS for `pw_medium`).
-3. Re-run cross-framework parity after each routing/sync change and keep
+2. Re-run cross-framework parity after each routing/sync change and keep
    `conv_large` within current pass band.
+
+P5 checkpoint after pointwise guard (2026-05-16, repeats=3):
+
+- `pw_medium` cross-framework (`tools/bench_conv_cross_framework.py`):
+  - `c_gemm`: `0.523 ms`
+  - `c_mps_zero_copy_sync`: `0.798 ms`
+  - `pytorch_mps`: `0.309 ms`
+  - `mlx`: `0.751 ms`
+
+Interpretation:
+
+- Routing intent is confirmed: for this pointwise class, GEMM remains the best
+  MMatrix path and should stay default in AUTO.
+- Remaining parity gap to PyTorch is kernel/implementation-level, not solved by
+  dispatching this class to MPS.
 
 ## Do Not Do Yet
 
