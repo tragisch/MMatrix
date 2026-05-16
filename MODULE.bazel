@@ -32,7 +32,6 @@ bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "rules_docs", version = "0.3.0")
 bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
-bazel_dep(name = "openmp", version = "22.1.1")
 
 git_override(
     module_name = "rules_docs",
@@ -157,8 +156,17 @@ new_local_repository(
     path = "third_party/log.c",
 )
 
-# libomp is now provided via bazel-registry as the 'openmp' module.
-# See bazel_dep(name = "openmp", ...) above.
+host_local_library(
+    name = "openmp",
+    build_file = "@//:third_party/libomp.BUILD",
+    env_var = "LIBOMP_ROOT",
+    linux_path = "/home/linuxbrew/.linuxbrew/opt/libomp",
+    macos_path = "/opt/homebrew/opt/libomp",
+    required_subdirs = [
+        "include",
+        "lib",
+    ],
+)
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
 host_local_library(

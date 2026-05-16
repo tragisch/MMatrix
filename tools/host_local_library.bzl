@@ -50,6 +50,7 @@ host_local_library = repository_rule(
     implementation = _host_local_library_impl,
     local = True,
     environ = [
+        "LIBOMP_ROOT",
         "OPENBLAS_ROOT",
         "SUITESPARSE_ROOT",
     ],
