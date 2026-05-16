@@ -148,6 +148,41 @@ static bool st_mps_tensor_is_valid(const FloatTensor *t, size_t ndim) {
   return t != NULL && t->values != NULL && t->ndim == ndim;
 }
 
+static bool st_mps_build_inputs_array(
+    NSMutableArray<MPSGraphTensorData *> *inputsArray,
+    NSArray<MPSGraphTensor *> *feedTensors,
+    MPSGraphTensor *inT, MPSGraphTensorData *inData,
+    MPSGraphTensor *wT, MPSGraphTensorData *wData,
+    MPSGraphTensor *biasT, MPSGraphTensorData *biasData,
+    MPSGraphTensor *gammaT, MPSGraphTensorData *gammaData,
+    MPSGraphTensor *betaT, MPSGraphTensorData *betaData) {
+  if (!inputsArray || !feedTensors || !inT || !inData || !wT || !wData) {
+    return false;
+  }
+
+  for (MPSGraphTensor *ft in feedTensors) {
+    MPSGraphTensorData *td = nil;
+    if (ft == inT) {
+      td = inData;
+    } else if (ft == wT) {
+      td = wData;
+    } else if (biasT && ft == biasT) {
+      td = biasData;
+    } else if (gammaT && ft == gammaT) {
+      td = gammaData;
+    } else if (betaT && ft == betaT) {
+      td = betaData;
+    }
+
+    if (!td) {
+      return false;
+    }
+    [inputsArray addObject:td];
+  }
+
+  return true;
+}
+
 /* ================================================================== */
 /*  supports_op                                                        */
 /* ================================================================== */
@@ -356,10 +391,12 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   feeds[inT] = inData;
   feeds[wT]  = wData;
 
+  MPSGraphTensorData *bData = nil;
+
   if (bias && biasT) {
     void *b_mh = bias->buf ? st_buffer_metal_handle(bias->buf) : NULL;
     const size_t bBytes = c_out * sizeof(float);
-    MPSGraphTensorData *bData = st_mps_make_tensor_data(
+    bData = st_mps_make_tensor_data(
         gDev, bias->values, b_mh, bBytes, @[ @1, @(c_out), @1, @1 ]);
     feeds[biasT] = bData;
   }
@@ -373,18 +410,17 @@ static bool mps_conv2d_forward(const FloatTensor *input,
   /* ---- Fastpath: executable + pre-allocated output MTLBuffer ---- */
   if (executable && wants_fastpath) {
     bool fastpath_ok = true;
-    NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
-        [NSMutableDictionary dictionaryWithDictionary:feeds];
     NSMutableArray<MPSGraphTensorData *> *inputsArray =
         [NSMutableArray arrayWithCapacity:executable.feedTensors.count];
-    for (MPSGraphTensor *ft in executable.feedTensors) {
-      MPSGraphTensorData *td = feedMap[ft];
-      if (!td) {
-        fastpath_ok = false;
-        st_backend_counter_conv_fastpath_missing_feed();
-        break;
-      }
-      [inputsArray addObject:td];
+    fastpath_ok = st_mps_build_inputs_array(inputsArray,
+                                            executable.feedTensors,
+                                            inT, inData,
+                                            wT, wData,
+                                            biasT, bData,
+                                            nil, nil,
+                                            nil, nil);
+    if (!fastpath_ok) {
+      st_backend_counter_conv_fastpath_missing_feed();
     }
 
     if (fastpath_ok) {
@@ -433,10 +469,11 @@ static bool mps_conv2d_forward(const FloatTensor *input,
         output->buf->_last_gpu_profile.command_ms =
             command_end_ms - command_start_ms;
 
-        /* Standalone async-safe rule: before writing to the same output
-           buffer again, drain the previous pending command buffer. */
+        /* Reusing same output: drop tracking of the previous pending command.
+           Commands on one queue execute in order; boundary sync on the latest
+           command still waits older ones transitively. */
         if (output->buf->_async_cmd_buf) {
-          st_buffer_metal_wait(output->buf);
+          st_buffer_metal_discard_pending(output->buf);
         }
 
         const double encode_start_ms = st_backend_now_ms();
@@ -860,44 +897,52 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
     feeds[inT] = inData;
     feeds[wT] = wData;
 
+    MPSGraphTensorData *biasData = nil;
+    MPSGraphTensorData *gammaData = nil;
+    MPSGraphTensorData *betaData = nil;
+
     if (bias && biasT) {
       void *b_mh = bias->buf ? st_buffer_metal_handle(bias->buf) : NULL;
-      feeds[biasT] = st_mps_make_tensor_data(
+      biasData = st_mps_make_tensor_data(
           gDev, bias->values, b_mh, c_out * sizeof(float),
           @[ @1, @(c_out), @1, @1 ]);
+      feeds[biasT] = biasData;
     }
 
     if (gamma && gammaT) {
       void *g_mh = gamma->buf ? st_buffer_metal_handle(gamma->buf) : NULL;
-      feeds[gammaT] = st_mps_make_tensor_data(
+      gammaData = st_mps_make_tensor_data(
           gDev, gamma->values, g_mh, c_out * sizeof(float),
           @[ @1, @(c_out), @1, @1 ]);
+      feeds[gammaT] = gammaData;
     }
 
     if (beta && betaT) {
       void *b_mh = beta->buf ? st_buffer_metal_handle(beta->buf) : NULL;
-      feeds[betaT] = st_mps_make_tensor_data(
+      betaData = st_mps_make_tensor_data(
           gDev, beta->values, b_mh, c_out * sizeof(float),
           @[ @1, @(c_out), @1, @1 ]);
+      feeds[betaT] = betaData;
     }
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
     if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
-      /* Standalone async-safe rule: before writing to the same output
-         buffer again, drain the previous pending command buffer. */
+      /* Reusing same output: drop tracking of previous pending command.
+         Queue ordering preserves correctness for later boundary sync. */
       if (output->buf->_async_cmd_buf) {
-        st_buffer_metal_wait(output->buf);
+        st_buffer_metal_discard_pending(output->buf);
       }
 
-      /* Build feedMap for order-independent inputsArray construction. */
-      NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
-          [NSMutableDictionary dictionaryWithDictionary:feeds];
       NSMutableArray<MPSGraphTensorData *> *inputsArray =
           [NSMutableArray arrayWithCapacity:executable.feedTensors.count];
-      for (MPSGraphTensor *ft in executable.feedTensors) {
-        MPSGraphTensorData *td = feedMap[ft];
-        if (!td) return false;
-        [inputsArray addObject:td];
+      if (!st_mps_build_inputs_array(inputsArray,
+                                     executable.feedTensors,
+                                     inT, inData,
+                                     wT, wData,
+                                     biasT, biasData,
+                                     gammaT, gammaData,
+                                     betaT, betaData)) {
+        return false;
       }
 
       /* Pre-allocate result TensorData backed by output's shared MTLBuffer. */
@@ -1223,38 +1268,47 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
     feeds[inT] = inData;
     feeds[wT]  = wData;
 
+    MPSGraphTensorData *biasData = nil;
+    MPSGraphTensorData *gammaData = nil;
+    MPSGraphTensorData *betaData = nil;
+
     if (bias && biasT) {
       void *b_mh = bias->buf ? st_buffer_metal_handle(bias->buf) : NULL;
-      feeds[biasT] = st_mps_make_tensor_data(gDev, bias->values, b_mh,
+      biasData = st_mps_make_tensor_data(gDev, bias->values, b_mh,
                          c_out * sizeof(float), @[ @1, @(c_out), @1, @1 ]);
+      feeds[biasT] = biasData;
     }
     if (gamma && gammaT) {
       void *g_mh = gamma->buf ? st_buffer_metal_handle(gamma->buf) : NULL;
-      feeds[gammaT] = st_mps_make_tensor_data(gDev, gamma->values, g_mh,
+      gammaData = st_mps_make_tensor_data(gDev, gamma->values, g_mh,
                           c_out * sizeof(float), @[ @1, @(c_out), @1, @1 ]);
+      feeds[gammaT] = gammaData;
     }
     if (beta && betaT) {
       void *b_mh = beta->buf ? st_buffer_metal_handle(beta->buf) : NULL;
-      feeds[betaT] = st_mps_make_tensor_data(gDev, beta->values, b_mh,
+      betaData = st_mps_make_tensor_data(gDev, beta->values, b_mh,
                          c_out * sizeof(float), @[ @1, @(c_out), @1, @1 ]);
+      feeds[betaT] = betaData;
     }
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
     if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
-      /* Standalone async-safe rule: before writing to the same output
-         buffer again, drain the previous pending command buffer. */
+      /* Reusing same output: drop tracking of previous pending command.
+         Queue ordering preserves correctness for later boundary sync. */
       if (output->buf->_async_cmd_buf) {
-        st_buffer_metal_wait(output->buf);
+        st_buffer_metal_discard_pending(output->buf);
       }
 
-      NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
-          [NSMutableDictionary dictionaryWithDictionary:feeds];
       NSMutableArray<MPSGraphTensorData *> *inputsArray =
           [NSMutableArray arrayWithCapacity:executable.feedTensors.count];
-      for (MPSGraphTensor *ft in executable.feedTensors) {
-        MPSGraphTensorData *td = feedMap[ft];
-        if (!td) return false;
-        [inputsArray addObject:td];
+      if (!st_mps_build_inputs_array(inputsArray,
+                                     executable.feedTensors,
+                                     inT, inData,
+                                     wT, wData,
+                                     biasT, biasData,
+                                     gammaT, gammaData,
+                                     betaT, betaData)) {
+        return false;
       }
 
       MPSShape *outShape = @[ @(n), @(c_out), @(out_h), @(out_w) ];

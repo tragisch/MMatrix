@@ -96,6 +96,8 @@ static void gpu_stats_maybe_add(GpuStats *stats, const FloatTensor *out) {
     stats->profile_sum.encode_ms += profile.encode_ms;
     stats->profile_sum.commit_ms += profile.commit_ms;
     stats->profile_sum.sync_wait_ms += profile.sync_wait_ms;
+    stats->profile_sum.sync_wait_prewrite_ms += profile.sync_wait_prewrite_ms;
+    stats->profile_sum.sync_wait_boundary_ms += profile.sync_wait_boundary_ms;
     stats->profile_count++;
   }
 }
@@ -116,7 +118,8 @@ static void print_header(void) {
          "fp_cmd_buf_nil_delta,fp_encode_exc_delta,last_gpu_ms,gpu_samples,"
          "gpu_avg_ms,gpu_min_ms,gpu_max_ms,cpu_overhead_ms,host_samples,"
          "feed_avg_ms,command_avg_ms,encode_avg_ms,commit_avg_ms,"
-         "sync_wait_avg_ms\n");
+         "sync_wait_avg_ms,sync_wait_prewrite_avg_ms,"
+         "sync_wait_boundary_avg_ms\n");
 }
 
 static void print_row(const char *case_name, const char *variant,
@@ -172,37 +175,54 @@ static void print_row(const char *case_name, const char *variant,
   printf(",");
   print_optional_ms(profile_valid,
                     gpu_stats->profile_sum.sync_wait_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.sync_wait_prewrite_ms /
+                        profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.sync_wait_boundary_ms /
+                        profile_count);
   printf("\n");
 }
 
 static int run_phase(const char *case_name, const char *variant,
                      const char *phase, const StConv2dParams *params,
                      const FloatTensor *input, const FloatTensor *weight,
-                     const FloatTensor *ref, FloatTensor *out, size_t iters,
-                     bool sync_each_iter, bool sync_at_end) {
+                     const FloatTensor *ref, FloatTensor **outs,
+                     size_t out_count, size_t iters, bool sync_each_iter,
+                     bool sync_at_end) {
+  if (!outs || out_count == 0) {
+    return 1;
+  }
+
+  FloatTensor *out0 = outs[0];
   const bool out_is_metal =
-      (out->buf && st_buffer_metal_handle(out->buf) != NULL);
+      (out0->buf && st_buffer_metal_handle(out0->buf) != NULL);
   const char *out_buf_type = out_is_metal ? "metal" : "cpu";
 
   StBackendCounters c0 = st_backend_get_counters();
   GpuStats gpu_stats = {0};
   uint64_t t0 = now_ns();
   for (size_t i = 0; i < iters; ++i) {
+    FloatTensor *out = outs[i % out_count];
     if (!st_conv2d_nchw(input, weight, NULL, params, out)) {
       return 1;
     }
     if (sync_each_iter) {
       st_tensor_sync(out);
       gpu_stats_maybe_add(&gpu_stats, out);
-    } else if (i > 0) {
+    } else if (i >= out_count) {
       /* st_conv2d_nchw drains the previous pending command before enqueueing
        * a new one when reusing the same output buffer. */
       gpu_stats_maybe_add(&gpu_stats, out);
     }
   }
   if (sync_at_end) {
-    st_tensor_sync(out);
-    gpu_stats_maybe_add(&gpu_stats, out);
+    for (size_t i = 0; i < out_count; ++i) {
+      st_tensor_sync(outs[i]);
+      gpu_stats_maybe_add(&gpu_stats, outs[i]);
+    }
   }
   uint64_t t1 = now_ns();
   StBackendCounters c1 = st_backend_get_counters();
@@ -222,7 +242,7 @@ static int run_phase(const char *case_name, const char *variant,
       c1.conv_fastpath_encode_exception - c0.conv_fastpath_encode_exception;
 
   print_row(case_name, variant, phase, "mps", st_conv2d_last_backend(), iters,
-            elapsed_ms(t0, t1, iters), d, max_abs_diff(ref, out), out_buf_type,
+            elapsed_ms(t0, t1, iters), d, max_abs_diff(ref, outs[0]), out_buf_type,
             readbytes_delta, fastpath_delta, fp_exec_nil_delta,
             fp_missing_feed_delta, fp_preout_nil_delta, fp_cmd_buf_nil_delta,
             fp_encode_exc_delta, &gpu_stats);
@@ -232,18 +252,22 @@ static int run_phase(const char *case_name, const char *variant,
 static int run_variant(const char *case_name, const char *variant,
                        const StConv2dParams *mps_params,
                        const FloatTensor *input, const FloatTensor *weight,
-                       const FloatTensor *ref, FloatTensor *out,
-                       bool sync_each_iter, bool sync_at_end) {
+                       const FloatTensor *ref, FloatTensor **outs,
+                       size_t out_count, bool sync_each_iter,
+                       bool sync_at_end) {
   if (run_phase(case_name, variant, "first_call", mps_params,
-                input, weight, ref, out, 1, sync_each_iter, sync_at_end) != 0) {
+                input, weight, ref, outs, out_count, 1,
+                sync_each_iter, sync_at_end) != 0) {
     return 1;
   }
   if (run_phase(case_name, variant, "second_call", mps_params,
-                input, weight, ref, out, 1, sync_each_iter, sync_at_end) != 0) {
+                input, weight, ref, outs, out_count, 1,
+                sync_each_iter, sync_at_end) != 0) {
     return 1;
   }
   if (run_phase(case_name, variant, "steady_state", mps_params,
-                input, weight, ref, out, 20, sync_each_iter, sync_at_end) != 0) {
+                input, weight, ref, outs, out_count, 20,
+                sync_each_iter, sync_at_end) != 0) {
     return 1;
   }
   return 0;
@@ -258,12 +282,15 @@ int main(int argc, char **argv) {
   int rc = 1;
   const char *requested_variant = NULL;
   const char *case_name = "conv_medium";
+  enum { OUT_RING_MAX = 4 };
   const size_t n = 4, c_in = 32, c_out = 64, h = 56, w = 56, k = 3;
   const size_t stride = 1, pad = 1;
   size_t out_h = 0, out_w = 0;
 
   if (argc > 2) {
-    fprintf(stderr, "usage: %s [all|mps_zero_copy_sync|mps_true_async_boundary]\n",
+    fprintf(stderr,
+            "usage: %s [all|mps_zero_copy_sync|mps_true_async_boundary|"
+            "mps_true_async_boundary_ring4]\n",
             argv[0]);
     return 2;
   }
@@ -271,7 +298,8 @@ int main(int argc, char **argv) {
     requested_variant = argv[1];
     if (strcmp(requested_variant, "all") != 0 &&
         strcmp(requested_variant, "mps_zero_copy_sync") != 0 &&
-        strcmp(requested_variant, "mps_true_async_boundary") != 0) {
+        strcmp(requested_variant, "mps_true_async_boundary") != 0 &&
+        strcmp(requested_variant, "mps_true_async_boundary_ring4") != 0) {
       fprintf(stderr, "unknown variant: %s\n", requested_variant);
       return 2;
     }
@@ -291,8 +319,12 @@ int main(int argc, char **argv) {
   FloatTensor *input = make4d(n, c_in, h, w);
   FloatTensor *weight = make4d(c_out, c_in, k, k);
   FloatTensor *ref = make4d(n, c_out, out_h, out_w);
-  FloatTensor *out = make4d(n, c_out, out_h, out_w);
-  if (!input || !weight || !ref || !out) {
+  FloatTensor *outs[OUT_RING_MAX] = {0};
+  for (size_t i = 0; i < OUT_RING_MAX; ++i) {
+    outs[i] = make4d(n, c_out, out_h, out_w);
+  }
+  if (!input || !weight || !ref || !outs[0] || !outs[1] || !outs[2] ||
+      !outs[3]) {
     goto cleanup;
   }
 
@@ -310,8 +342,8 @@ int main(int argc, char **argv) {
   if (should_run_variant(requested_variant, "mps_zero_copy_sync")) {
     st_backend_reset_counters();
     st_backend_set_conv_mps_async(true);
-    if (run_variant(case_name, "mps_zero_copy_sync", &base, input, weight, ref,
-                    out, true, true) != 0) {
+    if (run_variant(case_name, "mps_zero_copy_sync", &base, input, weight,
+                    ref, outs, 1, true, true) != 0) {
       goto cleanup;
     }
   }
@@ -319,8 +351,17 @@ int main(int argc, char **argv) {
   if (should_run_variant(requested_variant, "mps_true_async_boundary")) {
     st_backend_reset_counters();
     st_backend_set_conv_mps_async(true);
-    if (run_variant(case_name, "mps_true_async_boundary", &base, input, weight,
-                    ref, out, false, true) != 0) {
+    if (run_variant(case_name, "mps_true_async_boundary", &base, input,
+                    weight, ref, outs, 1, false, true) != 0) {
+      goto cleanup;
+    }
+  }
+
+  if (should_run_variant(requested_variant, "mps_true_async_boundary_ring4")) {
+    st_backend_reset_counters();
+    st_backend_set_conv_mps_async(true);
+    if (run_variant(case_name, "mps_true_async_boundary_ring4", &base, input,
+                    weight, ref, outs, 4, false, true) != 0) {
       goto cleanup;
     }
   }
@@ -329,7 +370,9 @@ int main(int argc, char **argv) {
 
 cleanup:
   st_backend_set_conv_mps_async(false);
-  st_destroy(out);
+  for (size_t i = 0; i < OUT_RING_MAX; ++i) {
+    st_destroy(outs[i]);
+  }
   st_destroy(ref);
   st_destroy(weight);
   st_destroy(input);

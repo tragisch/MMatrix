@@ -38,6 +38,8 @@ typedef struct StBufferGpuProfile {
   double encode_ms;
   double commit_ms;
   double sync_wait_ms;
+  double sync_wait_prewrite_ms;
+  double sync_wait_boundary_ms;
 } StBufferGpuProfile;
 
 /* ------------------------------------------------------------------ */

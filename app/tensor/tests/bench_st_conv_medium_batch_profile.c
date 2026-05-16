@@ -67,6 +67,8 @@ static void collect_profile(ProfileSums *sums, const FloatTensor *out) {
     sums->host.encode_ms += host.encode_ms;
     sums->host.commit_ms += host.commit_ms;
     sums->host.sync_wait_ms += host.sync_wait_ms;
+    sums->host.sync_wait_prewrite_ms += host.sync_wait_prewrite_ms;
+    sums->host.sync_wait_boundary_ms += host.sync_wait_boundary_ms;
   }
   sums->samples++;
 }
@@ -75,7 +77,8 @@ static void print_header(void) {
   printf("suite,case_name,mode,batch_ops,repeats,ops,total_ms_per_repeat,"
          "ms_per_op,enqueue_ms_per_op,sync_ms_per_op,gpu_avg_ms,"
          "cpu_overhead_ms,profile_samples,feed_avg_ms,command_avg_ms,"
-         "encode_avg_ms,commit_avg_ms,sync_wait_avg_ms,mps_hit,mps_miss,"
+         "encode_avg_ms,commit_avg_ms,sync_wait_avg_ms,"
+         "sync_wait_prewrite_avg_ms,sync_wait_boundary_avg_ms,mps_hit,mps_miss,"
          "fallback_gemm,fallback_ref,readbytes_delta,fastpath_delta,"
          "max_abs_diff\n");
 }
@@ -119,6 +122,12 @@ static void print_row(const char *mode, size_t batch_ops, size_t repeats,
   print_ms_or_na(have_profile, profiles->host.commit_ms / samples);
   printf(",");
   print_ms_or_na(have_profile, profiles->host.sync_wait_ms / samples);
+  printf(",");
+  print_ms_or_na(have_profile,
+                 profiles->host.sync_wait_prewrite_ms / samples);
+  printf(",");
+  print_ms_or_na(have_profile,
+                 profiles->host.sync_wait_boundary_ms / samples);
   printf(",%ld,%ld,%ld,%ld,%ld,%ld,",
          after.mps_hit - before.mps_hit,
          after.mps_miss - before.mps_miss,

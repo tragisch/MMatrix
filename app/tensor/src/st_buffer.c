@@ -212,7 +212,7 @@ void st_buffer_release(StBuffer *buf) {
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
   if (buf->_async_cmd_buf) {
     /* Wait for and release any pending GPU command buffer first. */
-    st_buffer_metal_wait(buf);
+    st_buffer_metal_wait(buf, ST_BUFFER_WAIT_REASON_RELEASE);
   }
   if (buf->_backend_handle) {
     /* Metal buffer: release the MTLBuffer; data pointer is owned by it. */
@@ -235,7 +235,7 @@ void st_buffer_wait_gpu(StBuffer *buf) {
     return;
   }
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
-  st_buffer_metal_wait(buf);
+  st_buffer_metal_wait(buf, ST_BUFFER_WAIT_REASON_BOUNDARY);
 #endif
 }
 

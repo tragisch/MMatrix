@@ -77,7 +77,18 @@ void st_buffer_release_metal_handle(void *handle) {
   /* mtl_buf goes out of scope here → ARC releases it. */
 }
 
-void st_buffer_metal_wait(StBuffer *buf) {
+void st_buffer_metal_discard_pending(StBuffer *buf) {
+  if (!buf || !buf->_async_cmd_buf) {
+    return;
+  }
+  void *handle = buf->_async_cmd_buf;
+  buf->_async_cmd_buf = NULL;
+  /* Transfer ownership to ARC and release without waiting. */
+  id<MTLCommandBuffer> __unused cmdBuf =
+      (__bridge_transfer id<MTLCommandBuffer>)handle;
+}
+
+void st_buffer_metal_wait(StBuffer *buf, StBufferWaitReason reason) {
   if (!buf || !buf->_async_cmd_buf) {
     return;
   }
@@ -90,7 +101,15 @@ void st_buffer_metal_wait(StBuffer *buf) {
   const double wait_start_ms = st_metal_now_ms();
   [cmdBuf waitUntilCompleted];
   const double wait_end_ms = st_metal_now_ms();
-  buf->_last_gpu_profile.sync_wait_ms = wait_end_ms - wait_start_ms;
+  const double wait_ms = wait_end_ms - wait_start_ms;
+  buf->_last_gpu_profile.sync_wait_ms = wait_ms;
+  buf->_last_gpu_profile.sync_wait_prewrite_ms = 0.0;
+  buf->_last_gpu_profile.sync_wait_boundary_ms = 0.0;
+  if (reason == ST_BUFFER_WAIT_REASON_PREWRITE) {
+    buf->_last_gpu_profile.sync_wait_prewrite_ms = wait_ms;
+  } else if (reason == ST_BUFFER_WAIT_REASON_BOUNDARY) {
+    buf->_last_gpu_profile.sync_wait_boundary_ms = wait_ms;
+  }
   buf->_last_gpu_profile_valid = true;
   if (cmdBuf.status == MTLCommandBufferStatusCompleted &&
       cmdBuf.GPUEndTime > cmdBuf.GPUStartTime) {
