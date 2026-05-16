@@ -13,6 +13,12 @@ sh_binary(
     visibility = ["//visibility:public"],
 )
 
+sh_binary(
+    name = "generate_tensor_api_docs",
+    srcs = ["doxygen/generate_tensor_api_docs.sh"],
+    visibility = ["//visibility:public"],
+)
+
 config_setting(
     name = "coverage",
     values = {"collect_code_coverage": "true"},

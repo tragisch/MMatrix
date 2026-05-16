@@ -29,8 +29,33 @@ bazel_dep(name = "rules_java", version = "9.0.3")
 bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
 bazel_dep(name = "google_benchmark", version = "1.9.2")
 bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_python", version = "1.7.0")
+bazel_dep(name = "rules_docs", version = "0.3.0")
 bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
 bazel_dep(name = "openmp", version = "22.1.1")
+
+git_override(
+    module_name = "rules_docs",
+    commit = "929ba5f65c64bdcb24bbc8e537c2dfac918c5de7",
+    remote = "https://github.com/jacobshirley/rules_docs.git",
+)
+
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "pypi",
+    python_version = "3.11",
+    requirements_lock = "//doc:requirements.txt",
+)
+use_repo(pip, "pypi")
+
+docgen = use_extension("@rules_docs//docgen:extensions.bzl", "docgen")
+docgen.mkdocs(
+    plugins = [
+        "mkdocs-material",
+    ],
+    pypi_hub = "@pypi",
+)
+use_repo(docgen, "mkdocs")
 
 # Required for objc_library / Apple-specific C(++) actions (e.g. MPS bridge)
 apple_cc = use_extension("@apple_support//crosstool:setup.bzl", "apple_cc_configure_extension")
