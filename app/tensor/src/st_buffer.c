@@ -112,6 +112,40 @@ static size_t st_buffer_env_size_t(const char *name, size_t fallback,
   return out;
 }
 
+static bool st_buffer_env_present(const char *name) {
+  if (!name) {
+    return false;
+  }
+  const char *v = getenv(name);
+  return v && v[0] != '\0';
+}
+
+static size_t st_buffer_resolve_auto_sync_every(void) {
+  /* Priority: explicit numeric override > profile preset > default(0). */
+  if (st_buffer_env_present("MMATRIX_ST_ASYNC_SYNC_EVERY")) {
+    return st_buffer_env_size_t("MMATRIX_ST_ASYNC_SYNC_EVERY", 0u,
+                                ST_BUFFER_PENDING_CMDS_MAX);
+  }
+
+  const char *profile = getenv("MMATRIX_ST_ASYNC_PROFILE");
+  if (!profile || profile[0] == '\0') {
+    return 0u;
+  }
+
+  if (strcmp(profile, "throughput") == 0 || strcmp(profile, "THROUGHPUT") == 0) {
+    return 0u;
+  }
+  if (strcmp(profile, "balanced") == 0 || strcmp(profile, "BALANCED") == 0) {
+    return 4u;
+  }
+  if (strcmp(profile, "stable") == 0 || strcmp(profile, "STABLE") == 0 ||
+      strcmp(profile, "latency") == 0 || strcmp(profile, "LATENCY") == 0) {
+    return 8u;
+  }
+
+  return 0u;
+}
+
 void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle) {
   if (!buf || !cmd_handle) {
     return;
@@ -155,8 +189,7 @@ void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle) {
 
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
   if (buf->type == ST_BUFFER_METAL) {
-    const size_t auto_sync_every = st_buffer_env_size_t(
-        "MMATRIX_ST_ASYNC_SYNC_EVERY", 0u, ST_BUFFER_PENDING_CMDS_MAX);
+    const size_t auto_sync_every = st_buffer_resolve_auto_sync_every();
     if (auto_sync_every > 0u && depth >= auto_sync_every) {
       void *pending_handles[ST_BUFFER_PENDING_CMDS_MAX] = {0};
       const size_t pending_count =

@@ -47,6 +47,7 @@ static void fill_rand(FloatTensor *t, uint32_t seed) {
 
 static bool run_variant(const char *name, bool blocking_release, size_t warmup,
                         size_t iters) {
+  unsetenv("MMATRIX_ST_ASYNC_PROFILE");
   setenv("MMATRIX_ST_ASYNC_SYNC_EVERY", "0", 1);
   if (blocking_release) {
     setenv("MMATRIX_ST_BUFFER_RELEASE_BLOCKING", "1", 1);
@@ -153,13 +154,21 @@ static bool run_variant(const char *name, bool blocking_release, size_t warmup,
 
 static bool run_ring_variant(const char *name, bool blocking_release,
                              size_t warmup, size_t iters, size_t ring_size,
-                             size_t sync_every, size_t auto_sync_every_env) {
+                             size_t sync_every, size_t auto_sync_every_env,
+                             const char *profile_env) {
   if (ring_size == 0u) {
     return false;
   }
-  char auto_buf[32];
-  snprintf(auto_buf, sizeof(auto_buf), "%zu", auto_sync_every_env);
-  setenv("MMATRIX_ST_ASYNC_SYNC_EVERY", auto_buf, 1);
+
+  if (profile_env && profile_env[0] != '\0') {
+    unsetenv("MMATRIX_ST_ASYNC_SYNC_EVERY");
+    setenv("MMATRIX_ST_ASYNC_PROFILE", profile_env, 1);
+  } else {
+    char auto_buf[32];
+    snprintf(auto_buf, sizeof(auto_buf), "%zu", auto_sync_every_env);
+    setenv("MMATRIX_ST_ASYNC_SYNC_EVERY", auto_buf, 1);
+    unsetenv("MMATRIX_ST_ASYNC_PROFILE");
+  }
 
   if (blocking_release) {
     setenv("MMATRIX_ST_BUFFER_RELEASE_BLOCKING", "1", 1);
@@ -285,9 +294,9 @@ static bool run_ring_variant(const char *name, bool blocking_release,
       stats.samples > 0u ? (double)stats.total_depth / (double)stats.samples
                          : 0.0;
 
-      printf("%s: %.3f ms/iter (%zu iters, ring=%zu, sync_every=%zu, auto_sync=%zu)\n",
-        name, elapsed_ms(t0, t1, ok_iters), ok_iters, ring_size, sync_every,
-        auto_sync_every_env);
+  printf("%s: %.3f ms/iter (%zu iters, ring=%zu, sync_every=%zu, auto_sync=%zu, profile=%s)\n",
+         name, elapsed_ms(t0, t1, ok_iters), ok_iters, ring_size, sync_every,
+         auto_sync_every_env, profile_env ? profile_env : "-");
   printf("  pending_depth: avg=%.2f max=%zu samples=%" PRIu64
          " enqueued=%" PRIu64 " evicted=%" PRIu64 "\n",
          avg_depth, stats.max_depth, stats.samples, stats.enqueued,
@@ -311,10 +320,10 @@ int main(void) {
   printf("\nworkload: async MPS Conv2D + ring-reuse(no sync in-loop)\n");
   bool ok_ring_nb =
       run_ring_variant("ring4_non_blocking_release", false, warmup, iters,
-               ring4, 0u, 0u);
+               ring4, 0u, 0u, NULL);
   bool ok_ring_bl =
       run_ring_variant("ring4_forced_blocking_release", true, warmup, iters,
-               ring4, 0u, 0u);
+               ring4, 0u, 0u, NULL);
 
   printf("\nworkload: ring8 sync-cadence sweep\n");
   const size_t cadences[] = {0u, 4u, 8u, 16u};
@@ -326,9 +335,11 @@ int main(void) {
     snprintf(name_nb, sizeof(name_nb), "ring8_non_blocking_sync%zu", cadence);
     snprintf(name_bl, sizeof(name_bl), "ring8_forced_blocking_sync%zu", cadence);
     bool ok_nb_c =
-        run_ring_variant(name_nb, false, warmup, iters, ring8, cadence, 0u);
+      run_ring_variant(name_nb, false, warmup, iters, ring8, cadence, 0u,
+               NULL);
     bool ok_bl_c =
-        run_ring_variant(name_bl, true, warmup, iters, ring8, cadence, 0u);
+      run_ring_variant(name_bl, true, warmup, iters, ring8, cadence, 0u,
+               NULL);
     ok_sweep = ok_sweep && ok_nb_c && ok_bl_c;
   }
 
@@ -343,14 +354,30 @@ int main(void) {
     snprintf(name_nb, sizeof(name_nb), "ring8_auto_non_blocking_%zu", auto_sync);
     snprintf(name_bl, sizeof(name_bl), "ring8_auto_forced_blocking_%zu", auto_sync);
     bool ok_nb_c = run_ring_variant(name_nb, false, warmup, iters, ring8,
-                                    0u, auto_sync);
+                                    0u, auto_sync, NULL);
     bool ok_bl_c = run_ring_variant(name_bl, true, warmup, iters, ring8,
-                                    0u, auto_sync);
+                                    0u, auto_sync, NULL);
     ok_auto = ok_auto && ok_nb_c && ok_bl_c;
   }
 
+  printf("\nworkload: ring8 runtime profile sweep (throughput/balanced/stable)\n");
+  const char *profiles[] = {"throughput", "balanced", "stable"};
+  bool ok_profile = true;
+  for (size_t i = 0; i < sizeof(profiles) / sizeof(profiles[0]); ++i) {
+    const char *profile = profiles[i];
+    char name_nb[128];
+    char name_bl[128];
+    snprintf(name_nb, sizeof(name_nb), "ring8_profile_non_blocking_%s", profile);
+    snprintf(name_bl, sizeof(name_bl), "ring8_profile_forced_blocking_%s", profile);
+    bool ok_nb_c = run_ring_variant(name_nb, false, warmup, iters, ring8,
+                                    0u, 0u, profile);
+    bool ok_bl_c = run_ring_variant(name_bl, true, warmup, iters, ring8,
+                                    0u, 0u, profile);
+    ok_profile = ok_profile && ok_nb_c && ok_bl_c;
+  }
+
   if (!ok_nb || !ok_bl || !ok_ring_nb || !ok_ring_bl || !ok_sweep ||
-      !ok_auto) {
+      !ok_auto || !ok_profile) {
     printf("\nResult: SKIP/INCOMPLETE (see stderr)\n");
     return 0;
   }
