@@ -17,7 +17,7 @@ LATEST_FILE="$RESULT_DIR/cross_framework_latest.txt"
   echo "repo_root: $ROOT_DIR"
   echo "repeats: $REPEATS"
   echo ""
-  python3 "$ROOT_DIR/share/benchmarks/scripts/bench_conv_cross_framework.py" \
+  python3 "$ROOT_DIR/benchmark/bench_conv_cross_framework.py" \
     --repo-root "$ROOT_DIR" \
     --repeats "$REPEATS"
 } | tee "$OUT_FILE"

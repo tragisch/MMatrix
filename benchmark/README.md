@@ -16,7 +16,7 @@ GitHub-hosted runners are easy to use and require no local runner management.
 
 The benchmark implementation itself is reused from:
 
-- `share/benchmarks/scripts/bench_conv_cross_framework.py`
+- `benchmark/bench_conv_cross_framework.py`
 
 ## Runner
 
