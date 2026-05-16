@@ -92,6 +92,7 @@ cc_library(
         "src/st_dtype.c",
         "src/st_gpu_guard.c",
         "src/st_pool.c",
+        "src/st_shape_ops.c",
         "src/st_warmup.c",
         "src/st_workspace.c",
     ],
@@ -251,6 +252,14 @@ unity_test(
     srcs = ["tests/test_st_shape_ops.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
+    deps = [":st"],
+)
+
+cc_binary(
+    name = "example_cnn_dense_pipeline",
+    srcs = ["tests/example_cnn_dense_pipeline.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
     deps = [":st"],
 )
 

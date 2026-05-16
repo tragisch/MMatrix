@@ -11,6 +11,7 @@
 #include "st.h"
 #include "st_shape_ops.h"
 
+#include <stdlib.h>
 #define UNITY_INCLUDE_FLOAT
 #define UNITY_FLOAT_PRECISION 6
 
@@ -161,6 +162,131 @@ void test_st_concat_axis_0(void) {
   st_destroy(t3);
 }
 
+/* ============================================================================
+ * Test: st_squeeze (remove all axes with size 1)
+ * ============================================================================ */
+void test_st_squeeze_all(void) {
+  /* Create [2, 1, 3, 1, 4] tensor */
+  size_t shape[5] = {2, 1, 3, 1, 4};
+  FloatTensor *t = st_create(5, shape);
+  TEST_ASSERT_NOT_NULL(t);
+
+  /* Squeeze all 1-sized axes → [2, 3, 4] */
+  FloatTensor *squeezed = st_squeeze(t);
+  TEST_ASSERT_NOT_NULL(squeezed);
+  TEST_ASSERT_EQUAL(3, squeezed->ndim);
+  TEST_ASSERT_EQUAL(2, squeezed->shape[0]);
+  TEST_ASSERT_EQUAL(3, squeezed->shape[1]);
+  TEST_ASSERT_EQUAL(4, squeezed->shape[2]);
+  TEST_ASSERT_EQUAL(2 * 3 * 4, squeezed->numel);
+
+  st_destroy(squeezed);
+  st_destroy(t);
+}
+
+/* ============================================================================
+ * Test: st_squeeze_dim (remove specific axis with size 1)
+ * ============================================================================ */
+void test_st_squeeze_dim_single(void) {
+  /* Create [2, 1, 3, 4] tensor */
+  size_t shape[4] = {2, 1, 3, 4};
+  FloatTensor *t = st_create(4, shape);
+  TEST_ASSERT_NOT_NULL(t);
+
+  /* Squeeze axis 1 → [2, 3, 4] */
+  FloatTensor *squeezed = st_squeeze_dim(t, 1);
+  TEST_ASSERT_NOT_NULL(squeezed);
+  TEST_ASSERT_EQUAL(3, squeezed->ndim);
+  TEST_ASSERT_EQUAL(2, squeezed->shape[0]);
+  TEST_ASSERT_EQUAL(3, squeezed->shape[1]);
+  TEST_ASSERT_EQUAL(4, squeezed->shape[2]);
+
+  st_destroy(squeezed);
+  st_destroy(t);
+}
+
+/* ============================================================================
+ * Test: st_unsqueeze (insert axis with size 1)
+ * ============================================================================ */
+void test_st_unsqueeze_middle(void) {
+  /* Create [2, 3, 4] tensor */
+  size_t shape[3] = {2, 3, 4};
+  FloatTensor *t = st_create(3, shape);
+  TEST_ASSERT_NOT_NULL(t);
+
+  /* Unsqueeze at axis 1 → [2, 1, 3, 4] */
+  FloatTensor *unsqueezed = st_unsqueeze(t, 1);
+  TEST_ASSERT_NOT_NULL(unsqueezed);
+  TEST_ASSERT_EQUAL(4, unsqueezed->ndim);
+  TEST_ASSERT_EQUAL(2, unsqueezed->shape[0]);
+  TEST_ASSERT_EQUAL(1, unsqueezed->shape[1]);
+  TEST_ASSERT_EQUAL(3, unsqueezed->shape[2]);
+  TEST_ASSERT_EQUAL(4, unsqueezed->shape[3]);
+
+  st_destroy(unsqueezed);
+  st_destroy(t);
+}
+
+/* ============================================================================
+ * Test: st_expand (repeat along axis)
+ * ============================================================================ */
+void test_st_expand_along_axis(void) {
+  /* Create [1, 3, 4] tensor */
+  size_t shape[3] = {1, 3, 4};
+  FloatTensor *t = st_create(3, shape);
+  TEST_ASSERT_NOT_NULL(t);
+
+  /* Fill with test data. */
+  for (size_t i = 0; i < t->numel; ++i) {
+    t->values[i] = (float)i;
+  }
+
+  /* Expand axis 0 with count=5 → [5, 3, 4] */
+  FloatTensor *expanded = st_expand(t, 0, 5);
+  TEST_ASSERT_NOT_NULL(expanded);
+  TEST_ASSERT_EQUAL(3, expanded->ndim);
+  TEST_ASSERT_EQUAL(5, expanded->shape[0]);
+  TEST_ASSERT_EQUAL(3, expanded->shape[1]);
+  TEST_ASSERT_EQUAL(4, expanded->shape[2]);
+  TEST_ASSERT_EQUAL(5 * 3 * 4, expanded->numel);
+
+  /* Verify data was replicated. */
+  for (size_t rep = 0; rep < 5; ++rep) {
+    for (size_t i = 0; i < 12; ++i) {
+      TEST_ASSERT_EQUAL((float)i, expanded->values[rep * 12 + i]);
+    }
+  }
+
+  st_destroy(expanded);
+  st_destroy(t);
+}
+
+/* ============================================================================
+ * Test: st_split (divide along axis)
+ * ============================================================================ */
+void test_st_split_evenly(void) {
+  /* Create [12, 5] tensor */
+  size_t shape[2] = {12, 5};
+  FloatTensor *t = st_create(2, shape);
+  TEST_ASSERT_NOT_NULL(t);
+
+  /* Split into 3 pieces along axis 0 → 3x [4, 5] */
+  FloatTensor **splits = NULL;
+  bool ok = st_split(t, 0, 3, &splits);
+  TEST_ASSERT_TRUE(ok);
+  TEST_ASSERT_NOT_NULL(splits);
+
+  for (size_t i = 0; i < 3; ++i) {
+    TEST_ASSERT_EQUAL(2, splits[i]->ndim);
+    TEST_ASSERT_EQUAL(4, splits[i]->shape[0]);
+    TEST_ASSERT_EQUAL(5, splits[i]->shape[1]);
+    TEST_ASSERT_EQUAL(4 * 5, splits[i]->numel);
+    st_destroy(splits[i]);
+  }
+  free(splits);
+
+  st_destroy(t);
+}
 /* ============================================================================
  * Test: st_concat along axis 1
  * ============================================================================ */
