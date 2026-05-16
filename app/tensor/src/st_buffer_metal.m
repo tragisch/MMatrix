@@ -12,6 +12,7 @@
 #import "sm_mps.h"
 
 #import <Metal/Metal.h>
+#import <dispatch/dispatch.h>
 #import <stdint.h>
 #import <string.h>
 #import <time.h>
@@ -88,16 +89,40 @@ void st_buffer_metal_discard_pending(StBuffer *buf) {
       (__bridge_transfer id<MTLCommandBuffer>)handle;
 }
 
+void st_buffer_metal_discard_handle(void *cmd_handle) {
+  if (!cmd_handle) {
+    return;
+  }
+  id<MTLCommandBuffer> __unused cmdBuf =
+      (__bridge_transfer id<MTLCommandBuffer>)cmd_handle;
+}
+
 void st_buffer_metal_wait(StBuffer *buf, StBufferWaitReason reason) {
   if (!buf || !buf->_async_cmd_buf) {
     return;
   }
   void *handle = buf->_async_cmd_buf;
   buf->_async_cmd_buf = NULL;
+  st_buffer_metal_wait_handle(handle, buf, reason);
+}
+
+void st_buffer_metal_wait_handle(void *cmd_handle, StBuffer *profile_buf,
+                                 StBufferWaitReason reason) {
+  if (!cmd_handle) {
+    return;
+  }
+
+  StBuffer *buf = profile_buf;
+  if (!buf) {
+    id<MTLCommandBuffer> cmdBuf = (__bridge_transfer id<MTLCommandBuffer>)cmd_handle;
+    [cmdBuf waitUntilCompleted];
+    return;
+  }
+
   buf->_last_gpu_elapsed_valid = false;
   buf->_last_gpu_elapsed_ms = 0.0;
   /* Transfer ownership to ARC so the command buffer is released after wait. */
-  id<MTLCommandBuffer> cmdBuf = (__bridge_transfer id<MTLCommandBuffer>)handle;
+  id<MTLCommandBuffer> cmdBuf = (__bridge_transfer id<MTLCommandBuffer>)cmd_handle;
   const double wait_start_ms = st_metal_now_ms();
   [cmdBuf waitUntilCompleted];
   const double wait_end_ms = st_metal_now_ms();
@@ -118,4 +143,46 @@ void st_buffer_metal_wait(StBuffer *buf, StBufferWaitReason reason) {
     buf->_last_gpu_elapsed_valid = true;
   }
   /* cmdBuf released by ARC here. */
+}
+
+bool st_buffer_metal_schedule_release(void *cmd_handle, void *metal_handle) {
+  if (!cmd_handle || !metal_handle) {
+    return false;
+  }
+
+  void *single[1] = {cmd_handle};
+  return st_buffer_metal_schedule_release_many(single, 1u, metal_handle);
+}
+
+bool st_buffer_metal_schedule_release_many(void **cmd_handles,
+                                           size_t cmd_count,
+                                           void *metal_handle) {
+  if (!metal_handle || !cmd_handles || cmd_count == 0u) {
+    return false;
+  }
+
+  void **cmd_copy = (void **)calloc(cmd_count, sizeof(void *));
+  if (!cmd_copy) {
+    return false;
+  }
+  memcpy(cmd_copy, cmd_handles, cmd_count * sizeof(void *));
+
+  void *metal_handle_for_block = metal_handle;
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    for (size_t i = 0; i < cmd_count; ++i) {
+      void *h = cmd_copy[i];
+      if (!h) {
+        continue;
+      }
+      id<MTLCommandBuffer> released_cmd =
+          (__bridge_transfer id<MTLCommandBuffer>)h;
+      if (released_cmd) {
+        [released_cmd waitUntilCompleted];
+      }
+    }
+    free(cmd_copy);
+    id<MTLBuffer> __unused released_buf =
+        (__bridge_transfer id<MTLBuffer>)metal_handle_for_block;
+  });
+  return true;
 }

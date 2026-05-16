@@ -332,3 +332,11 @@ cc_binary(
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
     deps = [":st"],
 )
+
+cc_binary(
+    name = "bench_st_async_release",
+    srcs = ["tests/bench_st_async_release.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [":st"],
+)

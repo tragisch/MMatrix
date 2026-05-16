@@ -17,6 +17,82 @@
 #include "st_buffer_metal.h"
 #endif
 
+static void st_buffer_pending_reset(StBuffer *buf) {
+  if (!buf) {
+    return;
+  }
+  buf->_async_cmd_buf = NULL;
+  buf->_async_cmd_head = 0u;
+  buf->_async_cmd_count = 0u;
+  for (size_t i = 0; i < ST_BUFFER_PENDING_CMDS_MAX; ++i) {
+    buf->_async_cmd_ring[i] = NULL;
+  }
+}
+
+static size_t st_buffer_pending_collect(StBuffer *buf, void **out_handles,
+                                        size_t max_handles, bool clear_state) {
+  if (!buf || !out_handles || max_handles == 0u) {
+    return 0u;
+  }
+
+  size_t n = 0u;
+  if (buf->_async_cmd_count > 0u) {
+    size_t count = (size_t)buf->_async_cmd_count;
+    for (size_t i = 0; i < count && n < max_handles; ++i) {
+      const size_t idx =
+          ((size_t)buf->_async_cmd_head + i) % ST_BUFFER_PENDING_CMDS_MAX;
+      void *h = buf->_async_cmd_ring[idx];
+      if (h) {
+        out_handles[n++] = h;
+      }
+      if (clear_state) {
+        buf->_async_cmd_ring[idx] = NULL;
+      }
+    }
+    if (clear_state) {
+      st_buffer_pending_reset(buf);
+    }
+    return n;
+  }
+
+  /* Legacy/manual sentinel path used by tests and guard checks. */
+  if (buf->_async_cmd_buf) {
+    out_handles[n++] = buf->_async_cmd_buf;
+    if (clear_state) {
+      buf->_async_cmd_buf = NULL;
+    }
+  }
+  return n;
+}
+
+void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle) {
+  if (!buf || !cmd_handle) {
+    return;
+  }
+
+  if (buf->_async_cmd_count >= ST_BUFFER_PENDING_CMDS_MAX) {
+    const size_t evict_idx = (size_t)buf->_async_cmd_head;
+    void *evict = buf->_async_cmd_ring[evict_idx];
+    if (evict) {
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
+      st_buffer_metal_discard_handle(evict);
+#endif
+    }
+    buf->_async_cmd_ring[evict_idx] = NULL;
+    buf->_async_cmd_head =
+        (unsigned char)(((size_t)buf->_async_cmd_head + 1u) %
+                        ST_BUFFER_PENDING_CMDS_MAX);
+    buf->_async_cmd_count = (unsigned char)(ST_BUFFER_PENDING_CMDS_MAX - 1u);
+  }
+
+  const size_t write_idx =
+      ((size_t)buf->_async_cmd_head + (size_t)buf->_async_cmd_count) %
+      ST_BUFFER_PENDING_CMDS_MAX;
+  buf->_async_cmd_ring[write_idx] = cmd_handle;
+  buf->_async_cmd_count = (unsigned char)((size_t)buf->_async_cmd_count + 1u);
+  buf->_async_cmd_buf = cmd_handle;
+}
+
 /* ------------------------------------------------------------------ */
 /*  CPU allocation                                                     */
 /* ------------------------------------------------------------------ */
@@ -39,6 +115,23 @@ static bool st_buffer_align_bytes(size_t num_bytes, size_t *out_aligned_bytes) {
 
   *out_aligned_bytes = (num_bytes + 63u) & ~(size_t)63u;
   return true;
+}
+
+static bool st_buffer_env_true(const char *name) {
+  if (!name) {
+    return false;
+  }
+  const char *v = getenv(name);
+  if (!v || v[0] == '\0') {
+    return false;
+  }
+  if (strcmp(v, "1") == 0 || strcmp(v, "true") == 0 ||
+      strcmp(v, "TRUE") == 0 || strcmp(v, "yes") == 0 ||
+      strcmp(v, "YES") == 0 || strcmp(v, "on") == 0 ||
+      strcmp(v, "ON") == 0) {
+    return true;
+  }
+  return false;
 }
 
 StBuffer *st_buffer_alloc_cpu(size_t num_floats) {
@@ -75,6 +168,7 @@ StBuffer *st_buffer_alloc_cpu(size_t num_floats) {
   buf->refcount = 1;
   buf->owns_data = true;
   buf->_backend_handle = NULL;
+  st_buffer_pending_reset(buf);
 
   return buf;
 }
@@ -117,6 +211,7 @@ StBuffer *st_buffer_alloc_bytes_cpu(size_t num_bytes) {
   buf->refcount = 1;
   buf->owns_data = true;
   buf->_backend_handle = NULL;
+  st_buffer_pending_reset(buf);
 
   return buf;
 }
@@ -184,6 +279,7 @@ StBuffer *st_buffer_from_ptr(float *data, size_t num_floats,
   buf->refcount = 1;
   buf->owns_data = take_ownership;
   buf->_backend_handle = NULL;
+  st_buffer_pending_reset(buf);
 
   return buf;
 }
@@ -210,9 +306,42 @@ void st_buffer_release(StBuffer *buf) {
 
   /* Refcount reached 0 — free backing storage. */
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
-  if (buf->_async_cmd_buf) {
-    /* Wait for and release any pending GPU command buffer first. */
-    st_buffer_metal_wait(buf, ST_BUFFER_WAIT_REASON_RELEASE);
+  const bool force_blocking_release =
+      st_buffer_env_true("MMATRIX_ST_BUFFER_RELEASE_BLOCKING");
+  void *pending_handles[ST_BUFFER_PENDING_CMDS_MAX] = {0};
+  const size_t pending_count =
+      st_buffer_pending_collect(buf, pending_handles, ST_BUFFER_PENDING_CMDS_MAX,
+                                /*clear_state=*/true);
+
+  if (pending_count > 0u && buf->_backend_handle) {
+    if (!force_blocking_release) {
+      /* Non-blocking path: defer handle release until GPU work completes. */
+      void *metal_handle = buf->_backend_handle;
+      if (st_buffer_metal_schedule_release_many(pending_handles, pending_count,
+                                                metal_handle)) {
+        buf->_backend_handle = NULL;
+        buf->data = NULL;
+        free(buf);
+        return;
+      }
+    }
+
+    /* Fallback path if scheduling failed for any reason. */
+    for (size_t i = 0; i < pending_count; ++i) {
+      st_buffer_metal_wait_handle(pending_handles[i], buf,
+                                  ST_BUFFER_WAIT_REASON_RELEASE);
+    }
+  } else if (pending_count > 0u) {
+    /* No owned Metal storage left to protect.
+     * For Metal buffers, release the retained command-buffer handle.
+     * For CPU buffers (tests may inject sentinel values), just clear marker. */
+    if (buf->type == ST_BUFFER_METAL) {
+      for (size_t i = 0; i < pending_count; ++i) {
+        st_buffer_metal_discard_handle(pending_handles[i]);
+      }
+    } else {
+      st_buffer_pending_reset(buf);
+    }
   }
   if (buf->_backend_handle) {
     /* Metal buffer: release the MTLBuffer; data pointer is owned by it. */
@@ -231,11 +360,20 @@ void st_buffer_release(StBuffer *buf) {
 }
 
 void st_buffer_wait_gpu(StBuffer *buf) {
-  if (!buf || !buf->_async_cmd_buf) {
+  if (!buf) {
     return;
   }
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
-  st_buffer_metal_wait(buf, ST_BUFFER_WAIT_REASON_BOUNDARY);
+  void *pending_handles[ST_BUFFER_PENDING_CMDS_MAX] = {0};
+  const size_t pending_count =
+      st_buffer_pending_collect(buf, pending_handles, ST_BUFFER_PENDING_CMDS_MAX,
+                                /*clear_state=*/true);
+  for (size_t i = 0; i < pending_count; ++i) {
+    st_buffer_metal_wait_handle(pending_handles[i], buf,
+                                ST_BUFFER_WAIT_REASON_BOUNDARY);
+  }
+#else
+  (void)buf;
 #endif
 }
 

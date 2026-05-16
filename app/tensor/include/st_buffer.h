@@ -23,6 +23,8 @@
 extern "C" {
 #endif
 
+#define ST_BUFFER_PENDING_CMDS_MAX 8u
+
 /* ------------------------------------------------------------------ */
 /*  Buffer type tag                                                    */
 /* ------------------------------------------------------------------ */
@@ -80,6 +82,13 @@ typedef struct StBuffer {
    * but not yet waited on (async dispatch).  Callers must invoke
    * st_buffer_wait_gpu() / st_tensor_sync() before reading ->data.    */
   void *_async_cmd_buf;
+
+  /* Bounded FIFO of pending GPU command buffers (bridge-retained handles).
+   * Oldest entry index = _async_cmd_head, count = _async_cmd_count.
+   * _async_cmd_buf remains a compatibility alias to the most-recent entry. */
+  void *_async_cmd_ring[ST_BUFFER_PENDING_CMDS_MAX];
+  unsigned char _async_cmd_head;
+  unsigned char _async_cmd_count;
 
   /* Last completed async GPU command duration, if the backend exposes one.
    * Used by benchmarks/profiling; false when unavailable or not measured. */
@@ -145,6 +154,11 @@ static inline void *st_buffer_metal_handle(const StBuffer *buf) {
 /// the pending marker.  No-op when no work is pending or buf is NULL.
 /// Must be called before reading buf->data after an async GPU dispatch.
 void st_buffer_wait_gpu(StBuffer *buf);
+
+/// Track one additional pending GPU command buffer handle for this buffer.
+/// cmd_handle must be a bridge-retained id<MTLCommandBuffer> on Apple paths.
+/// No-op when buf/cmd_handle is NULL.
+void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle);
 
 /// Return the last measured GPU command-buffer duration for this buffer.
 /// Returns false when no backend timestamp is available.

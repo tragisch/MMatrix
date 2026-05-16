@@ -39,10 +39,31 @@ void st_buffer_release_metal_handle(void *handle);
 /// completion of older command buffers first).
 void st_buffer_metal_discard_pending(StBuffer *buf);
 
+/// Release one bridge-retained command-buffer handle without waiting.
+void st_buffer_metal_discard_handle(void *cmd_handle);
+
 /// Wait for a pending GPU command buffer (bridge-retained id<MTLCommandBuffer>)
 /// stored in buf->_async_cmd_buf, then bridge-transfer ownership back to ARC.
 /// No-op if buf->_async_cmd_buf is NULL.
 void st_buffer_metal_wait(StBuffer *buf, StBufferWaitReason reason);
+
+/// Wait one bridge-retained command-buffer handle, then release it.
+/// Writes best-effort timing/profile into `profile_buf` when non-NULL.
+void st_buffer_metal_wait_handle(void *cmd_handle, StBuffer *profile_buf,
+								 StBufferWaitReason reason);
+
+/// Schedule asynchronous release of both handles once cmd buffer completes.
+/// cmd_handle must be a bridge-retained id<MTLCommandBuffer> and
+/// metal_handle must be a bridge-retained id<MTLBuffer>.
+/// Returns true when completion-handler registration succeeded.
+bool st_buffer_metal_schedule_release(void *cmd_handle, void *metal_handle);
+
+/// Schedule asynchronous wait+release for many command buffers and one
+/// retained MTLBuffer handle. `cmd_handles` entries must be bridge-retained
+/// id<MTLCommandBuffer> handles.
+bool st_buffer_metal_schedule_release_many(void **cmd_handles,
+										   size_t cmd_count,
+										   void *metal_handle);
 
 #ifdef __cplusplus
 }

@@ -239,3 +239,14 @@ void test_st_buffer_shared_views_should_reflect_writes(void) {
 
   st_buffer_release(buf);
 }
+
+void test_st_buffer_release_pending_without_backend_should_not_wait_or_crash(void) {
+  StBuffer *buf = st_buffer_alloc_cpu(8);
+  TEST_ASSERT_NOT_NULL(buf);
+  TEST_ASSERT_NULL(buf->_backend_handle);
+
+  /* Sentinel pending marker: must be safely discarded on release. */
+  buf->_async_cmd_buf = (void *)(uintptr_t)1;
+
+  st_buffer_release(buf);
+}

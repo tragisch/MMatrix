@@ -469,13 +469,6 @@ static bool mps_conv2d_forward(const FloatTensor *input,
         output->buf->_last_gpu_profile.command_ms =
             command_end_ms - command_start_ms;
 
-        /* Reusing same output: drop tracking of the previous pending command.
-           Commands on one queue execute in order; boundary sync on the latest
-           command still waits older ones transitively. */
-        if (output->buf->_async_cmd_buf) {
-          st_buffer_metal_discard_pending(output->buf);
-        }
-
         const double encode_start_ms = st_backend_now_ms();
         @try {
           id encodeCmdBuf = mpsCmdBuf ? mpsCmdBuf : (id)cmdBuf;
@@ -513,7 +506,8 @@ static bool mps_conv2d_forward(const FloatTensor *input,
           output->buf->_last_gpu_profile_valid = true;
 
           if (st_backend_get_conv_mps_async()) {
-            output->buf->_async_cmd_buf = (__bridge_retained void *)pendingCmdBuf;
+            st_buffer_track_pending_cmd(output->buf,
+                                        (__bridge_retained void *)pendingCmdBuf);
           } else {
             [pendingCmdBuf waitUntilCompleted];
           }
@@ -927,12 +921,6 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
     if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
-      /* Reusing same output: drop tracking of previous pending command.
-         Queue ordering preserves correctness for later boundary sync. */
-      if (output->buf->_async_cmd_buf) {
-        st_buffer_metal_discard_pending(output->buf);
-      }
-
       NSMutableArray<MPSGraphTensorData *> *inputsArray =
           [NSMutableArray arrayWithCapacity:executable.feedTensors.count];
       if (!st_mps_build_inputs_array(inputsArray,
@@ -967,7 +955,8 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
       }
       [cmdBuf commit];
       /* Store bridge-retained command buffer; st_buffer_metal_wait releases. */
-      output->buf->_async_cmd_buf = (__bridge_retained void *)cmdBuf;
+      st_buffer_track_pending_cmd(output->buf,
+                  (__bridge_retained void *)cmdBuf);
       /* Output is already in output->values via shared MTLBuffer — no readBytes. */
       return true;
     }
@@ -1293,12 +1282,6 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
     if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
-      /* Reusing same output: drop tracking of previous pending command.
-         Queue ordering preserves correctness for later boundary sync. */
-      if (output->buf->_async_cmd_buf) {
-        st_buffer_metal_discard_pending(output->buf);
-      }
-
       NSMutableArray<MPSGraphTensorData *> *inputsArray =
           [NSMutableArray arrayWithCapacity:executable.feedTensors.count];
       if (!st_mps_build_inputs_array(inputsArray,
@@ -1331,7 +1314,8 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
         return false;
       }
       [cmdBuf commit];
-      output->buf->_async_cmd_buf = (__bridge_retained void *)cmdBuf;
+      st_buffer_track_pending_cmd(output->buf,
+                  (__bridge_retained void *)cmdBuf);
       return true;
     }
 
