@@ -1,0 +1,16 @@
+site_name: MMatrix API Documentation
+repo_url: https://github.com/tragisch/MMatrix
+docs_dir: docs_src
+theme:
+  name: material
+nav:
+  - Home: doc/index.md
+  - Overview: README.md
+  - API:
+      - Tensor Core: doc/api/tensor/st.md
+      - BatchNorm: doc/api/tensor/st_batchnorm.md
+      - Convolution: doc/api/tensor/st_conv.md
+      - Pooling: doc/api/tensor/st_pool.md
+      - Shape Ops: doc/api/tensor/st_shape_ops.md
+  - Examples:
+      - Tensor NN forward pass: doc/examples/tensor_basic.md
