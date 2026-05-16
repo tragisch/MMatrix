@@ -30,6 +30,16 @@ jobs:
       - name: Ensure benchmark script is executable
         run: chmod +x benchmark/run_cross_framework.sh
 
+      - name: Prepare Bazel local registry mirror
+        run: |
+          sudo mkdir -p /Users/uwe/Documents/Programmierung
+          if [ ! -d /Users/uwe/Documents/Programmierung/Bazel-Registry/.git ]; then
+            sudo git clone --depth 1 https://github.com/bazelbuild/bazel-central-registry.git /Users/uwe/Documents/Programmierung/Bazel-Registry
+          else
+            sudo git -C /Users/uwe/Documents/Programmierung/Bazel-Registry fetch --depth 1 origin main
+            sudo git -C /Users/uwe/Documents/Programmierung/Bazel-Registry reset --hard origin/main
+          fi
+
       - name: Run cross-framework benchmark
         env:
           REPEATS: ${{ inputs.repeats }}
