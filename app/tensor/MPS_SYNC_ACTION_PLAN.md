@@ -4,7 +4,8 @@
 
 **P1: CPU-boundary audit** ✅ COMPLETED (2026-05-03)
 - `st_gpu_guard` hook: always-active, logs `[ST_GPU_GUARD]` and increments counter
-- 7 unit tests: 5 synthetic (Sentinel-based) + 1 real MPS async P2 test (skips gracefully if fastpath unavailable)
+- 7 unit tests: clean tensor baseline, 5 synthetic/Sentinel guard checks, and
+  1 real MPS async `conv -> st_get` test (skips gracefully if fastpath unavailable)
 - Guards applied to high-risk CPU APIs: `st_get`, `st_set`, `st_clone`, `st_to_f32`, `st_to_bf16`, `st_inplace_*`, `st_sum_axes`, `st_pad_nchw`
 - Outcome: 0 violations in current unit/integration test corpus
 - Next: P2 caller-side sync bundling before routing changes
@@ -115,12 +116,13 @@ Implemented guard:
   CPU APIs are called on a tensor with `_async_cmd_buf != NULL`.
 - The guard is diagnostic only. It never calls `st_tensor_sync()` and does not
   change runtime semantics.
-- Local verification: only synthetic assertions in `test_st_gpu_guard` trigger
-  the hook. The current productive tensor test corpus did not trigger guard
-  violations.
-- Interpretation: the known risk is currently not covered by regular unit
-  tests; it is expected to show up in runtime scenarios such as `MPS conv ->
-  st_get` or `MPS conv -> st_clone` without explicit sync.
+- Local verification: synthetic assertions trigger the hook, and the dedicated
+  real async `MPS conv -> st_get` test triggers it when the fastpath is
+  available. The broader productive tensor test corpus did not trigger
+  unexpected guard violations.
+- Interpretation: the known risk is now covered by one real pending-GPU path,
+  but not by every CPU API. Extend real-path coverage incrementally before
+  broadening runtime behavior.
 
 ### P2: Prefer end-of-pipeline sync in callers
 
@@ -131,8 +133,29 @@ Verification:
 
 - `bench_st_conv_medium_batch_profile`: `batched_sync_end` wins for
   `batch_ops>=2`.
-- `bench_st_pipeline`: `boundary_sync_only` should beat `sync_each_iter` for
-  MPS-backed medium/large cases.
+- `bench_st_pipeline`: compare `boundary_sync_only` against `sync_each_iter`
+  for MPS-backed medium/large cases; do not assume the boundary-only variant
+  wins for every fused pipeline shape.
+
+Current local snapshot (2026-05-14, macOS/Apple Silicon):
+
+- `bench_st_conv_medium_batch_profile` confirms P2 direction for independent
+  conv batches: `batched_sync_end` beats `serial_sync_each` for `batch_ops>=2`
+  (e.g. batch 8: `0.336 ms/op` vs `0.677 ms/op`).
+- `bench_st_pipeline` was updated to force MPS request (`ST_CONV_BACKEND_MPS`)
+  and explicit async mode (`st_backend_set_conv_mps_async(true)`) for cleaner
+  boundary-policy comparison.
+- Fused pipeline result is currently mixed:
+  - `conv+bn`: large favors boundary sync (`27.57` vs `38.85 ms/iter`),
+    medium slightly favors sync-each (`2.22` vs `2.40 ms/iter`).
+  - `conv+bn+pool`: medium/large currently favor sync-each in this run.
+
+Interpretation:
+
+- P2 is validated for independent conv batching.
+- For fused pipelines, we should not enforce a blanket routing/sync policy yet;
+  we need one more pass with stable repetition and variance capture before
+  changing defaults.
 
 ### P3: Add pipeline-like coverage before adding routing thresholds
 
@@ -146,6 +169,133 @@ class:
 
 Only encode a threshold if the benchmark result includes the target, date,
 hardware, and shape class.
+
+### P4: Cross-framework parity track (MLX / PyTorch as success metric)
+
+Goal:
+
+- Optimize tensor op runtime against real external baselines, not only internal
+  A/B comparisons.
+- Primary external references: MLX and PyTorch (MPS backend), same machine,
+  same shape, same dtype, synchronized timing boundaries.
+
+Execution target:
+
+- Use `tools/bench_conv_cross_framework.py` as the baseline harness.
+- Keep focus shape set aligned with internal routing decisions:
+  `conv_medium`, `conv_large`, `pw_medium`.
+- Extend the harness later for `conv+bn` and `conv+bn+pool` once the
+  single-op parity line is stable.
+
+Measurement rules (must hold for every published run):
+
+1. Same hardware snapshot in output (`platform`, CPU model, memory).
+2. Warmup and iteration counts documented; report median over repeated runs.
+3. Timing includes explicit sync/materialization boundaries for all frameworks.
+4. Compare with `ms/iter` and `GMAC/s`; reject results with mismatched shape
+   semantics or lazy-eval leakage.
+
+Acceptance bands for current optimization phase (conv focus):
+
+- `conv_large` (MPS candidate): MMatrix MPS path within **1.15x** of the faster
+  of MLX/PyTorch.
+- `conv_medium` (borderline): MMatrix best path within **1.25x** of the faster
+  of MLX/PyTorch.
+- `pw_medium` (1x1): stay on GEMM fast path; within **1.20x** of the faster
+  external baseline.
+
+If a case misses the band:
+
+- classify as one of: dispatch threshold miss, sync-boundary overhead,
+  host/device transfer overhead, kernel implementation gap.
+- open a targeted optimization item with measured deltas before changing global
+  thresholds.
+
+Near-term next step:
+
+- Run cross-framework benchmark with fixed repeats and archive result snapshot
+  (date + machine + commit) before further routing changes.
+- Use that snapshot as the regression gate for all upcoming MPS sync and
+  dispatch changes.
+
+Readiness gate (observed on 2026-05-16, local machine):
+
+- Python deps missing for external baselines: `torch`, `mlx`.
+- Local Bazel build of `//app/tensor:bench_st_ab_conv` blocked by
+  Xcode-version mismatch in toolchain resolution (`26.4.0.17E192` expected vs
+  local `26.5`).
+
+Unblock order:
+
+1. Fix Bazel/Xcode toolchain resolution and rebuild `bench_st_ab_conv`.
+2. Install/verify Python baseline deps (`torch`, `mlx`) for the active
+   interpreter.
+3. Re-run `tools/bench_conv_cross_framework.py` and archive first parity
+   snapshot.
+
+First parity snapshot (2026-05-16, local Apple Silicon, repeats=3):
+
+| Case          | c_gemm ms | c_mps_zero_copy_sync ms | c_mps_true_async_boundary ms | pytorch_mps ms | mlx ms | Winner             |
+| ------------- | --------- | ----------------------- | ---------------------------- | -------------- | ------ | ------------------ |
+| conv_medium   | 6.42      | 1.31                    | 1.86                         | 0.71           | 0.64   | MLX                |
+| conv_large    | 169.94    | 7.09                    | 10.61                        | 8.70           | 10.52  | MMatrix (MPS sync) |
+| pw_medium 1x1 | 0.68      | 1.19                    | 1.15                         | 0.34           | 0.93   | PyTorch            |
+
+Acceptance-band check:
+
+- `conv_large`: PASS (`7.09` vs best external `8.70`, better than target).
+- `conv_medium`: FAIL (best MMatrix `1.31` vs best external `0.64` → `2.05x`,
+  target `<=1.25x`).
+- `pw_medium`: FAIL (best MMatrix `0.68` vs best external `0.34` → `2.00x`,
+  target `<=1.20x`).
+
+Optimization priority from snapshot:
+
+1. `conv_medium`: reduce submit/boundary overhead (focus on command-buffer
+  lifecycle and host dispatch overhead, not kernel math).
+2. `pw_medium` (1x1): keep/strengthen GEMM routing and avoid MPS dispatch for
+  this workload class by default.
+3. Preserve current `conv_large` behavior; avoid regressions while tuning
+  medium/pointwise thresholds.
+
+### P5: Implementation sprint for medium-gap closure
+
+Objective:
+
+- Reduce `conv_medium` host/submit/boundary gap without regressing
+  `conv_large`.
+- Keep 1x1 (`pw_medium`) on GEMM-default behavior unless MPS proves faster
+  under the same benchmark contract.
+
+Completed in this sprint (2026-05-16):
+
+- Fused async output-write ordering fix in MPS backend:
+  - `st_backend_conv2d_batchnorm2d_forward_mps`
+  - `st_backend_conv2d_batchnorm2d_pool_forward_mps`
+- Change: drain `output->buf->_async_cmd_buf` **before** encoding/committing a
+  new write to the same output buffer (aligns fused path with conv fastpath
+  rule, avoids overlapping writes/orphaned pending states).
+
+Smoke validation after change (`bench_st_pipeline`, opt build):
+
+- `conv+bn` medium: boundary-sync faster than sync-each in this run.
+- `conv+bn` large: sync-each faster in this run.
+- `conv+bn+pool` medium/large: sync-each faster in this run.
+
+Interpretation:
+
+- The ordering fix is retained for correctness/scheduling hygiene.
+- Boundary policy for fused pipelines remains shape-sensitive; no global default
+  flip yet.
+
+Next implementation tasks:
+
+1. Add variance-aware repeated pipeline measurement (fixed seed + median +
+   p10/p90) before changing fused sync defaults.
+2. Add explicit routing guard for pointwise 1x1 workloads in AUTO mode
+   (documented by parity snapshot where GEMM beats MPS for `pw_medium`).
+3. Re-run cross-framework parity after each routing/sync change and keep
+   `conv_large` within current pass band.
 
 ## Do Not Do Yet
 

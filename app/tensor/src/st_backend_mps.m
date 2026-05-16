@@ -883,6 +883,12 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
     if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
+      /* Standalone async-safe rule: before writing to the same output
+         buffer again, drain the previous pending command buffer. */
+      if (output->buf->_async_cmd_buf) {
+        st_buffer_metal_wait(output->buf);
+      }
+
       /* Build feedMap for order-independent inputsArray construction. */
       NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
           [NSMutableDictionary dictionaryWithDictionary:feeds];
@@ -915,11 +921,6 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
         return false;
       }
       [cmdBuf commit];
-      /* Drain any previously-pending cmd buffer for this output before
-         overwriting (prevents orphaned cmd buffers in iterative loops). */
-      if (output->buf->_async_cmd_buf) {
-        st_buffer_metal_wait(output->buf);
-      }
       /* Store bridge-retained command buffer; st_buffer_metal_wait releases. */
       output->buf->_async_cmd_buf = (__bridge_retained void *)cmdBuf;
       /* Output is already in output->values via shared MTLBuffer — no readBytes. */
@@ -1240,6 +1241,12 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
 
     /* ---- Inference path: executable + pre-allocated output MTLBuffer ---- */
     if (executable && output->buf && st_buffer_metal_handle(output->buf)) {
+      /* Standalone async-safe rule: before writing to the same output
+         buffer again, drain the previous pending command buffer. */
+      if (output->buf->_async_cmd_buf) {
+        st_buffer_metal_wait(output->buf);
+      }
+
       NSMutableDictionary<MPSGraphTensor *, MPSGraphTensorData *> *feedMap =
           [NSMutableDictionary dictionaryWithDictionary:feeds];
       NSMutableArray<MPSGraphTensorData *> *inputsArray =
@@ -1270,11 +1277,6 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
         return false;
       }
       [cmdBuf commit];
-      /* Drain any previously-pending cmd buffer for this output before
-         overwriting (prevents orphaned cmd buffers in iterative loops). */
-      if (output->buf->_async_cmd_buf) {
-        st_buffer_metal_wait(output->buf);
-      }
       output->buf->_async_cmd_buf = (__bridge_retained void *)cmdBuf;
       return true;
     }

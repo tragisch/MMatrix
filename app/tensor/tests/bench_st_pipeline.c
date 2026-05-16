@@ -16,6 +16,7 @@
 #include "st_backend.h"
 #include "st_conv.h"
 #include "st_pool.h"
+#include "log.h"
 
 #include <inttypes.h>
 #include <stdint.h>
@@ -98,7 +99,7 @@ static void bench_fused_conv_bn(const PipelineCase *cfg,
   StConv2dParams p = st_conv2d_default_params();
   p.stride_h = p.stride_w = cfg->stride;
   p.pad_h    = p.pad_w    = cfg->pad;
-  p.backend  = ST_CONV_BACKEND_AUTO;
+  p.backend  = ST_CONV_BACKEND_MPS;
 
   size_t out_h = 0, out_w = 0;
   if (!st_conv2d_output_hw(cfg->h, cfg->w, cfg->k, cfg->k, &p, &out_h,
@@ -181,7 +182,7 @@ static void bench_fused_conv_bn_pool(const PipelineCase *cfg,
   StConv2dParams p = st_conv2d_default_params();
   p.stride_h = p.stride_w = cfg->stride;
   p.pad_h    = p.pad_w    = cfg->pad;
-  p.backend  = ST_CONV_BACKEND_AUTO;
+  p.backend  = ST_CONV_BACKEND_MPS;
 
   StPool2dParams pool;
   pool.pool_type = ST_POOL_MAX;
@@ -281,14 +282,17 @@ cleanup_conv_bn_relu:
 /* ------------------------------------------------------------------ */
 
 int main(void) {
+  const bool prev_async = st_backend_get_conv_mps_async();
+  st_backend_set_conv_mps_async(true);
+  log_set_level(LOG_WARN);
   printf("=== bench_st_pipeline ===\n\n");
 
   static const PipelineCase cases[] = {
-    /* small: below MPS threshold → CPU */
+    /* small: forced-MPS stress case; may skip if MPS rejects the shape */
     { "pipe-small",  1,  8,  8, 16, 16, 3, 1, 1, 2, 20 },
     /* medium */
     { "pipe-medium", 4, 32, 64, 56, 56, 3, 1, 1, 2, 10 },
-    /* large: above threshold → MPS on Apple Silicon */
+    /* large */
     { "pipe-large",  8, 64,128,112,112, 3, 1, 1, 2,  5 },
   };
 
@@ -309,5 +313,6 @@ int main(void) {
     bench_fused_conv_bn_pool(&cases[i], true);
 
   printf("\n=== done ===\n");
+  st_backend_set_conv_mps_async(prev_async);
   return 0;
 }
