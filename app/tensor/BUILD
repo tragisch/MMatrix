@@ -105,6 +105,7 @@ cc_library(
         "include/st_dtype.h",
         "include/st_gpu_guard.h",
         "include/st_pool.h",
+        "include/st_shape_ops.h",
         "include/st_workspace.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
@@ -240,6 +241,14 @@ unity_test(
 unity_test(
     name = "test_st_gpu_guard",
     srcs = ["tests/test_st_gpu_guard.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [":st"],
+)
+
+unity_test(
+    name = "test_st_shape_ops",
+    srcs = ["tests/test_st_shape_ops.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = [":st"],

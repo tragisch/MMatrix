@@ -1166,3 +1166,169 @@ FloatTensor *st_pad_nchw(const FloatTensor *input, size_t pad_h, size_t pad_w,
 
   return result;
 }
+
+/* ============================================================================
+ * Shape Transformation Operations (st_shape_ops.h)
+ * ============================================================================ */
+
+FloatTensor *st_flatten(const FloatTensor *tensor, size_t start_axis,
+                        size_t end_axis) {
+  if (tensor == NULL || start_axis > end_axis || end_axis > tensor->ndim) {
+    return NULL;
+  }
+
+  /* Edge case: no flattening needed. */
+  if (start_axis == end_axis) {
+    return st_clone(tensor);
+  }
+
+  /* Compute merged dimension size. */
+  size_t merge_size = 1;
+  for (size_t i = start_axis; i < end_axis; ++i) {
+    if (merge_size > SIZE_MAX / tensor->shape[i]) {
+      return NULL;  /* overflow */
+    }
+    merge_size *= tensor->shape[i];
+  }
+
+  /* Build new shape: [0..start_axis) + merged + (end_axis..ndim) */
+  size_t new_ndim = tensor->ndim - (end_axis - start_axis) + 1;
+  if (new_ndim > ST_MAX_DIMS) {
+    return NULL;
+  }
+
+  size_t new_shape[ST_MAX_DIMS];
+  ptrdiff_t new_strides[ST_MAX_DIMS];
+
+  /* Copy axes before start_axis. */
+  for (size_t i = 0; i < start_axis; ++i) {
+    new_shape[i] = tensor->shape[i];
+    new_strides[i] = tensor->strides[i];
+  }
+
+  /* Insert merged axis. */
+  new_shape[start_axis] = merge_size;
+  /* Stride of merged axis is stride of innermost merged axis. */
+  new_strides[start_axis] = tensor->strides[end_axis - 1];
+
+  /* Copy axes after end_axis. */
+  for (size_t i = end_axis; i < tensor->ndim; ++i) {
+    new_shape[start_axis + 1 + (i - end_axis)] = tensor->shape[i];
+    new_strides[start_axis + 1 + (i - end_axis)] = tensor->strides[i];
+  }
+
+  /* Create view. */
+  return st_view((FloatTensor *)tensor, new_ndim, new_shape, new_strides, 0);
+}
+
+FloatTensor *st_flatten_all(const FloatTensor *tensor) {
+  if (tensor == NULL) {
+    return NULL;
+  }
+  return st_flatten(tensor, 0, tensor->ndim);
+}
+
+FloatTensor *st_permute(const FloatTensor *tensor, const size_t *axes) {
+  if (tensor == NULL || axes == NULL) {
+    return NULL;
+  }
+  return st_permute_view((FloatTensor *)tensor, axes);
+}
+
+FloatTensor *st_concat(const FloatTensor *const *tensors, size_t num_tensors,
+                       size_t axis) {
+  if (tensors == NULL || num_tensors == 0) {
+    return NULL;
+  }
+
+  /* Validate all tensors. */
+  for (size_t i = 0; i < num_tensors; ++i) {
+    if (tensors[i] == NULL || tensors[i]->ndim == 0) {
+      return NULL;
+    }
+  }
+
+  /* All tensors must have same ndim and shape except on concat axis. */
+  size_t ndim = tensors[0]->ndim;
+  if (axis >= ndim) {
+    return NULL;
+  }
+
+  for (size_t i = 1; i < num_tensors; ++i) {
+    if (tensors[i]->ndim != ndim) {
+      return NULL;
+    }
+    for (size_t d = 0; d < ndim; ++d) {
+      if (d != axis && tensors[i]->shape[d] != tensors[0]->shape[d]) {
+        return NULL;
+      }
+    }
+  }
+
+  /* Compute output shape. */
+  size_t out_shape[ST_MAX_DIMS];
+  memcpy(out_shape, tensors[0]->shape, ndim * sizeof(size_t));
+
+  size_t concat_size = 0;
+  for (size_t i = 0; i < num_tensors; ++i) {
+    if (concat_size > SIZE_MAX - tensors[i]->shape[axis]) {
+      return NULL;  /* overflow */
+    }
+    concat_size += tensors[i]->shape[axis];
+  }
+  out_shape[axis] = concat_size;
+
+  /* Create output tensor (contiguous, same dtype as first input). */
+  FloatTensor *result = NULL;
+  if (tensors[0]->dtype == ST_DTYPE_BF16) {
+    result = st_create_bf16(ndim, out_shape);
+  } else {
+    result = st_create(ndim, out_shape);
+  }
+
+  if (result == NULL) {
+    return NULL;
+  }
+
+  /* Copy data from each tensor into result. */
+  size_t offset_on_concat_axis = 0;
+
+  for (size_t t = 0; t < num_tensors; ++t) {
+    const FloatTensor *src = tensors[t];
+    size_t src_elements = src->numel;
+
+    /* For each element in src, compute its offset in result. */
+    for (size_t elem = 0; elem < src_elements; ++elem) {
+      /* Convert flat index to multi-index in src. */
+      size_t multi_idx[ST_MAX_DIMS];
+      size_t temp = elem;
+      for (int d = (int)ndim - 1; d >= 0; --d) {
+        multi_idx[d] = temp % src->shape[d];
+        temp /= src->shape[d];
+      }
+
+      /* Adjust concat axis for result position. */
+      multi_idx[axis] += offset_on_concat_axis;
+
+      /* Compute flat index in result. */
+      size_t result_idx = 0;
+      size_t mult = 1;
+      for (int d = (int)ndim - 1; d >= 0; --d) {
+        result_idx += multi_idx[d] * mult;
+        mult *= result->shape[d];
+      }
+
+      /* Copy element (respects dtype). */
+      if (src->dtype == ST_DTYPE_BF16) {
+        uint16_t bf16_val = ((uint16_t *)src->values)[elem];
+        ((uint16_t *)result->values)[result_idx] = bf16_val;
+      } else {
+        result->values[result_idx] = src->values[elem];
+      }
+    }
+
+    offset_on_concat_axis += src->shape[axis];
+  }
+
+  return result;
+}
