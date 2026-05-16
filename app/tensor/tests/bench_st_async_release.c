@@ -109,6 +109,8 @@ static bool run_variant(const char *name, bool blocking_release, size_t warmup,
     st_destroy(out);
   }
 
+  st_buffer_pending_stats_reset();
+
   uint64_t t0 = now_ns();
   size_t ok_iters = 0;
   for (size_t i = 0; i < iters; ++i) {
@@ -134,8 +136,17 @@ static bool run_variant(const char *name, bool blocking_release, size_t warmup,
     return false;
   }
 
+  const StBufferPendingStats stats = st_buffer_pending_stats_get();
+  const double avg_depth =
+      stats.samples > 0u ? (double)stats.total_depth / (double)stats.samples
+                         : 0.0;
+
   printf("%s: %.3f ms/iter (%zu iters)\n", name, elapsed_ms(t0, t1, ok_iters),
          ok_iters);
+  printf("  pending_depth: avg=%.2f max=%zu samples=%" PRIu64
+         " enqueued=%" PRIu64 " evicted=%" PRIu64 "\n",
+         avg_depth, stats.max_depth, stats.samples, stats.enqueued,
+         stats.evicted);
   return true;
 }
 

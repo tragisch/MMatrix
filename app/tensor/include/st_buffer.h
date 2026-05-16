@@ -18,6 +18,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,6 +44,14 @@ typedef struct StBufferGpuProfile {
   double sync_wait_prewrite_ms;
   double sync_wait_boundary_ms;
 } StBufferGpuProfile;
+
+typedef struct StBufferPendingStats {
+  uint64_t samples;
+  uint64_t total_depth;
+  uint64_t enqueued;
+  uint64_t evicted;
+  size_t max_depth;
+} StBufferPendingStats;
 
 /* ------------------------------------------------------------------ */
 /*  StBuffer                                                           */
@@ -159,6 +168,12 @@ void st_buffer_wait_gpu(StBuffer *buf);
 /// cmd_handle must be a bridge-retained id<MTLCommandBuffer> on Apple paths.
 /// No-op when buf/cmd_handle is NULL.
 void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle);
+
+/// Reset process-wide pending-depth telemetry counters.
+void st_buffer_pending_stats_reset(void);
+
+/// Snapshot process-wide pending-depth telemetry counters.
+StBufferPendingStats st_buffer_pending_stats_get(void);
 
 /// Return the last measured GPU command-buffer duration for this buffer.
 /// Returns false when no backend timestamp is available.

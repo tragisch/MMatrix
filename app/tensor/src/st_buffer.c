@@ -17,6 +17,32 @@
 #include "st_buffer_metal.h"
 #endif
 
+static _Atomic uint64_t g_pending_samples = 0u;
+static _Atomic uint64_t g_pending_total_depth = 0u;
+static _Atomic uint64_t g_pending_enqueued = 0u;
+static _Atomic uint64_t g_pending_evicted = 0u;
+static _Atomic size_t g_pending_max_depth = 0u;
+
+void st_buffer_pending_stats_reset(void) {
+  atomic_store_explicit(&g_pending_samples, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_pending_total_depth, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_pending_enqueued, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_pending_evicted, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_pending_max_depth, 0u, memory_order_relaxed);
+}
+
+StBufferPendingStats st_buffer_pending_stats_get(void) {
+  StBufferPendingStats s;
+  s.samples = atomic_load_explicit(&g_pending_samples, memory_order_relaxed);
+  s.total_depth =
+      atomic_load_explicit(&g_pending_total_depth, memory_order_relaxed);
+  s.enqueued = atomic_load_explicit(&g_pending_enqueued, memory_order_relaxed);
+  s.evicted = atomic_load_explicit(&g_pending_evicted, memory_order_relaxed);
+  s.max_depth =
+      atomic_load_explicit(&g_pending_max_depth, memory_order_relaxed);
+  return s;
+}
+
 static void st_buffer_pending_reset(StBuffer *buf) {
   if (!buf) {
     return;
@@ -79,6 +105,7 @@ void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle) {
 #endif
     }
     buf->_async_cmd_ring[evict_idx] = NULL;
+    atomic_fetch_add_explicit(&g_pending_evicted, 1u, memory_order_relaxed);
     buf->_async_cmd_head =
         (unsigned char)(((size_t)buf->_async_cmd_head + 1u) %
                         ST_BUFFER_PENDING_CMDS_MAX);
@@ -91,6 +118,19 @@ void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle) {
   buf->_async_cmd_ring[write_idx] = cmd_handle;
   buf->_async_cmd_count = (unsigned char)((size_t)buf->_async_cmd_count + 1u);
   buf->_async_cmd_buf = cmd_handle;
+
+  const size_t depth = (size_t)buf->_async_cmd_count;
+  atomic_fetch_add_explicit(&g_pending_enqueued, 1u, memory_order_relaxed);
+  atomic_fetch_add_explicit(&g_pending_samples, 1u, memory_order_relaxed);
+  atomic_fetch_add_explicit(&g_pending_total_depth, (uint64_t)depth,
+                            memory_order_relaxed);
+  size_t cur_max =
+      atomic_load_explicit(&g_pending_max_depth, memory_order_relaxed);
+  while (depth > cur_max &&
+         !atomic_compare_exchange_weak_explicit(
+             &g_pending_max_depth, &cur_max, depth, memory_order_relaxed,
+             memory_order_relaxed)) {
+  }
 }
 
 /* ------------------------------------------------------------------ */
