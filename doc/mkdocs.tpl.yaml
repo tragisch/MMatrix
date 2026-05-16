@@ -7,6 +7,12 @@ nav:
   - Home: doc/index.md
   - Overview: README.md
   - API:
+      - Matrix:
+        - Dense Double (dm): doc/api/matrix/dm.md
+        - Dense Float (sm): doc/api/matrix/sm.md
+        - Sparse Double (dms): doc/api/matrix/dms.md
+        - I/O (m_io): doc/api/matrix/m_io.md
+        - Conversion (m_convert): doc/api/matrix/m_convert.md
       - Tensor Core: doc/api/tensor/st.md
       - BatchNorm: doc/api/tensor/st_batchnorm.md
       - Convolution: doc/api/tensor/st_conv.md

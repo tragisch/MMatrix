@@ -6,69 +6,130 @@ Public API for tensor shape/view transformation operations.
 
 ### `st_flatten`
 
-Flattens an axis range into a single axis.
+`st_flatten(const FloatTensor *tensor, size_t start_axis, size_t end_axis)`
 
-- `start_axis`: inclusive
-- `end_axis`: exclusive
+Flatten a range of axes into a single axis.
 
-Returns a new view (no data copy), or `NULL` on error.
+Parameters:
+
+- `tensor` (`const FloatTensor *`): Input tensor.
+- `start_axis` (`size_t`): First axis to merge (inclusive).
+- `end_axis` (`size_t`): Last axis to merge (exclusive).
+
+Returns: New flattened view (no data copy), or NULL on error.
 
 ### `st_flatten_all`
 
-Flattens all axes into a 1D view.
+`st_flatten_all(const FloatTensor *tensor)`
+
+Flatten all axes into a 1D view.
+
+Parameters:
+
+- `tensor` (`const FloatTensor *`): Input tensor.
+
+Returns: New 1D view (no data copy), or NULL on error.
 
 ### `st_permute`
 
-Permutes tensor axes.
+`st_permute(const FloatTensor *tensor, const size_t *axes)`
 
-- `axes[i]` defines which input axis maps to output axis `i`.
+Permute tensor axes.
+
+Parameters:
+
+- `tensor` (`const FloatTensor *`): Input tensor.
+- `axes` (`const size_t *`): Permutation array where axes[i] maps output axis i.
+
+Returns: New permuted view (no data copy), or NULL on error.
 
 ### `st_reshape_to`
 
-Inline convenience alias for `st_reshape`.
+`bool st_reshape_to(FloatTensor *tensor, size_t new_ndim, const size_t *new_shape)`
+
+Convenience alias for st_reshape.
+
+Parameters:
+
+- `tensor` (`FloatTensor *`)
+- `new_ndim` (`size_t`)
+- `new_shape` (`const size_t *`)
 
 ### `st_concat`
 
-Concatenates multiple tensors along one axis.
+`st_concat(const FloatTensor *const *tensors, size_t num_tensors, size_t axis)`
 
-- `tensors`: array of input tensors
-- `num_tensors`: number of tensors
-- `axis`: concatenation axis
+Concatenate multiple tensors along one axis.
 
-Returns a new contiguous tensor, or `NULL`.
+Parameters:
 
-### `st_concat_varargs`
+- `tensors` (`const FloatTensor *const *`): Array of input tensors.
+- `num_tensors` (`size_t`): Number of entries in tensors.
+- `axis` (`size_t`): Concatenation axis.
 
-Macro helper that simplifies `st_concat` usage with array literals.
+Returns: New contiguous tensor on success, or NULL on error.
 
 ### `st_squeeze`
 
-Removes all dimensions of size `1`.
+`st_squeeze(const FloatTensor *tensor)`
+
+Remove all dimensions of size 1.
+
+Parameters:
+
+- `tensor` (`const FloatTensor *`): Input tensor.
+
+Returns: New squeezed view (no data copy), or NULL on error.
 
 ### `st_squeeze_dim`
 
-Removes one dimension only if its size is `1`.
+`st_squeeze_dim(const FloatTensor *tensor, size_t axis)`
+
+Remove one dimension if and only if its size is 1.
+
+Parameters:
+
+- `tensor` (`const FloatTensor *`): Input tensor.
+- `axis` (`size_t`): Axis to remove.
+
+Returns: New squeezed view (no data copy), or NULL on error.
 
 ### `st_unsqueeze`
 
-Inserts a new dimension of size `1` at position `axis`.
+`st_unsqueeze(const FloatTensor *tensor, size_t axis)`
+
+Insert a new dimension of size 1.
+
+Parameters:
+
+- `tensor` (`const FloatTensor *`): Input tensor.
+- `axis` (`size_t`): Insert position in [0, ndim].
+
+Returns: New unsqueezed view (no data copy), or NULL on error.
 
 ### `st_expand`
 
-Expands a size-1 dimension by repetition.
+`st_expand(const FloatTensor *tensor, size_t axis, size_t count)`
 
-- `axis` must currently have size `1`.
-- `count` is the replication count.
+Expand a size-1 dimension by repetition.
 
-Returns a new tensor with copied data, or `NULL`.
+Parameters:
+
+- `tensor` (`const FloatTensor *`): Input tensor.
+- `axis` (`size_t`): Axis to expand (must currently be size 1).
+- `count` (`size_t`): Replication count.
+
+Returns: New tensor with copied data, or NULL on error.
 
 ### `st_split`
 
-Splits a tensor into equal parts along one axis.
+`bool st_split(const FloatTensor *tensor, size_t axis, size_t num_splits, FloatTensor ***out_splits)`
 
-- `num_splits`: number of equal splits
-- `out_splits`: output array with split tensor handles
+Split a tensor into equal parts along one axis.
 
-Returns `true` on success, `false` on error/uneven split.
+Parameters:
 
-Note: The caller must destroy each split tensor and then free `*out_splits`.
+- `tensor` (`const FloatTensor *`): Input tensor.
+- `axis` (`size_t`): Split axis.
+- `num_splits` (`size_t`): Number of equally sized splits.
+- `out_splits` (`FloatTensor ***`): Output array of split tensor handles.
