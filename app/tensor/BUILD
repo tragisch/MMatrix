@@ -177,6 +177,7 @@ objc_library(
         "-ObjC",
         "-fobjc-arc",
     ],
+    defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
     includes = [
         "include",
         "src",

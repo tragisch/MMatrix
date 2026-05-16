@@ -1,3 +1,8 @@
+/**
+ * @file m_convert.h
+ * @brief Public conversion API between dense/sparse matrix and tensor types.
+ */
+
 /*
  * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
  * SPDX-License-Identifier: MIT
@@ -18,17 +23,41 @@
 /*       Matrix/Tensor Conversion     */
 /**************************************/
 
-// Convert sparse COO double matrix to dense double matrix.
+/**
+ * @brief Convert sparse COO double matrix to dense double matrix.
+ * @param src Source sparse matrix.
+ * @return Dense matrix with all COO entries expanded, or NULL on allocation failure.
+ */
 DoubleMatrix *dms_to_dm(const DoubleSparseMatrix *src);
-// Convert dense double matrix to sparse COO double matrix.
+/**
+ * @brief Convert dense double matrix to sparse COO double matrix.
+ * @param src Source dense matrix.
+ * @return Sparse matrix with zero entries removed, or NULL on allocation failure.
+ */
 DoubleSparseMatrix *dm_to_dms(const DoubleMatrix *src);
-// Convert dense float matrix to dense double matrix.
+/**
+ * @brief Convert dense float matrix to dense double matrix.
+ * @param sm Source float matrix.
+ * @return Dense double matrix with precision-expanded values, or NULL on allocation failure.
+ */
 DoubleMatrix *sm_to_dm(const FloatMatrix *sm);
-// Convert dense double matrix to dense float matrix.
+/**
+ * @brief Convert dense double matrix to dense float matrix.
+ * @param src Source double matrix.
+ * @return Dense float matrix with precision-reduced values, or NULL on allocation failure.
+ */
 FloatMatrix *dm_to_sm(const DoubleMatrix *src);
-// Convert dense float matrix to float tensor.
+/**
+ * @brief Convert dense float matrix to float tensor.
+ * @param src Source float matrix (shape: rows x cols interpreted as batch 1, rows, cols, 1).
+ * @return Float tensor with matrix reshaped, or NULL on allocation failure.
+ */
 FloatTensor *st_from_sm(const FloatMatrix *src);
-// Convert float tensor to dense float matrix.
+/**
+ * @brief Convert float tensor to dense float matrix.
+ * @param src Source float tensor (extracted as 2D: flatten/reshape to rows x cols).
+ * @return Dense float matrix, or NULL on allocation failure or invalid tensor shape.
+ */
 FloatMatrix *sm_from_st(const FloatTensor *src);
 
-#endif // DM_CONVERT_H
+#endif  // DM_CONVERT_H
