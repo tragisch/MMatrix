@@ -91,6 +91,27 @@ static size_t st_buffer_pending_collect(StBuffer *buf, void **out_handles,
   return n;
 }
 
+static size_t st_buffer_env_size_t(const char *name, size_t fallback,
+                                   size_t max_value) {
+  if (!name) {
+    return fallback;
+  }
+  const char *v = getenv(name);
+  if (!v || v[0] == '\0') {
+    return fallback;
+  }
+  char *end = NULL;
+  unsigned long parsed = strtoul(v, &end, 10);
+  if (end == v || (end && *end != '\0')) {
+    return fallback;
+  }
+  size_t out = (size_t)parsed;
+  if (out > max_value) {
+    out = max_value;
+  }
+  return out;
+}
+
 void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle) {
   if (!buf || !cmd_handle) {
     return;
@@ -131,6 +152,24 @@ void st_buffer_track_pending_cmd(StBuffer *buf, void *cmd_handle) {
              &g_pending_max_depth, &cur_max, depth, memory_order_relaxed,
              memory_order_relaxed)) {
   }
+
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
+  if (buf->type == ST_BUFFER_METAL) {
+    const size_t auto_sync_every = st_buffer_env_size_t(
+        "MMATRIX_ST_ASYNC_SYNC_EVERY", 0u, ST_BUFFER_PENDING_CMDS_MAX);
+    if (auto_sync_every > 0u && depth >= auto_sync_every) {
+      void *pending_handles[ST_BUFFER_PENDING_CMDS_MAX] = {0};
+      const size_t pending_count =
+          st_buffer_pending_collect(buf, pending_handles,
+                                    ST_BUFFER_PENDING_CMDS_MAX,
+                                    /*clear_state=*/true);
+      for (size_t i = 0; i < pending_count; ++i) {
+        st_buffer_metal_wait_handle(pending_handles[i], buf,
+                                    ST_BUFFER_WAIT_REASON_BOUNDARY);
+      }
+    }
+  }
+#endif
 }
 
 /* ------------------------------------------------------------------ */
