@@ -541,8 +541,113 @@ static bool mps_conv2d_forward(const FloatTensor *input,
 }
 
 /* ================================================================== */
-/*  Pool forward — delegate to existing st_mps.h functions             */
+/*  Pool forward — preallocated GPU output (async) or fallback         */
 /* ================================================================== */
+
+/// MaxPool2D with preallocated Metal output (async, no readBytes).
+/// Returns NULL on failure, or a bridge-retained command buffer handle
+/// that caller must track via st_buffer_track_pending_cmd().
+static void *mps_maxpool2d_forward_preallocated(
+    const FloatTensor *input, size_t kh, size_t kw, size_t sh, size_t sw,
+    size_t ph, size_t pw, FloatTensor *output) {
+  if (!input || !output || !input->buf || !output->buf) return NULL;
+  
+  id<MTLDevice> device = _st_be_mps_device();
+  id<MTLCommandQueue> queue = _st_be_mps_queue();
+  if (!device || !queue) return NULL;
+
+  const size_t n = input->shape[0], c = input->shape[1],
+               h = input->shape[2], w = input->shape[3],
+               oh = output->shape[2], ow = output->shape[3];
+
+  @autoreleasepool {
+  /* ---- Executable cache by shape signature ---- */
+  NSString *cacheKey = [NSString stringWithFormat:
+      @"maxpool:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu",
+      n, c, h, w, kh, kw, sh, sw, ph, pw];
+
+  static NSCache *pool_cache = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ pool_cache = [[NSCache alloc] init]; });
+
+  NSDictionary *cached = [pool_cache objectForKey:cacheKey];
+  MPSGraphExecutable *executable = nil;
+  MPSGraphTensor *inT, *resultT;
+  MPSGraph *graph;
+
+  if (cached) {
+    executable = cached[@"executable"];
+    if ([executable isEqual:[NSNull null]]) executable = nil;
+    graph = cached[@"graph"];
+    inT = cached[@"inT"];
+    resultT = cached[@"resultT"];
+  } else {
+    /* Build and compile graph. */
+    graph = [[MPSGraph alloc] init];
+    inT = [graph placeholderWithShape:@[@(n), @(c), @(h), @(w)]
+                             dataType:MPSDataTypeFloat32 name:@"input"];
+    MPSGraphPooling2DOpDescriptor *desc =
+        [MPSGraphPooling2DOpDescriptor
+            descriptorWithKernelWidth:(NSUInteger)kw
+                        kernelHeight:(NSUInteger)kh
+                           strideInX:(NSUInteger)sw
+                           strideInY:(NSUInteger)sh
+                        paddingStyle:MPSGraphPaddingStyleExplicit
+                          dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
+    desc.paddingLeft = (NSUInteger)pw;
+    desc.paddingRight = (NSUInteger)pw;
+    desc.paddingTop = (NSUInteger)ph;
+    desc.paddingBottom = (NSUInteger)ph;
+    resultT = [graph maxPooling2DWithSourceTensor:inT descriptor:desc name:@"pool"];
+
+    /* Compile to executable. */
+    executable = [graph
+        compileWithDevice:[MPSGraphDevice deviceWithMTLDevice:device]
+                    feeds:@{inT: [[MPSGraphShapedType alloc]
+                        initWithShape:@[@(n), @(c), @(h), @(w)]
+                              dataType:MPSDataTypeFloat32]}
+            targetTensors:@[resultT] targetOperations:nil compilationDescriptor:nil];
+
+    [pool_cache setObject:@{
+      @"executable": executable ?: [NSNull null],
+      @"graph": graph, @"inT": inT, @"resultT": resultT
+    } forKey:cacheKey];
+  }
+
+  if (!executable) return NULL;
+
+  /* ---- Feed input + encode to pre-allocated output ---- */
+  void *in_metal = st_buffer_metal_handle(input->buf);
+  void *out_metal = st_buffer_metal_handle(output->buf);
+  if (!in_metal || !out_metal) return NULL;
+
+  id<MTLBuffer> inBuf = (__bridge id<MTLBuffer>)in_metal;
+  id<MTLBuffer> outBuf = (__bridge id<MTLBuffer>)out_metal;
+
+  MPSGraphTensorData *inData = [[MPSGraphTensorData alloc]
+      initWithMTLBuffer:inBuf shape:@[@(n), @(c), @(h), @(w)]
+            dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *outData = [[MPSGraphTensorData alloc]
+      initWithMTLBuffer:outBuf shape:@[@(n), @(c), @(oh), @(ow)]
+            dataType:MPSDataTypeFloat32];
+
+  /* ---- Async encode ---- */
+  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  if (!cmdBuf) return NULL;
+
+  @try {
+    [executable encodeToCommandBuffer:cmdBuf
+                           inputsArray:@[inData]
+                          resultsArray:@[outData]
+                   executionDescriptor:nil];
+  } @catch (NSException *e) {
+    return NULL;
+  }
+
+  [cmdBuf commit];
+  return (__bridge_retained void *)cmdBuf;
+  } // @autoreleasepool
+}
 
 static bool mps_maxpool2d_forward(const FloatTensor *input, size_t kh,
                                   size_t kw, size_t sh, size_t sw, size_t ph,
@@ -557,9 +662,118 @@ static bool mps_maxpool2d_forward(const FloatTensor *input, size_t kh,
   const size_t oh = output->shape[2];
   const size_t ow = output->shape[3];
 
+  /* ---- Try preallocated path (async, no readBytes) ---- */
+  if (output->buf && st_buffer_metal_handle(output->buf)) {
+    void *cmdBuf_handle = mps_maxpool2d_forward_preallocated(
+        input, kh, kw, sh, sw, ph, pw, output);
+    if (cmdBuf_handle) {
+      st_buffer_track_pending_cmd(output->buf, cmdBuf_handle);
+      return true;
+    }
+  }
+
+  /* ---- Fallback: delegate to graph run + readBytes ---- */
   void *mh = input->buf ? st_buffer_metal_handle(input->buf) : NULL;
   return st_maxpool2d_mps(input->values, mh, n, c, h, w, kh, kw,
                           sh, sw, ph, pw, output->values, oh, ow);
+}
+
+/// AvgPool2D with preallocated Metal output (async, no readBytes).
+static void *mps_avgpool2d_forward_preallocated(
+    const FloatTensor *input, size_t kh, size_t kw, size_t sh, size_t sw,
+    size_t ph, size_t pw, FloatTensor *output) {
+  if (!input || !output || !input->buf || !output->buf) return NULL;
+
+  id<MTLDevice> device = _st_be_mps_device();
+  id<MTLCommandQueue> queue = _st_be_mps_queue();
+  if (!device || !queue) return NULL;
+
+  const size_t n = input->shape[0], c = input->shape[1],
+               h = input->shape[2], w = input->shape[3],
+               oh = output->shape[2], ow = output->shape[3];
+
+  @autoreleasepool {
+  NSString *cacheKey = [NSString stringWithFormat:
+      @"avgpool:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu",
+      n, c, h, w, kh, kw, sh, sw, ph, pw];
+
+  static NSCache *pool_cache = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ pool_cache = [[NSCache alloc] init]; });
+
+  NSDictionary *cached = [pool_cache objectForKey:cacheKey];
+  MPSGraphExecutable *executable = nil;
+  MPSGraphTensor *inT, *resultT;
+  MPSGraph *graph;
+
+  if (cached) {
+    executable = cached[@"executable"];
+    if ([executable isEqual:[NSNull null]]) executable = nil;
+    graph = cached[@"graph"];
+    inT = cached[@"inT"];
+    resultT = cached[@"resultT"];
+  } else {
+    graph = [[MPSGraph alloc] init];
+    inT = [graph placeholderWithShape:@[@(n), @(c), @(h), @(w)]
+                             dataType:MPSDataTypeFloat32 name:@"input"];
+    MPSGraphPooling2DOpDescriptor *desc =
+        [MPSGraphPooling2DOpDescriptor
+            descriptorWithKernelWidth:(NSUInteger)kw
+                        kernelHeight:(NSUInteger)kh
+                           strideInX:(NSUInteger)sw
+                           strideInY:(NSUInteger)sh
+                        paddingStyle:MPSGraphPaddingStyleExplicit
+                          dataLayout:MPSGraphTensorNamedDataLayoutNCHW];
+    desc.paddingLeft = (NSUInteger)pw;
+    desc.paddingRight = (NSUInteger)pw;
+    desc.paddingTop = (NSUInteger)ph;
+    desc.paddingBottom = (NSUInteger)ph;
+    resultT = [graph avgPooling2DWithSourceTensor:inT descriptor:desc name:@"avgpool"];
+
+    executable = [graph
+        compileWithDevice:[MPSGraphDevice deviceWithMTLDevice:device]
+                    feeds:@{inT: [[MPSGraphShapedType alloc]
+                        initWithShape:@[@(n), @(c), @(h), @(w)]
+                              dataType:MPSDataTypeFloat32]}
+            targetTensors:@[resultT] targetOperations:nil compilationDescriptor:nil];
+
+    [pool_cache setObject:@{
+      @"executable": executable ?: [NSNull null],
+      @"graph": graph, @"inT": inT, @"resultT": resultT
+    } forKey:cacheKey];
+  }
+
+  if (!executable) return NULL;
+
+  void *in_metal = st_buffer_metal_handle(input->buf);
+  void *out_metal = st_buffer_metal_handle(output->buf);
+  if (!in_metal || !out_metal) return NULL;
+
+  id<MTLBuffer> inBuf = (__bridge id<MTLBuffer>)in_metal;
+  id<MTLBuffer> outBuf = (__bridge id<MTLBuffer>)out_metal;
+
+  MPSGraphTensorData *inData = [[MPSGraphTensorData alloc]
+      initWithMTLBuffer:inBuf shape:@[@(n), @(c), @(h), @(w)]
+            dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *outData = [[MPSGraphTensorData alloc]
+      initWithMTLBuffer:outBuf shape:@[@(n), @(c), @(oh), @(ow)]
+            dataType:MPSDataTypeFloat32];
+
+  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  if (!cmdBuf) return NULL;
+
+  @try {
+    [executable encodeToCommandBuffer:cmdBuf
+                           inputsArray:@[inData]
+                          resultsArray:@[outData]
+                   executionDescriptor:nil];
+  } @catch (NSException *e) {
+    return NULL;
+  }
+
+  [cmdBuf commit];
+  return (__bridge_retained void *)cmdBuf;
+  } // @autoreleasepool
 }
 
 static bool mps_avgpool2d_forward(const FloatTensor *input, size_t kh,
@@ -572,6 +786,17 @@ static bool mps_avgpool2d_forward(const FloatTensor *input, size_t kh,
   const size_t oh = output->shape[2];
   const size_t ow = output->shape[3];
 
+  /* ---- Try preallocated path (async, no readBytes) ---- */
+  if (output->buf && st_buffer_metal_handle(output->buf)) {
+    void *cmdBuf_handle = mps_avgpool2d_forward_preallocated(
+        input, kh, kw, sh, sw, ph, pw, output);
+    if (cmdBuf_handle) {
+      st_buffer_track_pending_cmd(output->buf, cmdBuf_handle);
+      return true;
+    }
+  }
+
+  /* ---- Fallback: delegate to graph run + readBytes ---- */
   void *mh = input->buf ? st_buffer_metal_handle(input->buf) : NULL;
   return st_avgpool2d_mps(input->values, mh, n, c, h, w, kh, kw,
                           sh, sw, ph, pw, output->values, oh, ow);

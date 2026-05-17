@@ -53,6 +53,14 @@ typedef struct StBufferPendingStats {
   size_t max_depth;
 } StBufferPendingStats;
 
+typedef struct StBufferMetalAllocatorStats {
+  uint64_t alloc_requests;
+  uint64_t pool_hits;
+  uint64_t new_allocations;
+  uint64_t pool_stores;
+  uint64_t pool_store_drops;
+} StBufferMetalAllocatorStats;
+
 /* ------------------------------------------------------------------ */
 /*  StBuffer                                                           */
 /* ------------------------------------------------------------------ */
@@ -174,6 +182,12 @@ void st_buffer_pending_stats_reset(void);
 
 /// Snapshot process-wide pending-depth telemetry counters.
 StBufferPendingStats st_buffer_pending_stats_get(void);
+
+/// Reset process-wide Metal allocator telemetry counters.
+void st_buffer_metal_allocator_stats_reset(void);
+
+/// Snapshot process-wide Metal allocator telemetry counters.
+StBufferMetalAllocatorStats st_buffer_metal_allocator_stats_get(void);
 
 /// Return the last measured GPU command-buffer duration for this buffer.
 /// Returns false when no backend timestamp is available.

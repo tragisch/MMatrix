@@ -43,6 +43,20 @@ StBufferPendingStats st_buffer_pending_stats_get(void) {
   return s;
 }
 
+void st_buffer_metal_allocator_stats_reset(void) {
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
+  st_buffer_metal_allocator_stats_reset_impl();
+#endif
+}
+
+StBufferMetalAllocatorStats st_buffer_metal_allocator_stats_get(void) {
+  StBufferMetalAllocatorStats s = {0};
+#if defined(USE_ACCELERATE) && defined(__APPLE__)
+  s = st_buffer_metal_allocator_stats_get_impl();
+#endif
+  return s;
+}
+
 static void st_buffer_pending_reset(StBuffer *buf) {
   if (!buf) {
     return;

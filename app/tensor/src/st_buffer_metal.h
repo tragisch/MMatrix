@@ -65,6 +65,12 @@ bool st_buffer_metal_schedule_release_many(void **cmd_handles,
 										   size_t cmd_count,
 										   void *metal_handle);
 
+/// Reset process-wide Metal allocator telemetry counters (Apple path).
+void st_buffer_metal_allocator_stats_reset_impl(void);
+
+/// Snapshot process-wide Metal allocator telemetry counters (Apple path).
+StBufferMetalAllocatorStats st_buffer_metal_allocator_stats_get_impl(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -14,8 +14,120 @@
 #import <Metal/Metal.h>
 #import <dispatch/dispatch.h>
 #import <stdint.h>
+#import <stdlib.h>
+#import <stdatomic.h>
 #import <string.h>
 #import <time.h>
+
+#define ST_METAL_POOL_MAX_SLOTS 32u
+#define ST_METAL_POOL_MAX_BUFFER_BYTES (64u * 1024u * 1024u)
+
+typedef struct StMetalPoolEntry {
+  size_t size_bytes;
+  void *handle;
+} StMetalPoolEntry;
+
+static _Atomic uint64_t g_alloc_requests = 0u;
+static _Atomic uint64_t g_pool_hits = 0u;
+static _Atomic uint64_t g_new_allocations = 0u;
+static _Atomic uint64_t g_pool_stores = 0u;
+static _Atomic uint64_t g_pool_store_drops = 0u;
+
+void st_buffer_metal_allocator_stats_reset_impl(void) {
+  atomic_store_explicit(&g_alloc_requests, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_pool_hits, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_new_allocations, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_pool_stores, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_pool_store_drops, 0u, memory_order_relaxed);
+}
+
+StBufferMetalAllocatorStats st_buffer_metal_allocator_stats_get_impl(void) {
+  StBufferMetalAllocatorStats s;
+  s.alloc_requests =
+      atomic_load_explicit(&g_alloc_requests, memory_order_relaxed);
+  s.pool_hits = atomic_load_explicit(&g_pool_hits, memory_order_relaxed);
+  s.new_allocations =
+      atomic_load_explicit(&g_new_allocations, memory_order_relaxed);
+  s.pool_stores = atomic_load_explicit(&g_pool_stores, memory_order_relaxed);
+  s.pool_store_drops =
+      atomic_load_explicit(&g_pool_store_drops, memory_order_relaxed);
+  return s;
+}
+
+static dispatch_queue_t st_metal_pool_queue(void) {
+  static dispatch_queue_t q = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    q = dispatch_queue_create("com.mmatrix.st_buffer_metal.pool",
+                              DISPATCH_QUEUE_SERIAL);
+  });
+  return q;
+}
+
+static StMetalPoolEntry *st_metal_pool_entries(void) {
+  static StMetalPoolEntry entries[ST_METAL_POOL_MAX_SLOTS] = {0};
+  return entries;
+}
+
+static void *st_metal_pool_take_exact(size_t size_bytes) {
+  if (size_bytes == 0u || size_bytes > ST_METAL_POOL_MAX_BUFFER_BYTES) {
+    return NULL;
+  }
+
+  __block void *found_handle = NULL;
+  dispatch_sync(st_metal_pool_queue(), ^{
+    StMetalPoolEntry *entries = st_metal_pool_entries();
+    for (size_t i = 0; i < ST_METAL_POOL_MAX_SLOTS; ++i) {
+      if (entries[i].handle && entries[i].size_bytes == size_bytes) {
+        found_handle = entries[i].handle;
+        entries[i].handle = NULL;
+        entries[i].size_bytes = 0u;
+        atomic_fetch_add_explicit(&g_pool_hits, 1u, memory_order_relaxed);
+        break;
+      }
+    }
+  });
+  return found_handle;
+}
+
+static void st_metal_pool_put_handle(void *handle) {
+  if (!handle) {
+    return;
+  }
+
+  id<MTLBuffer> mtl_buf = (__bridge id<MTLBuffer>)handle;
+  if (!mtl_buf) {
+    id<MTLBuffer> __unused released = (__bridge_transfer id<MTLBuffer>)handle;
+    atomic_fetch_add_explicit(&g_pool_store_drops, 1u, memory_order_relaxed);
+    return;
+  }
+
+  const size_t size_bytes = (size_t)mtl_buf.length;
+  if (size_bytes == 0u || size_bytes > ST_METAL_POOL_MAX_BUFFER_BYTES) {
+    id<MTLBuffer> __unused released = (__bridge_transfer id<MTLBuffer>)handle;
+    atomic_fetch_add_explicit(&g_pool_store_drops, 1u, memory_order_relaxed);
+    return;
+  }
+
+  __block bool stored = false;
+  dispatch_sync(st_metal_pool_queue(), ^{
+    StMetalPoolEntry *entries = st_metal_pool_entries();
+    for (size_t i = 0; i < ST_METAL_POOL_MAX_SLOTS; ++i) {
+      if (!entries[i].handle) {
+        entries[i].handle = handle;
+        entries[i].size_bytes = size_bytes;
+        stored = true;
+        atomic_fetch_add_explicit(&g_pool_stores, 1u, memory_order_relaxed);
+        return;
+      }
+    }
+  });
+
+  if (!stored) {
+    id<MTLBuffer> __unused released = (__bridge_transfer id<MTLBuffer>)handle;
+    atomic_fetch_add_explicit(&g_pool_store_drops, 1u, memory_order_relaxed);
+  }
+}
 
 static double st_metal_now_ms(void) {
   struct timespec ts;
@@ -38,12 +150,18 @@ StBuffer *st_buffer_alloc_metal_impl(size_t num_floats) {
   }
 
   const size_t size_bytes = num_floats * sizeof(float);
+  atomic_fetch_add_explicit(&g_alloc_requests, 1u, memory_order_relaxed);
 
-  id<MTLBuffer> mtl_buf =
-      [device newBufferWithLength:size_bytes
-                          options:MTLResourceStorageModeShared];
+  void *reused_handle = st_metal_pool_take_exact(size_bytes);
+  id<MTLBuffer> mtl_buf = reused_handle
+                              ? (__bridge id<MTLBuffer>)reused_handle
+                              : [device newBufferWithLength:size_bytes
+                                                  options:MTLResourceStorageModeShared];
   if (!mtl_buf) {
     return NULL;
+  }
+  if (!reused_handle) {
+    atomic_fetch_add_explicit(&g_new_allocations, 1u, memory_order_relaxed);
   }
 
   /* Zero-fill to match st_buffer_alloc_cpu() behaviour. */
@@ -64,7 +182,8 @@ StBuffer *st_buffer_alloc_metal_impl(size_t num_floats) {
 
   /* Bridge-retain: ARC won't release the MTLBuffer as long as we
    * hold this void* — we release it in st_buffer_release_metal_handle(). */
-  buf->_backend_handle = (__bridge_retained void *)mtl_buf;
+  buf->_backend_handle = reused_handle ? reused_handle
+                                       : (__bridge_retained void *)mtl_buf;
 
   return buf;
 }
@@ -73,9 +192,7 @@ void st_buffer_release_metal_handle(void *handle) {
   if (!handle) {
     return;
   }
-  /* Transfer ownership back to ARC, which will release the MTLBuffer. */
-  id<MTLBuffer> __unused mtl_buf = (__bridge_transfer id<MTLBuffer>)handle;
-  /* mtl_buf goes out of scope here → ARC releases it. */
+  st_metal_pool_put_handle(handle);
 }
 
 void st_buffer_metal_discard_pending(StBuffer *buf) {
@@ -181,8 +298,7 @@ bool st_buffer_metal_schedule_release_many(void **cmd_handles,
       }
     }
     free(cmd_copy);
-    id<MTLBuffer> __unused released_buf =
-        (__bridge_transfer id<MTLBuffer>)metal_handle_for_block;
+    st_metal_pool_put_handle(metal_handle_for_block);
   });
   return true;
 }

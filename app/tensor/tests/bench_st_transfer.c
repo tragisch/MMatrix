@@ -24,6 +24,7 @@
 
 #include "st.h"
 #include "st_backend.h"
+#include "st_buffer.h"
 #include "st_batchnorm.h"
 #include "st_conv.h"
 
@@ -86,9 +87,14 @@ static void fill_rand(FloatTensor *t, uint32_t seed) {
 
 static void print_counters(void) {
   StBackendCounters c = st_backend_get_counters();
+  StBufferMetalAllocatorStats a = st_buffer_metal_allocator_stats_get();
   printf("    counters: mps_hit=%ld  mps_miss=%ld  fallback_gemm=%ld"
          "  fallback_ref=%ld\n",
          c.mps_hit, c.mps_miss, c.fallback_gemm, c.fallback_ref);
+  printf("    allocator: requests=%" PRIu64 "  pool_hit=%" PRIu64
+         "  new=%" PRIu64 "  stores=%" PRIu64 "  drops=%" PRIu64 "\n",
+         a.alloc_requests, a.pool_hits, a.new_allocations,
+         a.pool_stores, a.pool_store_drops);
 }
 
 /* ------------------------------------------------------------------ */
