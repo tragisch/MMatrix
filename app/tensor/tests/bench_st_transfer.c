@@ -141,6 +141,7 @@ static void bench_transfer(const TransferCase *cfg) {
       st_batchnorm2d_forward(co1, g1, b1, 1e-5f, bo1, m1, v1);
     }
     st_backend_reset_counters();
+    st_buffer_metal_allocator_stats_reset();
     uint64_t t0 = now_ns();
     for (size_t i = 0; i < cfg->iters; ++i) {
       st_conv2d_nchw(i1, w1, NULL, &p, co1);
@@ -168,6 +169,7 @@ static void bench_transfer(const TransferCase *cfg) {
         st_batchnorm2d_forward(co2, g2, b2, 1e-5f, bo2, m2, v2);
       }
       st_backend_reset_counters();
+      st_buffer_metal_allocator_stats_reset();
       uint64_t t2 = now_ns();
       for (size_t i = 0; i < cfg->iters; ++i) {
         st_conv2d_nchw(i2, w2, NULL, &p, co2);

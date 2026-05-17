@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 /* ------------------------------------------------------------------ */
@@ -37,6 +38,27 @@ static uint64_t now_ns(void) {
 
 static double elapsed_ms(uint64_t start, uint64_t end, size_t iters) {
   return (double)(end - start) / 1000000.0 / (double)iters;
+}
+
+static int bench_csv_enabled(void) {
+  const char *env = getenv("BENCH_CSV");
+  return env && strcmp(env, "0") != 0;
+}
+
+static void print_csv_header(void) {
+  printf("op,case,N,Cin,Cout,H,W,K,stride,pad,ms_per_iter,mps_hit,mps_miss,fallback_gemm,fallback_ref,max_abs,max_rel\n");
+}
+
+static void print_csv_row(const char *op, const char *name,
+                          size_t n, size_t cin, size_t cout,
+                          size_t h, size_t w, size_t k,
+                          size_t stride, size_t pad,
+                          double ms, StBackendCounters c,
+                          float max_abs, float max_rel) {
+  printf("%s,%s,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%.6f,%ld,%ld,%ld,%ld,%.6g,%.6g\n",
+         op, name, n, cin, cout, h, w, k, stride, pad, ms,
+         c.mps_hit, c.mps_miss, c.fallback_gemm, c.fallback_ref,
+         max_abs, max_rel);
 }
 
 static FloatTensor *make4d(size_t n, size_t c, size_t h, size_t w) {
@@ -233,23 +255,26 @@ static void bench_conv2d(const ConvCase *cfg) {
     st_conv2d_nchw(input, weight, NULL, &p, output);
   uint64_t t1 = now_ns();
 
-  printf("[single-op] conv2d  %s\n", cfg->name);
-  printf("    N=%zu Cin=%zu Cout=%zu H=%zu W=%zu K=%zu s=%zu p=%zu\n",
-         cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k,
-         cfg->stride, cfg->pad);
-  printf("    conv2d_auto: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
-  print_counters();
-
-  /* Accuracy: compare AUTO output against GEMM (CPU BLAS reference). */
+  StBackendCounters c = st_backend_get_counters();
+  double ms = elapsed_ms(t0, t1, cfg->iters);
   FloatTensor *ref_out = make4d(cfg->n, cfg->c_out, out_h, out_w);
+  float max_abs = 0.0f, max_rel = 0.0f;
   if (ref_out) {
     StConv2dParams pr = p;
     pr.backend = ST_CONV_BACKEND_GEMM;
     st_conv2d_nchw(input, weight, NULL, &pr, ref_out);
-    float max_abs = 0.0f, max_rel = 0.0f;
     accuracy(output, ref_out, &max_abs, &max_rel);
-    print_accuracy(max_abs, max_rel);
     st_destroy(ref_out);
+  }
+  if (bench_csv_enabled()) {
+    print_csv_row("conv2d", cfg->name, cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k, cfg->stride, cfg->pad, ms, c, max_abs, max_rel);
+  } else {
+    printf("[single-op] conv2d  %s\n", cfg->name);
+    printf("    N=%zu Cin=%zu Cout=%zu H=%zu W=%zu K=%zu s=%zu p=%zu\n",
+           cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k, cfg->stride, cfg->pad);
+    printf("    conv2d_auto: %.3f ms/iter\n", ms);
+    print_counters();
+    print_accuracy(max_abs, max_rel);
   }
 
   st_destroy(input);
@@ -291,22 +316,24 @@ static void bench_maxpool2d(const PoolCase *cfg) {
                       cfg->ph, cfg->pw, output, NULL);
   uint64_t t1 = now_ns();
 
-  printf("[single-op] maxpool2d  %s\n", cfg->name);
-  printf("    N=%zu C=%zu H=%zu W=%zu k=%zux%zu s=%zux%zu p=%zux%zu\n",
-         cfg->n, cfg->c, cfg->h, cfg->w,
-         cfg->kh, cfg->kw, cfg->sh, cfg->sw, cfg->ph, cfg->pw);
-  printf("    maxpool2d: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
-  print_counters();
-
-  /* Accuracy: compare against inline reference. */
+  StBackendCounters c = st_backend_get_counters();
+  double ms = elapsed_ms(t0, t1, cfg->iters);
   FloatTensor *ref_out = make4d(cfg->n, cfg->c, oh, ow);
+  float max_abs = 0.0f, max_rel = 0.0f;
   if (ref_out) {
-    ref_maxpool2d(input, cfg->kh, cfg->kw, cfg->sh, cfg->sw,
-                  cfg->ph, cfg->pw, ref_out);
-    float max_abs = 0.0f, max_rel = 0.0f;
+    ref_maxpool2d(input, cfg->kh, cfg->kw, cfg->sh, cfg->sw, cfg->ph, cfg->pw, ref_out);
     accuracy(output, ref_out, &max_abs, &max_rel);
-    print_accuracy(max_abs, max_rel);
     st_destroy(ref_out);
+  }
+  if (bench_csv_enabled()) {
+    print_csv_row("maxpool2d", cfg->name, cfg->n, cfg->c, 0, cfg->h, cfg->w, cfg->kh, cfg->sh, cfg->ph, ms, c, max_abs, max_rel);
+  } else {
+    printf("[single-op] maxpool2d  %s\n", cfg->name);
+    printf("    N=%zu C=%zu H=%zu W=%zu k=%zux%zu s=%zux%zu p=%zux%zu\n",
+           cfg->n, cfg->c, cfg->h, cfg->w, cfg->kh, cfg->kw, cfg->sh, cfg->sw, cfg->ph, cfg->pw);
+    printf("    maxpool2d: %.3f ms/iter\n", ms);
+    print_counters();
+    print_accuracy(max_abs, max_rel);
   }
 
   st_destroy(input);
@@ -341,22 +368,24 @@ static void bench_avgpool2d(const PoolCase *cfg) {
                       cfg->ph, cfg->pw, output);
   uint64_t t1 = now_ns();
 
-  printf("[single-op] avgpool2d  %s\n", cfg->name);
-  printf("    N=%zu C=%zu H=%zu W=%zu k=%zux%zu s=%zux%zu p=%zux%zu\n",
-         cfg->n, cfg->c, cfg->h, cfg->w,
-         cfg->kh, cfg->kw, cfg->sh, cfg->sw, cfg->ph, cfg->pw);
-  printf("    avgpool2d: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
-  print_counters();
-
-  /* Accuracy: compare against inline reference. */
+  StBackendCounters c = st_backend_get_counters();
+  double ms = elapsed_ms(t0, t1, cfg->iters);
   FloatTensor *ref_out = make4d(cfg->n, cfg->c, oh, ow);
+  float max_abs = 0.0f, max_rel = 0.0f;
   if (ref_out) {
-    ref_avgpool2d(input, cfg->kh, cfg->kw, cfg->sh, cfg->sw,
-                  cfg->ph, cfg->pw, ref_out);
-    float max_abs = 0.0f, max_rel = 0.0f;
+    ref_avgpool2d(input, cfg->kh, cfg->kw, cfg->sh, cfg->sw, cfg->ph, cfg->pw, ref_out);
     accuracy(output, ref_out, &max_abs, &max_rel);
-    print_accuracy(max_abs, max_rel);
     st_destroy(ref_out);
+  }
+  if (bench_csv_enabled()) {
+    print_csv_row("avgpool2d", cfg->name, cfg->n, cfg->c, 0, cfg->h, cfg->w, cfg->kh, cfg->sh, cfg->ph, ms, c, max_abs, max_rel);
+  } else {
+    printf("[single-op] avgpool2d  %s\n", cfg->name);
+    printf("    N=%zu C=%zu H=%zu W=%zu k=%zux%zu s=%zux%zu p=%zux%zu\n",
+           cfg->n, cfg->c, cfg->h, cfg->w, cfg->kh, cfg->kw, cfg->sh, cfg->sw, cfg->ph, cfg->pw);
+    printf("    avgpool2d: %.3f ms/iter\n", ms);
+    print_counters();
+    print_accuracy(max_abs, max_rel);
   }
 
   st_destroy(input);
@@ -399,19 +428,23 @@ static void bench_batchnorm2d(const BNCase *cfg) {
     st_batchnorm2d_forward(input, gamma, beta, 1e-5f, output, mean, var);
   uint64_t t1 = now_ns();
 
-  printf("[single-op] batchnorm2d  %s\n", cfg->name);
-  printf("    N=%zu C=%zu H=%zu W=%zu\n", cfg->n, cfg->c, cfg->h, cfg->w);
-  printf("    batchnorm2d: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
-  print_counters();
-
-  /* Accuracy: compare against inline double-precision reference. */
+  StBackendCounters c = st_backend_get_counters();
+  double ms = elapsed_ms(t0, t1, cfg->iters);
   FloatTensor *ref_out = make4d(cfg->n, cfg->c, cfg->h, cfg->w);
+  float max_abs = 0.0f, max_rel = 0.0f;
   if (ref_out) {
     ref_batchnorm2d(input, gamma, beta, 1e-5f, ref_out);
-    float max_abs = 0.0f, max_rel = 0.0f;
     accuracy(output, ref_out, &max_abs, &max_rel);
-    print_accuracy(max_abs, max_rel);
     st_destroy(ref_out);
+  }
+  if (bench_csv_enabled()) {
+    print_csv_row("batchnorm2d", cfg->name, cfg->n, cfg->c, 0, cfg->h, cfg->w, 0, 0, 0, ms, c, max_abs, max_rel);
+  } else {
+    printf("[single-op] batchnorm2d  %s\n", cfg->name);
+    printf("    N=%zu C=%zu H=%zu W=%zu\n", cfg->n, cfg->c, cfg->h, cfg->w);
+    printf("    batchnorm2d: %.3f ms/iter\n", ms);
+    print_counters();
+    print_accuracy(max_abs, max_rel);
   }
 
   st_destroy(input);  st_destroy(output);
@@ -424,7 +457,8 @@ static void bench_batchnorm2d(const BNCase *cfg) {
 /* ------------------------------------------------------------------ */
 
 int main(void) {
-  printf("=== bench_st_single_op ===\n\n");
+  if (bench_csv_enabled()) print_csv_header();
+  else printf("=== bench_st_single_op ===\n\n");
 
   /* ---- Conv2D cases ---- */
   static const ConvCase conv_cases[] = {

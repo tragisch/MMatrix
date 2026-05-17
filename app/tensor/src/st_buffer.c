@@ -15,6 +15,7 @@
 
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
 #include "st_buffer_metal.h"
+#include "st_stream_mps.h"
 #endif
 
 static _Atomic uint64_t g_pending_samples = 0u;
@@ -432,6 +433,7 @@ void st_buffer_release(StBuffer *buf) {
 
   /* Refcount reached 0 — free backing storage. */
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
+  st_mps_stream_flush();
   const bool force_blocking_release =
       st_buffer_env_true("MMATRIX_ST_BUFFER_RELEASE_BLOCKING");
   void *pending_handles[ST_BUFFER_PENDING_CMDS_MAX] = {0};
@@ -490,6 +492,7 @@ void st_buffer_wait_gpu(StBuffer *buf) {
     return;
   }
 #if defined(USE_ACCELERATE) && defined(__APPLE__)
+  st_mps_stream_flush();
   void *pending_handles[ST_BUFFER_PENDING_CMDS_MAX] = {0};
   const size_t pending_count =
       st_buffer_pending_collect(buf, pending_handles, ST_BUFFER_PENDING_CMDS_MAX,

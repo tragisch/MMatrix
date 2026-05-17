@@ -8,6 +8,7 @@
 
 #include "st_batchnorm.h"
 #include "st.h"
+#include "st_bf16_utils.h"
 
 #include <math.h>
 #include <string.h>

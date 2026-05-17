@@ -250,3 +250,30 @@ void test_st_buffer_release_pending_without_backend_should_not_wait_or_crash(voi
 
   st_buffer_release(buf);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Metal allocator pool reuse                                         */
+/* ------------------------------------------------------------------ */
+
+void test_st_buffer_metal_pool_should_hit_on_same_size_realloc(void) {
+  st_buffer_metal_allocator_stats_reset();
+
+  /* First alloc: no pool entry yet — must allocate fresh. */
+  StBuffer *a = st_buffer_alloc_metal(1024);
+  TEST_ASSERT_NOT_NULL(a);
+
+  /* Release without pending GPU work: synchronous pool store. */
+  st_buffer_release(a);
+
+  /* Second alloc of the same size: must come from the pool. */
+  StBuffer *b = st_buffer_alloc_metal(1024);
+  TEST_ASSERT_NOT_NULL(b);
+  st_buffer_release(b);
+
+#if defined(__APPLE__)
+  StBufferMetalAllocatorStats s = st_buffer_metal_allocator_stats_get();
+  TEST_ASSERT_EQUAL(2, (int)s.alloc_requests);
+  TEST_ASSERT_EQUAL(1, (int)s.pool_hits);
+  TEST_ASSERT_EQUAL(1, (int)s.new_allocations);
+#endif
+}

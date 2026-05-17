@@ -163,6 +163,7 @@ objc_library(
         "src/st_backend_mps.m",
         "src/st_buffer_metal.m",
         "src/st_mps.m",
+        "src/st_stream_mps.m",
     ],
     hdrs = [
         "include/st.h",
@@ -172,6 +173,7 @@ objc_library(
         "src/st_buffer_metal.h",
         "src/st_dtype.h",
         "src/st_mps.h",
+        "src/st_stream_mps.h",
     ],
     copts = [
         "-ObjC",
@@ -465,6 +467,28 @@ cc_binary(
 cc_binary(
     name = "bench_st_async_release",
     srcs = ["tests/bench_st_async_release.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
+)
+
+cc_binary(
+    name = "bench_st_batchnorm",
+    srcs = ["tests/bench_st_batchnorm.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
+)
+
+cc_binary(
+    name = "bench_st_pool_diagnostic",
+    srcs = ["tests/bench_st_pool_diagnostic.c"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
     deps = [

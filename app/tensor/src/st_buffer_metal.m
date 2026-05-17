@@ -169,7 +169,9 @@ StBuffer *st_buffer_alloc_metal_impl(size_t num_floats) {
 
   StBuffer *buf = (StBuffer *)calloc(1, sizeof(StBuffer));
   if (!buf) {
-    /* mtl_buf released by ARC when leaving scope. */
+    /* Return the handle to the pool so it is not leaked. */
+    st_metal_pool_put_handle(reused_handle ? reused_handle
+                                           : (__bridge_retained void *)mtl_buf);
     return NULL;
   }
 

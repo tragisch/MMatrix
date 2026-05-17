@@ -14,12 +14,12 @@
 #import "st_conv.h"
 #import "st_mps.h"
 #import "st_pool.h"
+#import "st_stream_mps.h"
 #import "sm_mps.h"
 
 #import <Metal/Metal.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 #import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
-#include <objc/message.h>
 #include <errno.h>
 #include <math.h>
 #include <stdatomic.h>
@@ -34,7 +34,7 @@ static id<MTLDevice> _st_be_mps_device(void) {
 }
 
 static id<MTLCommandQueue> _st_be_mps_queue(void) {
-  return (__bridge id<MTLCommandQueue>)mps_get_shared_command_queue();
+  return st_mps_stream_shared_queue();
 }
 
 static double st_backend_now_ms(void) {
@@ -434,24 +434,8 @@ static bool mps_conv2d_forward(const FloatTensor *input,
                                                dataType:MPSDataTypeFloat32];
       const double feed_end_ms = st_backend_now_ms();
       const double command_start_ms = feed_end_ms;
-      id<MTLCommandBuffer> cmdBuf = nil;
-      id mpsCmdBuf = nil;
-      if ([queue respondsToSelector:@selector(commandBufferWithDescriptor:)]) {
-        MTLCommandBufferDescriptor *cbDesc = [[MTLCommandBufferDescriptor alloc] init];
-        cmdBuf = [queue commandBufferWithDescriptor:cbDesc];
-      }
-      if (!cmdBuf) {
-        cmdBuf = [queue commandBuffer];
-      }
-
-      /* On some runtimes MPSGraphExecutable encode expects an MPSCommandBuffer
-         wrapper (selector mpsCommandBufferDescriptor). Create it dynamically
-         when available, but keep fallback to plain MTLCommandBuffer. */
-      Class MPSCBClass = NSClassFromString(@"MPSCommandBuffer");
-      if (MPSCBClass && [MPSCBClass respondsToSelector:@selector(commandBufferFromCommandQueue:)]) {
-        id (*msgSendCB)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
-        mpsCmdBuf = msgSendCB(MPSCBClass, @selector(commandBufferFromCommandQueue:), queue);
-      }
+      id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
+      id mpsCmdBuf = st_mps_stream_make_mps_command_buffer(queue);
       const double command_end_ms = st_backend_now_ms();
 
       if (!preOutData) {
@@ -486,33 +470,38 @@ static bool mps_conv2d_forward(const FloatTensor *input,
         output->buf->_last_gpu_profile.encode_ms =
             encode_end_ms - encode_start_ms;
         if (fastpath_ok) {
-          const double commit_start_ms = st_backend_now_ms();
-          if (mpsCmdBuf && [mpsCmdBuf respondsToSelector:@selector(commit)]) {
-            void (*msgSendVoid)(id, SEL) = (void (*)(id, SEL))objc_msgSend;
-            msgSendVoid(mpsCmdBuf, @selector(commit));
-          } else {
-            [cmdBuf commit];
+          const bool conv_async = st_backend_get_conv_mps_async();
+          const bool defer_async =
+              conv_async && st_mps_stream_async_defer_enabled();
+          if (defer_async) {
+            st_mps_stream_register_pending_buffer(output->buf);
           }
-
-          id<MTLCommandBuffer> pendingCmdBuf = cmdBuf;
-          if (mpsCmdBuf && [mpsCmdBuf respondsToSelector:@selector(commandBuffer)]) {
-            id (*msgSendCBObj)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
-            id raw = msgSendCBObj(mpsCmdBuf, @selector(commandBuffer));
-            if (raw) pendingCmdBuf = (id<MTLCommandBuffer>)raw;
+          const double commit_start_ms = st_backend_now_ms();
+          id<MTLCommandBuffer> pendingCmdBuf = nil;
+          if (!st_mps_stream_finalize_encoded_command_buffer(
+                  cmdBuf, mpsCmdBuf,
+                  /*force_commit=*/!defer_async,
+                  &pendingCmdBuf)) {
+            st_backend_counter_conv_fastpath_cmd_buf_nil();
+            fastpath_ok = false;
           }
           const double commit_end_ms = st_backend_now_ms();
           output->buf->_last_gpu_profile.commit_ms =
               commit_end_ms - commit_start_ms;
           output->buf->_last_gpu_profile_valid = true;
 
-          if (st_backend_get_conv_mps_async()) {
+          if (fastpath_ok && conv_async && !defer_async && pendingCmdBuf) {
             st_buffer_track_pending_cmd(output->buf,
                                         (__bridge_retained void *)pendingCmdBuf);
-          } else {
+          } else if (fastpath_ok && !conv_async && pendingCmdBuf) {
             [pendingCmdBuf waitUntilCompleted];
+          } else if (fastpath_ok && !conv_async) {
+            fastpath_ok = false;
           }
-          st_backend_counter_conv_fastpath_hit();
-          return true;
+          if (fastpath_ok) {
+            st_backend_counter_conv_fastpath_hit();
+            return true;
+          }
         }
       }
     }
@@ -568,7 +557,10 @@ static void *mps_maxpool2d_forward_preallocated(
 
   static NSCache *pool_cache = nil;
   static dispatch_once_t once;
-  dispatch_once(&once, ^{ pool_cache = [[NSCache alloc] init]; });
+  dispatch_once(&once, ^{
+    pool_cache = [[NSCache alloc] init];
+    pool_cache.countLimit = 16;
+  });
 
   NSDictionary *cached = [pool_cache objectForKey:cacheKey];
   MPSGraphExecutable *executable = nil;
@@ -632,7 +624,7 @@ static void *mps_maxpool2d_forward_preallocated(
             dataType:MPSDataTypeFloat32];
 
   /* ---- Async encode ---- */
-  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
   if (!cmdBuf) return NULL;
 
   @try {
@@ -644,8 +636,13 @@ static void *mps_maxpool2d_forward_preallocated(
     return NULL;
   }
 
-  [cmdBuf commit];
-  return (__bridge_retained void *)cmdBuf;
+  id<MTLCommandBuffer> pendingCmdBuf = nil;
+    if (!st_mps_stream_finalize_encoded_command_buffer(
+      cmdBuf, nil, /*force_commit=*/true,
+      &pendingCmdBuf) || !pendingCmdBuf) {
+    return NULL;
+  }
+  return (__bridge_retained void *)pendingCmdBuf;
   } // @autoreleasepool
 }
 
@@ -697,11 +694,14 @@ static void *mps_avgpool2d_forward_preallocated(
       @"avgpool:%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu",
       n, c, h, w, kh, kw, sh, sw, ph, pw];
 
-  static NSCache *pool_cache = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{ pool_cache = [[NSCache alloc] init]; });
+  static NSCache *avg_pool_cache = nil;
+  static dispatch_once_t avg_once;
+  dispatch_once(&avg_once, ^{
+    avg_pool_cache = [[NSCache alloc] init];
+    avg_pool_cache.countLimit = 16;
+  });
 
-  NSDictionary *cached = [pool_cache objectForKey:cacheKey];
+  NSDictionary *cached = [avg_pool_cache objectForKey:cacheKey];
   MPSGraphExecutable *executable = nil;
   MPSGraphTensor *inT, *resultT;
   MPSGraph *graph;
@@ -737,7 +737,7 @@ static void *mps_avgpool2d_forward_preallocated(
                               dataType:MPSDataTypeFloat32]}
             targetTensors:@[resultT] targetOperations:nil compilationDescriptor:nil];
 
-    [pool_cache setObject:@{
+    [avg_pool_cache setObject:@{
       @"executable": executable ?: [NSNull null],
       @"graph": graph, @"inT": inT, @"resultT": resultT
     } forKey:cacheKey];
@@ -759,7 +759,7 @@ static void *mps_avgpool2d_forward_preallocated(
       initWithMTLBuffer:outBuf shape:@[@(n), @(c), @(oh), @(ow)]
             dataType:MPSDataTypeFloat32];
 
-  id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+  id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
   if (!cmdBuf) return NULL;
 
   @try {
@@ -771,8 +771,13 @@ static void *mps_avgpool2d_forward_preallocated(
     return NULL;
   }
 
-  [cmdBuf commit];
-  return (__bridge_retained void *)cmdBuf;
+  id<MTLCommandBuffer> pendingCmdBuf = nil;
+    if (!st_mps_stream_finalize_encoded_command_buffer(
+      cmdBuf, nil, /*force_commit=*/true,
+      &pendingCmdBuf) || !pendingCmdBuf) {
+    return NULL;
+  }
+  return (__bridge_retained void *)pendingCmdBuf;
   } // @autoreleasepool
 }
 
@@ -803,6 +808,170 @@ static bool mps_avgpool2d_forward(const FloatTensor *input, size_t kh,
 }
 
 /* ================================================================== */
+/*  Batchnorm forward — GPU-resident preallocated output (async)       */
+/* ================================================================== */
+
+/// BatchNorm2D with preallocated Metal output (async, no readBytes).
+/// Returns NULL on failure, or a bridge-retained command buffer handle.
+/// Only used for inference path (no mean/var tracking).
+static void *mps_batchnorm2d_forward_preallocated(
+    const FloatTensor *input, const FloatTensor *gamma,
+    const FloatTensor *beta, float epsilon, FloatTensor *output) {
+  if (!input || !output || !input->buf || !output->buf) return NULL;
+  if (!gamma || !beta) return NULL;  /* Require scale/shift for this path */
+
+  id<MTLDevice> device = _st_be_mps_device();
+  id<MTLCommandQueue> queue = _st_be_mps_queue();
+  if (!device || !queue) return NULL;
+
+  const size_t n = input->shape[0], c = input->shape[1],
+               h = input->shape[2], w = input->shape[3];
+
+  @autoreleasepool {
+  /* ---- Executable cache by shape signature ---- */
+  NSString *cacheKey = [NSString stringWithFormat:
+      @"bn_ga_preallocated:%zu,%zu,%zu,%zu,%.9g",
+      n, c, h, w, (double)epsilon];
+
+  NSCache *cache = _st_mps_graph_cache();
+  NSDictionary *cached = [cache objectForKey:cacheKey];
+  MPSGraphExecutable *executable = nil;
+  MPSGraphTensor *inT, *gammaT, *betaT, *resultT;
+  MPSGraph *graph;
+
+  if (cached) {
+    executable = cached[@"executable"];
+    if ([executable isEqual:[NSNull null]]) executable = nil;
+    graph = cached[@"graph"];
+    inT = cached[@"inT"];
+    gammaT = cached[@"gammaT"];
+    betaT = cached[@"betaT"];
+    resultT = cached[@"resultT"];
+  } else {
+    /* Build BatchNorm graph: (x - mean) / sqrt(var + eps) * gamma + beta */
+    graph = [[MPSGraph alloc] init];
+
+    inT = [graph placeholderWithShape:@[@(n), @(c), @(h), @(w)]
+                             dataType:MPSDataTypeFloat32 name:@"input"];
+    gammaT = [graph placeholderWithShape:@[@1, @(c), @1, @1]
+                               dataType:MPSDataTypeFloat32 name:@"gamma"];
+    betaT = [graph placeholderWithShape:@[@1, @(c), @1, @1]
+                              dataType:MPSDataTypeFloat32 name:@"beta"];
+
+    /* Compute mean and variance along N, H, W (axes 0, 2, 3) */
+    NSArray<NSNumber *> *reduceAxes = @[@0, @2, @3];
+    MPSGraphTensor *meanT =
+        [graph meanOfTensor:inT axes:reduceAxes name:@"mean"];
+    MPSGraphTensor *diffT =
+        [graph subtractionWithPrimaryTensor:inT secondaryTensor:meanT
+                                       name:@"diff"];
+    MPSGraphTensor *sqDiffT =
+        [graph squareWithTensor:diffT name:@"sq_diff"];
+    MPSGraphTensor *varT =
+        [graph meanOfTensor:sqDiffT axes:reduceAxes name:@"var"];
+
+    /* Normalize: (x - mean) / sqrt(var + epsilon) */
+    MPSGraphTensor *epsT =
+        [graph constantWithScalar:(double)epsilon shape:@[@1]
+                         dataType:MPSDataTypeFloat32];
+    MPSGraphTensor *varPlusEpsT =
+        [graph additionWithPrimaryTensor:varT secondaryTensor:epsT
+                                    name:@"var_eps"];
+    MPSGraphTensor *sqrtVarT =
+        [graph squareRootWithTensor:varPlusEpsT name:@"sqrt_var"];
+    MPSGraphTensor *invStdT =
+        [graph reciprocalWithTensor:sqrtVarT name:@"inv_std"];
+
+    resultT = [graph multiplicationWithPrimaryTensor:diffT
+                                     secondaryTensor:invStdT name:@"normed"];
+    resultT = [graph multiplicationWithPrimaryTensor:resultT
+                                     secondaryTensor:gammaT name:@"scale"];
+    resultT = [graph additionWithPrimaryTensor:resultT
+                               secondaryTensor:betaT name:@"shift"];
+
+    /* Compile executable for inference (single output, no mean/var). */
+    executable = [graph
+        compileWithDevice:[MPSGraphDevice deviceWithMTLDevice:device]
+                    feeds:@{
+                        inT: [[MPSGraphShapedType alloc]
+                            initWithShape:@[@(n), @(c), @(h), @(w)]
+                                  dataType:MPSDataTypeFloat32],
+                        gammaT: [[MPSGraphShapedType alloc]
+                            initWithShape:@[@1, @(c), @1, @1]
+                                  dataType:MPSDataTypeFloat32],
+                        betaT: [[MPSGraphShapedType alloc]
+                            initWithShape:@[@1, @(c), @1, @1]
+                                  dataType:MPSDataTypeFloat32],
+                    }
+            targetTensors:@[resultT]
+             targetOperations:nil
+         compilationDescriptor:nil];
+
+    [cache setObject:@{
+      @"executable": executable ?: [NSNull null],
+      @"graph": graph,
+      @"inT": inT,
+      @"gammaT": gammaT,
+      @"betaT": betaT,
+      @"resultT": resultT,
+    } forKey:cacheKey];
+  }
+
+  if (!executable) return NULL;
+
+  /* ---- Feed and encode to pre-allocated output ---- */
+  void *in_metal = st_buffer_metal_handle(input->buf);
+  void *g_metal = st_buffer_metal_handle(gamma->buf);
+  void *b_metal = st_buffer_metal_handle(beta->buf);
+  void *out_metal = st_buffer_metal_handle(output->buf);
+  if (!in_metal || !g_metal || !b_metal || !out_metal) return NULL;
+
+  id<MTLBuffer> inBuf = (__bridge id<MTLBuffer>)in_metal;
+  id<MTLBuffer> gamBuf = (__bridge id<MTLBuffer>)g_metal;
+  id<MTLBuffer> betBuf = (__bridge id<MTLBuffer>)b_metal;
+  id<MTLBuffer> outBuf = (__bridge id<MTLBuffer>)out_metal;
+
+  MPSGraphTensorData *inData =
+      [[MPSGraphTensorData alloc] initWithMTLBuffer:inBuf
+                                              shape:@[@(n), @(c), @(h), @(w)]
+                                           dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *gamData =
+      [[MPSGraphTensorData alloc] initWithMTLBuffer:gamBuf
+                                              shape:@[@1, @(c), @1, @1]
+                                           dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *betData =
+      [[MPSGraphTensorData alloc] initWithMTLBuffer:betBuf
+                                              shape:@[@1, @(c), @1, @1]
+                                           dataType:MPSDataTypeFloat32];
+  MPSGraphTensorData *outData =
+      [[MPSGraphTensorData alloc] initWithMTLBuffer:outBuf
+                                              shape:@[@(n), @(c), @(h), @(w)]
+                                           dataType:MPSDataTypeFloat32];
+
+  /* ---- Async encode ---- */
+  id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
+  if (!cmdBuf) return NULL;
+
+  @try {
+    [executable encodeToCommandBuffer:cmdBuf
+                           inputsArray:@[inData, gamData, betData]
+                          resultsArray:@[outData]
+                   executionDescriptor:nil];
+  } @catch (NSException *e) {
+    return NULL;
+  }
+
+  id<MTLCommandBuffer> pendingCmdBuf = nil;
+    if (!st_mps_stream_finalize_encoded_command_buffer(
+      cmdBuf, nil, /*force_commit=*/true,
+      &pendingCmdBuf) || !pendingCmdBuf) {
+    return NULL;
+  }
+  return (__bridge_retained void *)pendingCmdBuf;
+  } // @autoreleasepool
+}
+
+/* ================================================================== */
 /*  Batchnorm forward — delegate to existing st_mps.h function        */
 /* ================================================================== */
 
@@ -816,6 +985,20 @@ static bool mps_batchnorm2d_forward(const FloatTensor *input,
   const size_t h = input->shape[2];
   const size_t w = input->shape[3];
 
+  /* ---- Try preallocated GPU-resident path (inference only) ---- */
+  if (!mean && !var &&  /* No mean/var tracking */
+      output->buf && st_buffer_metal_handle(output->buf) &&
+      gamma && gamma->buf && st_buffer_metal_handle(gamma->buf) &&
+      beta && beta->buf && st_buffer_metal_handle(beta->buf)) {
+    void *cmdBuf_handle = mps_batchnorm2d_forward_preallocated(
+        input, gamma, beta, epsilon, output);
+    if (cmdBuf_handle) {
+      st_buffer_track_pending_cmd(output->buf, cmdBuf_handle);
+      return true;
+    }
+  }
+
+  /* ---- Fallback: delegate to graph run + readBytes ---- */
   void *mh = input->buf ? st_buffer_metal_handle(input->buf) : NULL;
   return st_batchnorm2d_forward_mps(
       input->values, mh, n, c, h, w,
@@ -1168,7 +1351,7 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
                                                dataType:MPSDataTypeFloat32];
 
       /* Async encode: commit without waiting; caller uses st_tensor_sync(). */
-      id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+      id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
       if (!cmdBuf) return false;
       @try {
         [executable encodeToCommandBuffer:cmdBuf
@@ -1178,10 +1361,21 @@ bool st_backend_conv2d_batchnorm2d_forward_mps(
       } @catch (NSException *exception) {
         return false;
       }
-      [cmdBuf commit];
+      /* Heuristic: keep conv+bn+pool on immediate commit.
+       * Step-3 A/B showed regressions for boundary_sync_only when defer batching
+       * was enabled for this fused path. */
+      const bool defer_async = false;
+      id<MTLCommandBuffer> pendingCmdBuf = nil;
+      if (!st_mps_stream_finalize_encoded_command_buffer(
+              cmdBuf, nil, /*force_commit=*/!defer_async,
+              &pendingCmdBuf)) {
+        return false;
+      }
       /* Store bridge-retained command buffer; st_buffer_metal_wait releases. */
-      st_buffer_track_pending_cmd(output->buf,
-                  (__bridge_retained void *)cmdBuf);
+      if (!defer_async && pendingCmdBuf) {
+        st_buffer_track_pending_cmd(output->buf,
+            (__bridge_retained void *)pendingCmdBuf);
+      }
       /* Output is already in output->values via shared MTLBuffer — no readBytes. */
       return true;
     }
@@ -1528,7 +1722,7 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
                                                dataType:MPSDataTypeFloat32];
 
       /* Async encode: commit without waiting; caller uses st_tensor_sync(). */
-      id<MTLCommandBuffer> cmdBuf = [queue commandBuffer];
+      id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
       if (!cmdBuf) return false;
       @try {
         [executable encodeToCommandBuffer:cmdBuf
@@ -1538,9 +1732,20 @@ bool st_backend_conv2d_batchnorm2d_pool_forward_mps(
       } @catch (NSException *exception) {
         return false;
       }
-      [cmdBuf commit];
-      st_buffer_track_pending_cmd(output->buf,
-                  (__bridge_retained void *)cmdBuf);
+      const bool defer_async = st_mps_stream_async_defer_enabled();
+      if (defer_async) {
+        st_mps_stream_register_pending_buffer(output->buf);
+      }
+      id<MTLCommandBuffer> pendingCmdBuf = nil;
+      if (!st_mps_stream_finalize_encoded_command_buffer(
+              cmdBuf, nil, /*force_commit=*/!defer_async,
+              &pendingCmdBuf)) {
+        return false;
+      }
+      if (!defer_async && pendingCmdBuf) {
+        st_buffer_track_pending_cmd(output->buf,
+            (__bridge_retained void *)pendingCmdBuf);
+      }
       return true;
     }
 
