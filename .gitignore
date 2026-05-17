@@ -136,3 +136,7 @@ MODULE.bazel.lock
 profile.gz
 
 /.venv-bench/
+.github/skills/api-return-conventions/SKILL.md
+TENSOR_ARCHITECTURE_ANALYSIS.md
+TENSOR_PATTERNS_QUICK_REF.md
+app/tensor/docs/mps-performance.md
