@@ -45,16 +45,33 @@ bazel test //...
 
 Unit tests are in `app/matrix/tests/` and `app/tensor/tests/`.
 
-## Benchmarks (GitHub / macOS)
+## Benchmarks (macOS)
 
-For cross-framework tensor benchmarks (C vs PyTorch vs MLX), use the benchmark workflow on a
-GitHub-hosted macOS runner.
+For cross-framework tensor benchmarks (C vs PyTorch vs MLX), use the local
+benchmark script on Apple Silicon.
 
-- Folder: `benchmark/`
-- Workflow: `.github/workflows/benchmark-macos.yml`
-- Script entrypoint: `benchmark/run_cross_framework.sh`
+- Script entrypoint: `share/benchmarks/scripts/bench_conv_cross_framework.py`
+- Recommended Python environment: conda env `py-dev`
+- Requirements in that env: `torch` with MPS support and `mlx`
 
-This is easy to run without managing your own runner machines.
+Run the benchmark locally:
+
+```bash
+conda run -n py-dev python share/benchmarks/scripts/bench_conv_cross_framework.py --repeats 3
+```
+
+The script builds and runs the C benchmark target `//app/tensor:bench_st_ab_conv`
+and prints a CSV-style comparison table with rows for:
+
+- `c_gemm`
+- `c_mps_zero_copy_sync`
+- `c_mps_true_async_boundary`
+- `c_mps_cpu_materialized`
+- `pytorch_mps`
+- `mlx`
+
+Use a small repeat count for quick iteration and a larger one for more stable
+numbers.
 
 ## Documentation
 
