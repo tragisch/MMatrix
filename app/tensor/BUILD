@@ -134,7 +134,7 @@ cc_library(
     deps = default_deps + [
         ":st_mps_objc",
         "//app/matrix:sm",
-        "//app/matrix:sm_mps_objc",
+        "//app/matrix:sm_mps",
     ],
 )
 
@@ -185,7 +185,7 @@ objc_library(
         "src",
     ],
     target_compatible_with = ["@platforms//os:macos"],
-    deps = ["//app/matrix:sm_mps_objc"],
+    deps = ["//app/matrix:sm_mps"],
 )
 
 unity_test(

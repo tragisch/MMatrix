@@ -37,9 +37,8 @@
 typedef enum SmBackend {
   SM_BACKEND_DEFAULT = 0,     // best available: Accelerate > OpenBLAS > OpenMP
   SM_BACKEND_ACCELERATE = 1,  // Apple Accelerate (AMX)
-  SM_BACKEND_MPS = 2,         // Metal Performance Shaders (GPU)
-  SM_BACKEND_OPENBLAS = 3,    // OpenBLAS
-  SM_BACKEND_OPENMP = 4,      // OpenMP / ARM NEON (no BLAS)
+  SM_BACKEND_OPENBLAS = 2,    // OpenBLAS
+  SM_BACKEND_OPENMP = 3,      // OpenMP / ARM NEON (no BLAS)
 } SmBackend;
 
 /**
@@ -533,18 +532,11 @@ bool sm_lu_decompose(FloatMatrix *mat, size_t *pivot_order);
  */
 void sm_print(const FloatMatrix *matrix);
 
-/**
+ /**
  * @brief Return active compute backend name.
- * @return String name of active backend (e.g., "Accelerate", "MPS", "OpenBLAS").
+ * @return String name of active backend (e.g., "Accelerate", "OpenBLAS").
  */
 const char *sm_active_library(void);
-
-/**
- * @brief Return whether MPS backend is available in this build.
- * @retval true MPS (Metal) backend is available.
- * @retval false MPS backend is not available.
- */
-bool sm_mps_available(void);
 
 /**************************************/
 /*         Memory Management          */

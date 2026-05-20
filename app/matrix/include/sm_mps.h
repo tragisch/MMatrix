@@ -9,24 +9,17 @@
 #ifndef SM_MPS_H
 #define SM_MPS_H
 
-#ifdef __OBJC__
-#import <Foundation/Foundation.h>
-#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
-#import <MetalPerformanceShadersGraph/MetalPerformanceShadersGraph.h>
-#else
-// keine Includes für C, keine @class, keine NSString
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <stddef.h>
-#include <stdbool.h>
 
-/// Returns the shared MTLDevice (as opaque pointer). Thread-safe.
+#include <stdbool.h>
+#include <stddef.h>
+
+/// Returns the shared MTLDevice as an opaque pointer, or NULL if unavailable.
 void *mps_get_shared_device(void);
 
-/// Returns the shared MTLCommandQueue (as opaque pointer). Thread-safe.
+/// Returns the shared MTLCommandQueue as an opaque pointer, or NULL if unavailable.
 void *mps_get_shared_command_queue(void);
 
 bool mps_matrix_multiply(const float *mat1, size_t rows1, size_t cols1,

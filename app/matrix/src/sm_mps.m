@@ -8,6 +8,8 @@
 
 #import "sm_mps.h"
 
+#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
+
 static id<MTLDevice> _mps_shared_device(void) {
   static id<MTLDevice> device = nil;
   static dispatch_once_t onceToken;

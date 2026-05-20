@@ -115,18 +115,8 @@ void test_sm_set_backend_should_follow_build_capabilities(void) {
     TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_OPENBLAS, (int)sm_get_backend());
   }
 
-  bool mps_ok = sm_set_backend(SM_BACKEND_MPS);
-  TEST_ASSERT_EQUAL_INT((int)sm_mps_available(), (int)mps_ok);
-  if (mps_ok) {
-    TEST_ASSERT_EQUAL_INT((int)SM_BACKEND_MPS, (int)sm_get_backend());
-  }
-
   // Current build should not expose Accelerate and OpenBLAS simultaneously.
   TEST_ASSERT_FALSE(accel_ok && openblas_ok);
-  // MPS availability implies Accelerate availability in this project layout.
-  if (sm_mps_available()) {
-    TEST_ASSERT_TRUE(accel_ok);
-  }
 
   bool openmp_ok = sm_set_backend(SM_BACKEND_OPENMP);
   bool expect_openmp = !(accel_ok || openblas_ok);

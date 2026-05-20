@@ -53,11 +53,6 @@ static bool sm_seed_initialized = false;
 #define BLASINT int
 #include <Accelerate/Accelerate.h>
 
-#ifdef __APPLE__
-#include "sm_mps.h"
-#define SM_HAS_MPS 1
-#endif
-
 #elif defined(USE_OPENBLAS)
 #define BLASINT int
 #include <cblas.h>
@@ -88,13 +83,6 @@ bool sm_set_backend(SmBackend backend) {
 #else
       return false;
 #endif
-    case SM_BACKEND_MPS:
-#if defined(SM_HAS_MPS)
-      sm_current_backend = backend;
-      return true;
-#else
-      return false;
-#endif
     case SM_BACKEND_OPENBLAS:
 #if defined(USE_OPENBLAS)
       sm_current_backend = backend;
@@ -108,21 +96,8 @@ bool sm_set_backend(SmBackend backend) {
 
 SmBackend sm_get_backend(void) { return sm_current_backend; }
 
-bool sm_mps_available(void) {
-#if defined(SM_HAS_MPS)
-  return mps_get_shared_device() != NULL;
-#else
-  return false;
-#endif
-}
-
 const char *sm_active_library(void) {
   switch (sm_current_backend) {
-    case SM_BACKEND_MPS:
-#if defined(SM_HAS_MPS)
-      return "Metal Performance Shaders";
-#endif
-      break;
     case SM_BACKEND_ACCELERATE:
 #if defined(USE_ACCELERATE)
       return "Apple Accelerate";
@@ -631,19 +606,6 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
   }
 
 #if defined(USE_ACCELERATE) || defined(USE_OPENBLAS)
-
-#if defined(SM_HAS_MPS)
-  /* Runtime MPS dispatch: only when backend explicitly set to MPS */
-  if (sm_current_backend == SM_BACKEND_MPS) {
-    if (mps_matrix_multiply_ex(A->values, A->rows, A->cols,
-                               trans_a == SM_TRANSPOSE, B->values, B->rows,
-                               B->cols, trans_b == SM_TRANSPOSE, alpha, beta,
-                               C->values, C->rows, C->cols)) {
-      return true;
-    }
-    /* MPS failed — fall through to cblas */
-  }
-#endif
 
   enum CBLAS_TRANSPOSE op_a =
       (trans_a == SM_TRANSPOSE) ? CblasTrans : CblasNoTrans;

@@ -171,7 +171,6 @@ mps_linkopts = select({
     ":backend_accelerate_macos": [
         "-framework Metal",
         "-framework MetalPerformanceShaders",
-        "-framework MetalPerformanceShadersGraph",
     ],
     "//conditions:default": [],
 })
@@ -215,7 +214,7 @@ cc_library(
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
     target_compatible_with = select({
         ":backend_accelerate": ["@platforms//os:macos"],
         ":backend_openblas": ["@platforms//os:linux"],
@@ -236,7 +235,7 @@ cc_library(
     hdrs = ["include/dm.h"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
     target_compatible_with = select({
         ":backend_accelerate": ["@platforms//os:macos"],
         ":backend_openblas": ["@platforms//os:linux"],
@@ -255,7 +254,7 @@ cc_library(
     hdrs = ["include/sm.h"],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = ["include"],
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
     target_compatible_with = select({
         ":backend_accelerate": ["@platforms//os:macos"],
         ":backend_openblas": ["@platforms//os:linux"],
@@ -263,26 +262,26 @@ cc_library(
     }),
     visibility = ["//visibility:public"],
     deps = default_deps + select({
-        ":backend_accelerate_macos": [":sm_mps_objc"],
         ":backend_openblas_linux": ["@openblas"],
         "//conditions:default": [],
     }),
 )
 
 objc_library(
-    name = "sm_mps_objc",
+    name = "sm_mps",
     srcs = ["src/sm_mps.m"],
-    hdrs = ["src/sm_mps.h"],
+    hdrs = ["include/sm_mps.h"],
     copts = [
         "-ObjC",
         "-fobjc-arc",
     ],
-    includes = ["src"],
+    includes = ["include"],
+    linkopts = mps_linkopts,
     target_compatible_with = select({
         ":backend_accelerate": ["@platforms//os:macos"],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
-    visibility = ["//app/tensor:__pkg__"],
+    visibility = ["//visibility:public"],
 )
 
 cc_library(
@@ -293,7 +292,7 @@ cc_library(
         "-O3",
     ],
     includes = ["include"],
-    linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts + openblas_linkopts,
+    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
     target_compatible_with = select({
         ":backend_accelerate": ["@platforms//os:macos"],
         ":backend_openblas": ["@platforms//os:linux"],

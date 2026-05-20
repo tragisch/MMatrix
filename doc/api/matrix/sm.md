@@ -12,7 +12,6 @@ Values:
 
 - `SM_BACKEND_DEFAULT`
 - `SM_BACKEND_ACCELERATE`
-- `SM_BACKEND_MPS`
 - `SM_BACKEND_OPENBLAS`
 - `SM_BACKEND_OPENMP`
 
@@ -772,17 +771,7 @@ Parameters:
 
 - `(unnamed)` (`void`)
 
-Returns: String name of active backend (e.g., "Accelerate", "MPS", "OpenBLAS").
-
-### `sm_mps_available`
-
-`bool sm_mps_available(void)`
-
-Return whether MPS backend is available in this build.
-
-Parameters:
-
-- `(unnamed)` (`void`)
+Returns: String name of active backend (e.g., "Accelerate", "OpenBLAS").
 
 ### `sm_destroy`
 
