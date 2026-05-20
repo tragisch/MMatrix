@@ -8,7 +8,97 @@
 
 #import "sm_mps.h"
 
+#import <Foundation/Foundation.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
+
+#include <stdlib.h>
+#include <stdatomic.h>
+#include <string.h>
+
+@interface SmMpsMatrixHandle : NSObject
+@property(nonatomic, assign) size_t rows;
+@property(nonatomic, assign) size_t cols;
+@property(nonatomic, strong) id<MTLBuffer> buffer;
+@property(nonatomic, strong) MPSMatrixDescriptor *descriptor;
+@property(nonatomic, strong) MPSMatrix *matrix;
+@end
+
+@implementation SmMpsMatrixHandle
+@end
+
+@interface SmMpsStreamHandle : NSObject
+@property(nonatomic, strong) id<MTLCommandQueue> queue;
+@property(nonatomic, strong) id<MTLCommandBuffer> commandBuffer;
+@property(nonatomic, strong) NSMutableArray *pendingBuffers;
+@property(nonatomic, assign) BOOL hasEncodedWork;
+@end
+
+@implementation SmMpsStreamHandle
+@end
+
+@interface SmMpsGemmPlanHandle : NSObject
+@property(nonatomic, assign) size_t resultRows;
+@property(nonatomic, assign) size_t resultCols;
+@property(nonatomic, assign) size_t interiorCols;
+@property(nonatomic, assign) BOOL transposeLeft;
+@property(nonatomic, assign) BOOL transposeRight;
+@property(nonatomic, strong) MPSMatrixMultiplication *kernel;
+@end
+
+@implementation SmMpsGemmPlanHandle
+@end
+
+struct SmMpsMatrix {
+  void *handle;
+};
+
+struct SmMpsStream {
+  void *handle;
+};
+
+struct SmMpsGemmPlan {
+  void *handle;
+};
+
+static atomic_ullong g_matrix_allocations;
+static atomic_ullong g_command_buffers_created;
+static atomic_ullong g_commits;
+static atomic_ullong g_waits;
+static atomic_ullong g_gemm_encodes;
+static atomic_ullong g_uploads;
+static atomic_ullong g_downloads;
+static atomic_ullong g_plan_allocations;
+
+static void sm_mps_counter_inc(atomic_ullong *counter) {
+  atomic_fetch_add_explicit(counter, 1u, memory_order_relaxed);
+}
+
+SmMpsCounters sm_mps_get_counters(void) {
+  return (SmMpsCounters){
+      .matrix_allocations =
+          atomic_load_explicit(&g_matrix_allocations, memory_order_relaxed),
+      .command_buffers_created =
+          atomic_load_explicit(&g_command_buffers_created, memory_order_relaxed),
+      .commits = atomic_load_explicit(&g_commits, memory_order_relaxed),
+      .waits = atomic_load_explicit(&g_waits, memory_order_relaxed),
+      .gemm_encodes = atomic_load_explicit(&g_gemm_encodes, memory_order_relaxed),
+      .uploads = atomic_load_explicit(&g_uploads, memory_order_relaxed),
+      .downloads = atomic_load_explicit(&g_downloads, memory_order_relaxed),
+      .plan_allocations =
+          atomic_load_explicit(&g_plan_allocations, memory_order_relaxed),
+  };
+}
+
+void sm_mps_reset_counters(void) {
+  atomic_store_explicit(&g_matrix_allocations, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_command_buffers_created, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_commits, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_waits, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_gemm_encodes, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_uploads, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_downloads, 0u, memory_order_relaxed);
+  atomic_store_explicit(&g_plan_allocations, 0u, memory_order_relaxed);
+}
 
 static id<MTLDevice> _mps_shared_device(void) {
   static id<MTLDevice> device = nil;
@@ -34,6 +124,344 @@ void *mps_get_shared_device(void) {
 
 void *mps_get_shared_command_queue(void) {
   return (__bridge void *)_mps_shared_command_queue();
+}
+
+static SmMpsMatrixHandle *_sm_mps_matrix_handle(const SmMpsMatrix *matrix) {
+  if (!matrix || !matrix->handle) {
+    return nil;
+  }
+  return (__bridge SmMpsMatrixHandle *)matrix->handle;
+}
+
+static SmMpsStreamHandle *_sm_mps_stream_handle(const SmMpsStream *stream) {
+  if (!stream || !stream->handle) {
+    return nil;
+  }
+  return (__bridge SmMpsStreamHandle *)stream->handle;
+}
+
+static SmMpsGemmPlanHandle *_sm_mps_plan_handle(const SmMpsGemmPlan *plan) {
+  if (!plan || !plan->handle) {
+    return nil;
+  }
+  return (__bridge SmMpsGemmPlanHandle *)plan->handle;
+}
+
+static id<MTLCommandBuffer> _sm_mps_stream_command_buffer(SmMpsStreamHandle *handle) {
+  if (!handle) {
+    return nil;
+  }
+  if (!handle.commandBuffer) {
+    handle.commandBuffer = [handle.queue commandBuffer];
+    if (handle.commandBuffer) {
+      sm_mps_counter_inc(&g_command_buffers_created);
+    }
+  }
+  return handle.commandBuffer;
+}
+
+SmMpsMatrix *sm_mps_matrix_create(size_t rows, size_t cols) {
+  if (rows == 0 || cols == 0) {
+    return NULL;
+  }
+
+  @autoreleasepool {
+    id<MTLDevice> device = _mps_shared_device();
+    if (!device) {
+      return NULL;
+    }
+
+    const size_t bytes = rows * cols * sizeof(float);
+    id<MTLBuffer> buffer =
+        [device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+    if (!buffer) {
+      return NULL;
+    }
+
+    MPSMatrixDescriptor *descriptor =
+        [MPSMatrixDescriptor matrixDescriptorWithRows:rows
+                                              columns:cols
+                                             rowBytes:cols * sizeof(float)
+                                             dataType:MPSDataTypeFloat32];
+    MPSMatrix *matrix = [[MPSMatrix alloc] initWithBuffer:buffer descriptor:descriptor];
+    if (!matrix) {
+      return NULL;
+    }
+
+    SmMpsMatrixHandle *handle = [SmMpsMatrixHandle new];
+    handle.rows = rows;
+    handle.cols = cols;
+    handle.buffer = buffer;
+    handle.descriptor = descriptor;
+    handle.matrix = matrix;
+
+    SmMpsMatrix *out = (SmMpsMatrix *)calloc(1, sizeof(SmMpsMatrix));
+    if (!out) {
+      return NULL;
+    }
+    out->handle = (__bridge_retained void *)handle;
+    sm_mps_counter_inc(&g_matrix_allocations);
+    return out;
+  }
+}
+
+void sm_mps_matrix_destroy(SmMpsMatrix *matrix) {
+  if (!matrix) {
+    return;
+  }
+  if (matrix->handle) {
+    CFBridgingRelease(matrix->handle);
+  }
+  free(matrix);
+}
+
+bool sm_mps_matrix_upload(SmMpsMatrix *matrix, const float *values) {
+  SmMpsMatrixHandle *handle = _sm_mps_matrix_handle(matrix);
+  if (!handle || !values) {
+    return false;
+  }
+  memcpy(handle.buffer.contents, values, handle.rows * handle.cols * sizeof(float));
+  sm_mps_counter_inc(&g_uploads);
+  return true;
+}
+
+bool sm_mps_matrix_download(const SmMpsMatrix *matrix, float *values) {
+  SmMpsMatrixHandle *handle = _sm_mps_matrix_handle(matrix);
+  if (!handle || !values) {
+    return false;
+  }
+  memcpy(values, handle.buffer.contents, handle.rows * handle.cols * sizeof(float));
+  sm_mps_counter_inc(&g_downloads);
+  return true;
+}
+
+SmMpsStream *sm_mps_stream_create(void) {
+  @autoreleasepool {
+    id<MTLCommandQueue> queue = _mps_shared_command_queue();
+    if (!queue) {
+      return NULL;
+    }
+
+    SmMpsStreamHandle *handle = [SmMpsStreamHandle new];
+    handle.queue = queue;
+    handle.pendingBuffers = [NSMutableArray array];
+
+    SmMpsStream *stream = (SmMpsStream *)calloc(1, sizeof(SmMpsStream));
+    if (!stream) {
+      return NULL;
+    }
+    stream->handle = (__bridge_retained void *)handle;
+    return stream;
+  }
+}
+
+bool sm_mps_stream_commit(SmMpsStream *stream) {
+  SmMpsStreamHandle *handle = _sm_mps_stream_handle(stream);
+  if (!handle) {
+    return false;
+  }
+  if (!handle.commandBuffer) {
+    return true;
+  }
+  if (!handle.hasEncodedWork) {
+    handle.commandBuffer = nil;
+    return true;
+  }
+
+  [handle.commandBuffer commit];
+  [handle.pendingBuffers addObject:handle.commandBuffer];
+  handle.commandBuffer = nil;
+  handle.hasEncodedWork = NO;
+  sm_mps_counter_inc(&g_commits);
+  return true;
+}
+
+bool sm_mps_stream_wait(SmMpsStream *stream) {
+  SmMpsStreamHandle *handle = _sm_mps_stream_handle(stream);
+  if (!handle) {
+    return false;
+  }
+  if (!sm_mps_stream_commit(stream)) {
+    return false;
+  }
+
+  bool ok = true;
+  for (id<MTLCommandBuffer> commandBuffer in handle.pendingBuffers) {
+    [commandBuffer waitUntilCompleted];
+    if (commandBuffer.status == MTLCommandBufferStatusError) {
+      ok = false;
+    }
+  }
+  [handle.pendingBuffers removeAllObjects];
+  sm_mps_counter_inc(&g_waits);
+  return ok;
+}
+
+void sm_mps_stream_destroy(SmMpsStream *stream) {
+  if (!stream) {
+    return;
+  }
+  if (stream->handle) {
+    SmMpsStreamHandle *handle = _sm_mps_stream_handle(stream);
+    if (handle && (handle.commandBuffer || handle.pendingBuffers.count > 0)) {
+      (void)sm_mps_stream_wait(stream);
+    }
+    CFBridgingRelease(stream->handle);
+  }
+  free(stream);
+}
+
+SmMpsGemmPlan *sm_mps_gemm_plan_create(size_t result_rows,
+                                       size_t result_cols,
+                                       size_t interior_cols,
+                                       bool transpose_left,
+                                       bool transpose_right,
+                                       float alpha,
+                                       float beta) {
+  if (result_rows == 0 || result_cols == 0 || interior_cols == 0) {
+    return NULL;
+  }
+
+  @autoreleasepool {
+    id<MTLDevice> device = _mps_shared_device();
+    if (!device) {
+      return NULL;
+    }
+
+    MPSMatrixMultiplication *kernel =
+        [[MPSMatrixMultiplication alloc] initWithDevice:device
+                                          transposeLeft:(BOOL)transpose_left
+                                         transposeRight:(BOOL)transpose_right
+                                             resultRows:result_rows
+                                          resultColumns:result_cols
+                                        interiorColumns:interior_cols
+                                                  alpha:alpha
+                                                   beta:beta];
+    if (!kernel) {
+      return NULL;
+    }
+
+    SmMpsGemmPlanHandle *handle = [SmMpsGemmPlanHandle new];
+    handle.resultRows = result_rows;
+    handle.resultCols = result_cols;
+    handle.interiorCols = interior_cols;
+    handle.transposeLeft = (BOOL)transpose_left;
+    handle.transposeRight = (BOOL)transpose_right;
+    handle.kernel = kernel;
+
+    SmMpsGemmPlan *plan = (SmMpsGemmPlan *)calloc(1, sizeof(SmMpsGemmPlan));
+    if (!plan) {
+      return NULL;
+    }
+    plan->handle = (__bridge_retained void *)handle;
+    sm_mps_counter_inc(&g_plan_allocations);
+    return plan;
+  }
+}
+
+void sm_mps_gemm_plan_destroy(SmMpsGemmPlan *plan) {
+  if (!plan) {
+    return;
+  }
+  if (plan->handle) {
+    CFBridgingRelease(plan->handle);
+  }
+  free(plan);
+}
+
+static bool _sm_mps_gemm_plan_matches(const SmMpsGemmPlanHandle *plan,
+                                      const SmMpsMatrixHandle *handleC,
+                                      const SmMpsMatrixHandle *handleA,
+                                      const SmMpsMatrixHandle *handleB) {
+  if (!plan || !handleA || !handleB || !handleC) {
+    return false;
+  }
+  const size_t left_rows = plan.transposeLeft ? handleA.cols : handleA.rows;
+  const size_t left_cols = plan.transposeLeft ? handleA.rows : handleA.cols;
+  const size_t right_rows = plan.transposeRight ? handleB.cols : handleB.rows;
+  const size_t right_cols = plan.transposeRight ? handleB.rows : handleB.cols;
+  return left_cols == right_rows &&
+         left_cols == plan.interiorCols &&
+         handleC.rows == left_rows &&
+         handleC.cols == right_cols &&
+         handleC.rows == plan.resultRows &&
+         handleC.cols == plan.resultCols;
+}
+
+bool sm_mps_gemm_plan_encode(SmMpsStream *stream, const SmMpsGemmPlan *plan,
+                             SmMpsMatrix *C, const SmMpsMatrix *A,
+                             const SmMpsMatrix *B) {
+  SmMpsStreamHandle *streamHandle = _sm_mps_stream_handle(stream);
+  SmMpsGemmPlanHandle *planHandle = _sm_mps_plan_handle(plan);
+  SmMpsMatrixHandle *handleA = _sm_mps_matrix_handle(A);
+  SmMpsMatrixHandle *handleB = _sm_mps_matrix_handle(B);
+  SmMpsMatrixHandle *handleC = _sm_mps_matrix_handle(C);
+  if (!streamHandle || !planHandle ||
+      !_sm_mps_gemm_plan_matches(planHandle, handleC, handleA, handleB)) {
+    return false;
+  }
+
+  id<MTLCommandBuffer> commandBuffer =
+      _sm_mps_stream_command_buffer(streamHandle);
+  if (!commandBuffer) {
+    return false;
+  }
+
+  [planHandle.kernel encodeToCommandBuffer:commandBuffer
+                                leftMatrix:handleA.matrix
+                               rightMatrix:handleB.matrix
+                              resultMatrix:handleC.matrix];
+  streamHandle.hasEncodedWork = YES;
+  sm_mps_counter_inc(&g_gemm_encodes);
+  return true;
+}
+
+bool sm_mps_matrix_gemm_async(SmMpsStream *stream, SmMpsMatrix *C, float alpha,
+                              const SmMpsMatrix *A, bool transpose_left,
+                              const SmMpsMatrix *B, bool transpose_right,
+                              float beta) {
+  SmMpsMatrixHandle *handleA = _sm_mps_matrix_handle(A);
+  SmMpsMatrixHandle *handleB = _sm_mps_matrix_handle(B);
+  SmMpsMatrixHandle *handleC = _sm_mps_matrix_handle(C);
+  if (!handleA || !handleB || !handleC) {
+    return false;
+  }
+
+  size_t left_rows = transpose_left ? handleA.cols : handleA.rows;
+  size_t left_cols = transpose_left ? handleA.rows : handleA.cols;
+  size_t right_rows = transpose_right ? handleB.cols : handleB.rows;
+  size_t right_cols = transpose_right ? handleB.rows : handleB.cols;
+  if (left_cols != right_rows ||
+      handleC.rows != left_rows || handleC.cols != right_cols) {
+    return false;
+  }
+
+  SmMpsGemmPlan *plan =
+      sm_mps_gemm_plan_create(handleC.rows, handleC.cols, left_cols,
+                              transpose_left, transpose_right, alpha, beta);
+  if (!plan) {
+    return false;
+  }
+  bool ok = sm_mps_gemm_plan_encode(stream, plan, C, A, B);
+  sm_mps_gemm_plan_destroy(plan);
+  return ok;
+}
+
+bool sm_mps_matrix_gemm_ex(SmMpsMatrix *C, float alpha,
+                           const SmMpsMatrix *A, bool transpose_left,
+                           const SmMpsMatrix *B, bool transpose_right,
+                           float beta) {
+  SmMpsStream *stream = sm_mps_stream_create();
+  if (!stream) {
+    return false;
+  }
+  bool ok = sm_mps_matrix_gemm_async(stream, C, alpha, A, transpose_left,
+                                     B, transpose_right, beta);
+  if (ok) {
+    ok = sm_mps_stream_wait(stream);
+  }
+  sm_mps_stream_destroy(stream);
+  return ok;
 }
 
 bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
@@ -91,12 +519,15 @@ bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
   id<MTLBuffer> bufferB = [device newBufferWithBytes:mat2
                                                length:rows2 * cols2 * sizeof(float)
                                               options:MTLResourceStorageModeShared];
+  sm_mps_counter_inc(&g_uploads);
+  sm_mps_counter_inc(&g_uploads);
   id<MTLBuffer> bufferC = nil;
   size_t c_bytes = result_rows * result_cols * sizeof(float);
   if (beta != 0.0f) {
     bufferC = [device newBufferWithBytes:result
                                   length:c_bytes
                                  options:MTLResourceStorageModeShared];
+    sm_mps_counter_inc(&g_uploads);
   } else {
     bufferC = [device newBufferWithLength:c_bytes
                                   options:MTLResourceStorageModeShared];
@@ -124,19 +555,25 @@ bool mps_matrix_multiply_ex(const float *mat1, size_t rows1, size_t cols1,
   if (!commandBuffer) {
     return false;
   }
+  sm_mps_counter_inc(&g_command_buffers_created);
 
   [mm encodeToCommandBuffer:commandBuffer
                  leftMatrix:matrixA
                 rightMatrix:matrixB
                resultMatrix:matrixC];
+  sm_mps_counter_inc(&g_gemm_encodes);
   [commandBuffer commit];
+  sm_mps_counter_inc(&g_commits);
+  /* This one-shot API returns a host-visible result, so this is a true CPU boundary. */
   [commandBuffer waitUntilCompleted];
+  sm_mps_counter_inc(&g_waits);
 
   if (commandBuffer.status == MTLCommandBufferStatusError) {
     return false;
   }
 
   memcpy(result, matrixC.data.contents, c_bytes);
+  sm_mps_counter_inc(&g_downloads);
   return true;
 
   } // @autoreleasepool

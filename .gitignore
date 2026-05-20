@@ -103,6 +103,11 @@ MODULE.bazel.lock
 /benchmarks/*
 /data/*
 /share/*
+!/share/mps-performance.md
+!/share/simple_benchmark/
+/share/simple_benchmark/*
+!/share/simple_benchmark/BUILD
+!/share/simple_benchmark/bench_sm_mps.c
 /lib/*
 /_archive/*
 /archive/*

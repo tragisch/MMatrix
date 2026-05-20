@@ -168,7 +168,7 @@ accelerate_linkopts = select({
 })
 
 mps_linkopts = select({
-    ":backend_accelerate_macos": [
+    ":macos_arm64": [
         "-framework Metal",
         "-framework MetalPerformanceShaders",
     ],
@@ -278,7 +278,7 @@ objc_library(
     includes = ["include"],
     linkopts = mps_linkopts,
     target_compatible_with = select({
-        ":backend_accelerate": ["@platforms//os:macos"],
+        ":macos_arm64": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     visibility = ["//visibility:public"],
