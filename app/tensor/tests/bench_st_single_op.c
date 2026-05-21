@@ -45,8 +45,13 @@ static int bench_csv_enabled(void) {
   return env && strcmp(env, "0") != 0;
 }
 
+static const char *bench_async_profile(void) {
+  const char *p = getenv("MMATRIX_ST_ASYNC_PROFILE");
+  return (p && p[0] != '\0') ? p : "default";
+}
+
 static void print_csv_header(void) {
-  printf("op,case,N,Cin,Cout,H,W,K,stride,pad,ms_per_iter,mps_hit,mps_miss,fallback_gemm,fallback_ref,max_abs,max_rel\n");
+  printf("suite,async_profile,op,case,N,Cin,Cout,H,W,K,stride,pad,ms_per_iter,mps_hit,mps_miss,fallback_gemm,fallback_ref,max_abs,max_rel\n");
 }
 
 static void print_csv_row(const char *op, const char *name,
@@ -55,8 +60,8 @@ static void print_csv_row(const char *op, const char *name,
                           size_t stride, size_t pad,
                           double ms, StBackendCounters c,
                           float max_abs, float max_rel) {
-  printf("%s,%s,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%.6f,%ld,%ld,%ld,%ld,%.6g,%.6g\n",
-         op, name, n, cin, cout, h, w, k, stride, pad, ms,
+  printf("single_op,%s,%s,%s,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%.6f,%ld,%ld,%ld,%ld,%.6g,%.6g\n",
+    bench_async_profile(), op, name, n, cin, cout, h, w, k, stride, pad, ms,
          c.mps_hit, c.mps_miss, c.fallback_gemm, c.fallback_ref,
          max_abs, max_rel);
 }
@@ -502,6 +507,8 @@ int main(void) {
   for (size_t i = 0; i < sizeof(bn_cases)/sizeof(bn_cases[0]); ++i)
     bench_batchnorm2d(&bn_cases[i]);
 
-  printf("\n=== done ===\n");
+  if (!bench_csv_enabled()) {
+    printf("\n=== done ===\n");
+  }
   return 0;
 }

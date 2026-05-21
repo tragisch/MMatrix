@@ -35,6 +35,12 @@
 #include <string.h>
 #include <time.h>
 
+typedef struct TransferCase {
+  const char *name;
+  size_t n, c_in, c_out, h, w, k, stride, pad;
+  size_t warmup, iters;
+} TransferCase;
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -47,6 +53,34 @@ static uint64_t now_ns(void) {
 
 static double elapsed_ms(uint64_t start, uint64_t end, size_t iters) {
   return (double)(end - start) / 1000000.0 / (double)iters;
+}
+
+static int bench_csv_enabled(void) {
+  const char *env = getenv("BENCH_CSV");
+  return env && strcmp(env, "0") != 0;
+}
+
+static const char *bench_async_profile(void) {
+  const char *p = getenv("MMATRIX_ST_ASYNC_PROFILE");
+  return (p && p[0] != '\0') ? p : "default";
+}
+
+static void print_csv_header(void) {
+  printf("suite,async_profile,case_name,mode,N,Cin,Cout,H,W,K,stride,pad,iters,ms_per_iter,mps_hit,mps_miss,fallback_gemm,fallback_ref,alloc_requests,pool_hit,new_allocations,pool_stores,pool_drops,transfer_overhead_ms,transfer_overhead_pct\n");
+}
+
+static void print_csv_row(const TransferCase *cfg, const char *mode,
+                          double ms, StBackendCounters c,
+                          StBufferMetalAllocatorStats a,
+                          double overhead_ms, double overhead_pct) {
+  printf("transfer,%s,%s,%s,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%.6f,%ld,%ld,%ld,%ld,%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%" PRIu64 ",%.6f,%.6f\n",
+    bench_async_profile(), cfg->name, mode,
+    cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w,
+         cfg->k, cfg->stride, cfg->pad, cfg->iters, ms,
+         c.mps_hit, c.mps_miss, c.fallback_gemm, c.fallback_ref,
+         a.alloc_requests, a.pool_hits, a.new_allocations,
+         a.pool_stores, a.pool_store_drops,
+         overhead_ms, overhead_pct);
 }
 
 /* Create tensor backed by the best available buffer (Metal on Apple).  */
@@ -101,12 +135,6 @@ static void print_counters(void) {
 /*  Transfer case                                                      */
 /* ------------------------------------------------------------------ */
 
-typedef struct TransferCase {
-  const char *name;
-  size_t n, c_in, c_out, h, w, k, stride, pad;
-  size_t warmup, iters;
-} TransferCase;
-
 static void bench_transfer(const TransferCase *cfg) {
   StConv2dParams p = st_conv2d_default_params();
   p.stride_h = p.stride_w = cfg->stride;
@@ -119,10 +147,12 @@ static void bench_transfer(const TransferCase *cfg) {
     return;
   }
 
-  printf("[transfer] %s\n", cfg->name);
-  printf("    N=%zu Cin=%zu Cout=%zu H=%zu W=%zu K=%zu s=%zu p=%zu\n",
-         cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k,
-         cfg->stride, cfg->pad);
+  if (!bench_csv_enabled()) {
+    printf("[transfer] %s\n", cfg->name);
+    printf("    N=%zu Cin=%zu Cout=%zu H=%zu W=%zu K=%zu s=%zu p=%zu\n",
+           cfg->n, cfg->c_in, cfg->c_out, cfg->h, cfg->w, cfg->k,
+           cfg->stride, cfg->pad);
+  }
 
   /* --- Metal (device-resident / zero-copy) --- */
   FloatTensor *i1 = make4d_auto(cfg->n, cfg->c_in, cfg->h, cfg->w);
@@ -133,6 +163,9 @@ static void bench_transfer(const TransferCase *cfg) {
   FloatTensor *b1 = make1d_auto(cfg->c_out);
   FloatTensor *m1 = make1d_auto(cfg->c_out);
   FloatTensor *v1 = make1d_auto(cfg->c_out);
+  double ms_metal = 0.0;
+  StBackendCounters c_metal = {0};
+  StBufferMetalAllocatorStats a_metal = {0};
   if (i1 && w1 && co1 && bo1 && g1 && b1 && m1 && v1) {
     fill_rand(i1, 1u); fill_rand(w1, 2u);
     fill_rand(g1, 3u); fill_rand(b1, 4u);
@@ -148,9 +181,13 @@ static void bench_transfer(const TransferCase *cfg) {
       st_batchnorm2d_forward(co1, g1, b1, 1e-5f, bo1, m1, v1);
     }
     uint64_t t1 = now_ns();
-    double ms_metal = elapsed_ms(t0, t1, cfg->iters);
-    printf("    metal (zero-copy):  %.3f ms/iter\n", ms_metal);
-    print_counters();
+    ms_metal = elapsed_ms(t0, t1, cfg->iters);
+    c_metal = st_backend_get_counters();
+    a_metal = st_buffer_metal_allocator_stats_get();
+    if (!bench_csv_enabled()) {
+      printf("    metal (zero-copy):  %.3f ms/iter\n", ms_metal);
+      print_counters();
+    }
 
     /* --- CPU buffers (with Host→Device blit overhead) --- */
     FloatTensor *i2 = make4d_cpu(cfg->n, cfg->c_in, cfg->h, cfg->w);
@@ -176,12 +213,24 @@ static void bench_transfer(const TransferCase *cfg) {
         st_batchnorm2d_forward(co2, g2, b2, 1e-5f, bo2, m2, v2);
       }
       uint64_t t3 = now_ns();
-      double ms_cpu = elapsed_ms(t2, t3, cfg->iters);
-      printf("    cpu   (blit copy):  %.3f ms/iter\n", ms_cpu);
-      print_counters();
-      printf("    transfer overhead:  %+.3f ms/iter  (%.1f%%)\n",
-             ms_cpu - ms_metal,
-             ms_metal > 0.0 ? (ms_cpu - ms_metal) / ms_metal * 100.0 : 0.0);
+      const double ms_cpu = elapsed_ms(t2, t3, cfg->iters);
+      const StBackendCounters c_cpu = st_backend_get_counters();
+      const StBufferMetalAllocatorStats a_cpu =
+          st_buffer_metal_allocator_stats_get();
+      const double overhead_ms = ms_cpu - ms_metal;
+      const double overhead_pct =
+          ms_metal > 0.0 ? overhead_ms / ms_metal * 100.0 : 0.0;
+
+      if (bench_csv_enabled()) {
+        print_csv_row(cfg, "metal", ms_metal, c_metal, a_metal, 0.0, 0.0);
+        print_csv_row(cfg, "cpu", ms_cpu, c_cpu, a_cpu,
+                      overhead_ms, overhead_pct);
+      } else {
+        printf("    cpu   (blit copy):  %.3f ms/iter\n", ms_cpu);
+        print_counters();
+        printf("    transfer overhead:  %+.3f ms/iter  (%.1f%%)\n",
+               overhead_ms, overhead_pct);
+      }
     }
     st_destroy(i2);  st_destroy(w2);  st_destroy(co2); st_destroy(bo2);
     st_destroy(g2);  st_destroy(b2);  st_destroy(m2);  st_destroy(v2);
@@ -195,9 +244,13 @@ static void bench_transfer(const TransferCase *cfg) {
 /* ------------------------------------------------------------------ */
 
 int main(void) {
-  printf("=== bench_st_transfer ===\n");
-  printf("    metal=zero-copy (initWithMTLBuffer:)\n");
-  printf("    cpu  =blit copy (initWithDevice:data:…)\n\n");
+  if (bench_csv_enabled()) {
+    print_csv_header();
+  } else {
+    printf("=== bench_st_transfer ===\n");
+    printf("    metal=zero-copy (initWithMTLBuffer:)\n");
+    printf("    cpu  =blit copy (initWithDevice:data:…)\n\n");
+  }
 
   static const TransferCase cases[] = {
     /* large: above MPS threshold → MPS selected, transfer effect visible */
@@ -207,9 +260,13 @@ int main(void) {
 
   for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i) {
     bench_transfer(&cases[i]);
-    printf("\n");
+    if (!bench_csv_enabled()) {
+      printf("\n");
+    }
   }
 
-  printf("=== done ===\n");
+  if (!bench_csv_enabled()) {
+    printf("=== done ===\n");
+  }
   return 0;
 }

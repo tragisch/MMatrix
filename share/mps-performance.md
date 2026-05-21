@@ -1,290 +1,413 @@
 # MPS Performance Guide
 
-Dieses Dokument fasst den aktuellen Stand der MPS-Optimierungen im
-`tensor`-Runtime zusammen. Der Fokus liegt auf drei Fragen:
+Dieses Dokument ist bewusst auf **noch offene** MPS-Performance-Themen im
+`tensor`-Runtime reduziert. Bereits erledigte Arbeiten und historische
+Messreihen sind aus dem laufenden Arbeitsdokument entfernt.
 
-- Was wurde bereits umgesetzt?
-- Was wurde dadurch messbar erreicht?
-- Welche Themen sind noch offen?
+Leitplanken bleiben unverändert:
 
-Der übergeordnete Performance-Anspruch bleibt unverändert:
+- GPU-Daten möglichst GPU-resident halten.
+- `readBytes(...)` nur an klaren API-Grenzen.
+- `waitUntilCompleted` nicht implizit pro Operator.
+- Reuse von Graphen, Buffern und Command Buffers.
+- Jede Änderung muss benchmark-seitig nachvollziehbar sein.
 
-- GPU-Daten sollen möglichst auf der GPU bleiben.
-- `readBytes(...)` soll nur an klaren API-Grenzen oder für explizite
-  Host-Ausgaben auftreten.
-- `waitUntilCompleted` soll nicht implizit pro Operator passieren.
-- Graphen, Buffer und Command Buffers sollen wiederverwendet werden.
-- Änderungen müssen über Benchmarks nachvollziehbar sein.
+## Fortschritt (kurz)
 
-## Bereits umgesetzt
+### 2026-05-21 — Schritt 1 (P0) abgeschlossen: CSV-Basis erweitert
 
-### GPU-residente Outputs für Pool und BatchNorm
+Umgesetzt:
 
-Die größte konkrete Lücke lag in Pool- und BatchNorm-Pfaden, die GPU-Arbeit zu
-früh wieder auf die CPU zurückgeführt haben. Diese Lücke ist für die relevanten
-Inference-Pfade geschlossen.
+- `BENCH_CSV`-Export für `//app/tensor:bench_st_pipeline` ergänzt.
+- `BENCH_CSV`-Export für `//app/tensor:bench_st_transfer` ergänzt.
+- Default-Textausgabe beider Benchmarks unverändert beibehalten.
 
-Umgesetzt wurden:
+Verifiziert:
 
-- `mps_maxpool2d_forward_preallocated()` und
-  `mps_avgpool2d_forward_preallocated()` in `src/st_backend_mps.m`
-- GPU-residenter BatchNorm-Fastpath
-  `mps_batchnorm2d_forward_preallocated()` in `src/st_backend_mps.m`
-- Preallocated Metal-Outputs statt `readBytes(...)` im Fastpath
-- Asynchrone Ausführung ohne implizites `waitUntilCompleted`
-- CPU-/Readback-Fallback für Fälle ohne Metal-Handle bzw. für Training mit
-  Mean/Variance-Outputs
+- `bazel build //app/tensor:bench_st_pipeline //app/tensor:bench_st_transfer` ✅
+- `bazel run //app/tensor:bench_st_pipeline` ✅
+- `BENCH_CSV=1 bazel run //app/tensor:bench_st_pipeline` ✅
+- `bazel run //app/tensor:bench_st_transfer` ✅
+- `BENCH_CSV=1 bazel run //app/tensor:bench_st_transfer` ✅
 
-Ergebnis auf Architektur-Ebene:
+Kurzbefund Performance:
 
-- GPU-residente Pipelines brechen deutlich seltener auf
-- Conv/Pool/BatchNorm folgen nun demselben Fastpath-Muster
-- Readback ist von der Hot-Path-Ausführung in die Fallbacks verschoben
+- Kein reproduzierbarer Regressionshinweis durch CSV-Pfad.
+- Transfer-Benchmark bestätigt weiter klaren Vorteil für metal-residenten Pfad
+  (Session-Lauf: `transfer-medium` ~`2.05ms` vs `3.12ms`,
+  `transfer-large` ~`16.43ms` vs `35.77ms`).
 
-### Gemeinsame MPS-Stream-Infrastruktur
+### 2026-05-21 — Schritt 2 (P0) gestartet: Profil-Kalibrierung angebahnt
 
-Die Runtime besitzt inzwischen eine zentrale Stream-Schicht, statt die
-Command-Buffer-Steuerung vollständig op-lokal zu halten.
+Umgesetzt:
 
-Umgesetzt wurden:
+- CSV-Ausgabe enthält jetzt zusätzlich `async_profile` zur sauberen
+  A/B-Zuordnung in Profil-Läufen.
+- Skript `share/benchmarks/scripts/run_st_profile_matrix.sh` ergänzt,
+  erzeugt Profil-Matrix-Artefakte für `pipeline` und `transfer`.
+- Erste Stichprobe für `conv+bn+pool(fused), boundary_sync_only, pipe-large`
+  aufgenommen:
+  - `throughput`: ~`25.64ms/iter`
+  - `balanced`: ~`25.84ms/iter`
+  - `stable`: ~`28.66ms/iter`
 
-- `src/st_stream_mps.h/.m` als gemeinsame Stream-Abstraktion
-- Zentraler Zugriff auf Queue, Command Buffer und Commit-Pfad
-- `st_mps_stream_flush()` vor Boundary-Sync in `src/st_buffer.c`
-- Konfigurierbare Commit-Frequenz über
-  `MMATRIX_ST_STREAM_COMMIT_EVERY`
-- Selektiver Defer-Commit für asynchrone Fastpaths über
-  `MMATRIX_ST_STREAM_DEFER_ASYNC=1`
-- Konservative Heuristik: Defer aktiv für `conv+bn`, deaktiviert für
-  `conv+bn+pool`, weil dort Regressionen beobachtet wurden
+Neue Artefakte (aktueller Lauf):
 
-Ergebnis auf Architektur-Ebene:
+- `share/benchmarks/results/st_pipeline_profile_matrix_20260521_213338.csv`
+- `share/benchmarks/results/st_transfer_profile_matrix_20260521_213338.csv`
 
-- Stream-Steuerung ist zentralisiert
-- Uncommitted GPU-Arbeit wird vor Boundary-Sync deterministisch committed
-- Commit-Verhalten kann jetzt gezielt kalibriert werden statt implizit zu
-  variieren
+Kurzbefund:
 
-### Wiederverwendbarer Metal-Buffer-Pool
+- In dieser Stichprobe liegt `stable` hinter `throughput/balanced`.
+- Einzelne Transfer-Mittelwerte schwanken stark zwischen Läufen; daher sind
+  Einzelmessungen kein belastbarer Regressionsindikator.
+- Für eine belastbare Default-Entscheidung folgt als Nächstes die
+  vollständige Matrix über weitere Cases/Größen.
 
-Ein globaler Metal-Buffer-Pool wurde eingeführt, um wiederholte
-`newBufferWithLength`-Allokationen zu vermeiden.
+### 2026-05-21 — Schritt 3/4 (P0) umgesetzt: Schema + Matrix-Auswertung
 
-Umgesetzt wurden:
+Umgesetzt:
 
-- Thread-sicherer Reuse-Pool in `src/st_buffer_metal.m`
-- Wiederverwendung exakter Größen vor Neuallokation
-- Rückgabe in den Pool auch bei async deferred release
-- Schutzkorrekturen aus dem Review:
-  - `NSCache`-Limits für Pooling
-  - Leak-Fix bei Fehlerpfaden nach Pool-Take
+- Einheitliches CSV-Kernschema dokumentiert:
+  `share/benchmarks/csv-schema.md`.
+- `single_op`-CSV auf Kernspalten `suite` und `async_profile` erweitert.
+- Generischer Parser/Validator ergänzt:
+  `share/benchmarks/scripts/parse_st_bench_csv.py`.
+- Profil-Matrix-Resumen ergänzt:
+  `share/benchmarks/scripts/summarize_st_profile_matrix.py`.
 
-Zusätzlich erfasst die Runtime jetzt Allocator-Metriken:
+Verifiziert:
 
-- `alloc_requests`
-- `pool_hit`
-- `new`
-- `stores`
-- `drops`
+- Parser liest `single_op`, `pipeline`, `transfer` mit derselben Kernlogik:
+  - `share/benchmarks/results/st_single_op_latest.csv`
+  - `share/benchmarks/results/st_pipeline_latest.csv`
+  - `share/benchmarks/results/st_transfer_latest.csv`
+- Matrix-Artefakte und Auswertung aus aktuellem Lauf:
+  - `share/benchmarks/results/st_pipeline_profile_matrix_20260521_213722.csv`
+  - `share/benchmarks/results/st_transfer_profile_matrix_20260521_213722.csv`
+  - `share/benchmarks/results/st_profile_matrix_summary_20260521_213722.md`
 
-Die API dafür liegt in `src/st_buffer.h` / `src/st_buffer.c`.
+Kurzbefund:
 
-### Benchmarks und Profiling-Basis
+- Aktuelle Matrix-Empfehlung: `default` (aggregiert beste Mean-Metrik über
+  `conv_bn_boundary`, `conv_bn_pool_boundary`, `transfer_metal`).
+- `throughput` ist zwar bei `conv_bn_boundary` am schnellsten, verliert aber in
+  `conv_bn_pool_boundary` und `transfer_metal`.
 
-Die vorhandenen Benchmarks decken die wichtigsten MPS-Fragen inzwischen
-brauchbar ab:
+### 2026-05-21 — Schritt 5 (P0) umgesetzt: Empfehlung + Guardrails
 
-- `tests/bench_st_single_op.c` für isolierte Operatoren
-- `tests/bench_st_pipeline.c` für Pipeline- und Boundary-Sync-Verhalten
-- `tests/bench_st_transfer.c` für Host↔Device-Transferkosten
-- `share/simple_benchmark/bench_st_pool.c` für Pool-spezifische Diagnostik
+Umgesetzt:
 
-Außerdem ist der CSV-Export im Single-Op-Benchmark vorhanden:
+- Klassen-spezifische Profil-Policy ergänzt:
+  `share/benchmarks/st_async_profile_policy.json`
+  - `conv_bn_boundary`: `throughput`
+  - `conv_bn_pool_boundary`: `default`
+  - `transfer_metal`: `default`
+- Regression-Guard ergänzt:
+  `share/benchmarks/scripts/check_st_profile_policy.py`
+- Guard-Report aus aktuellem Matrix-Lauf erzeugt:
+  `share/benchmarks/results/st_profile_policy_guard_20260521_213722.md`
 
-- `BENCH_CSV=1 bazel run //app/tensor:bench_st_single_op`
+Guardrail:
 
-Damit gibt es bereits eine reproduzierbare Maschinen-Ausgabe für
-Single-Op-Messungen; der gleiche Export für weitere Benchmarks ist noch nicht
-vollständig ausgerollt.
+- Maximal erlaubte Regression gegenüber Klassen-Bestwert: `10%`.
+- Aktueller Datensatz: alle Policy-Klassen bestehen den Guard (`ok`).
 
-## Was erreicht wurde
+### 2026-05-21 — Schritt 6 (P1) umgesetzt: Fastpath-Helper konsolidiert
 
-### BatchNorm profitiert deutlich von GPU-Resident-Outputs
+Umgesetzt:
 
-Der BatchNorm-Fastpath zeigt gegenüber dem CPU-/Readback-Pfad einen klaren und
-messbaren Gewinn:
+- Neuer gemeinsamer Helper im MPS-Backend:
+  `st_mps_encode_preallocated_async(...)` in
+  `app/tensor/src/st_backend_mps.m`.
+- Verwendet in drei preallocated Fastpaths:
+  - `mps_maxpool2d_forward_preallocated`
+  - `mps_avgpool2d_forward_preallocated`
+  - `mps_batchnorm2d_forward_preallocated`
 
-- `bn-small`: `1.205 ms/iter` statt `1.646 ms/iter`
-- `bn-medium`: `6.021 ms/iter` statt `8.935 ms/iter`
-- `bn-large`: `19.170 ms/iter` statt `33.447 ms/iter`
+Wirkung:
 
-Das entspricht einem Vorteil von etwa **36 % bis 74 %** für den GPU-residenten
-Pfad. Der Gewinn steigt mit der Tensorgröße, was zum erwarteten Readback-
-Overhead passt.
+- Gemeinsame Encode/Finalize-Logik statt dreifacher Duplikation.
+- Keine Verhaltensänderung an Call-Sites (gleiche async/commit-Semantik).
 
-### Pool-Pfade vermeiden den früheren strukturellen Readback-Verlust
+Verifiziert:
 
-Die Pool-Fastpaths laufen im Diagnose-Benchmark mit erfolgreichem MPS-Treffer
-und ohne systematischen Fallback:
+- `bazel build //app/tensor:bench_st_single_op //app/tensor:bench_st_pipeline //app/tensor:bench_st_transfer` ✅
+- Fokus-Benchmarks nach Konsolidierung ohne Regressionshinweis:
+  - `single_op`: `maxpool2d`, `avgpool2d`, `batchnorm2d`
+  - `pipeline`: `conv+bn` und `conv+bn+pool` (boundary_sync_only, medium/large)
 
-- `mps_hit = iters`
-- `fallback = 0`
+### 2026-05-21 — Schritt 7 (P1) umgesetzt: Layout-Policy Draft
 
-Wichtig ist dabei die Einordnung: Die früher beobachtete große xlarge-Abweichung
-war in späteren Läufen **nicht stabil reproduzierbar**. Der aktuelle Stand
-spricht eher für Laufzeit-/Queue-Effekte als für einen festen MaxPool-Defekt.
+Umgesetzt:
 
-### Transfer- und Allocator-Optimierungen liefern sichtbare End-to-End-Gewinne
+- Layout-Policy mit If/Then-Regeln ergänzt:
+  `share/benchmarks/st_layout_policy.md`
+- Messartefakte für den Draft erzeugt:
+  - `share/benchmarks/results/st_layout_policy_input_20260521.csv`
+  - `share/benchmarks/results/st_nhwc_vs_nchw_policy_input_20260521.csv`
+- Kurz-Auswertung abgelegt:
+  `share/benchmarks/results/st_layout_policy_summary_20260521.md`
 
-Die Transfer-Benchmarks zeigen einen klaren Vorteil für device-residente
-Ausführung:
+Kurzbefund:
 
-- `transfer-medium`: `2.305 ms/iter` statt `3.477 ms/iter`
-- `transfer-large`: `17.160 ms/iter` statt `38.048 ms/iter`
+- NCHW↔NHWC-Roundtrip ist für mehrere Cases deutlich teurer als Conv selbst
+  (`+544%` bis `+2106%`).
+- NHWC zeigt im aktuellen Satz nur für `resnet_s1` einen Vorteil (`-11.06%`),
+  in den übrigen Cases ist NHWC langsamer.
+- Empfehlung daher: Default bleibt NCHW, NHWC nur case-spezifisch freigeben.
 
-Das bestätigt zwei Dinge:
+### 2026-05-21 — Schritt 8 (P2) umgesetzt: Custom-Kernel Kandidatenliste
 
-- Zero-copy/Metal-residente Datenpfade lohnen sich messbar
-- Der Buffer-Pool und die Vermeidung unnötiger Host↔Device-Übergänge greifen
-  in der Praxis zusammen
+Umgesetzt:
 
-### Matrix-GEMM profitiert erst mit GPU-residenter Ausführung
+- Kandidatenliste + Go/No-Go-Hypothesen + A/B-Messplan ergänzt:
+  `share/benchmarks/st_custom_kernel_candidates.md`
 
-`sm` bleibt bewusst CPU-/BLAS-orientiert. Der separate Apple-Silicon-Pfad
-`sm_mps` zeigt aber dieselbe Grundregel wie die Tensor-Runtime: MPS lohnt sich
-erst, wenn Daten resident bleiben und Synchronisation an echte Grenzen
-verschoben wird.
+Top-Kandidaten (priorisiert):
 
-Der Benchmark `//share/simple_benchmark:bench_sm_mps` vergleicht aktuell:
+1. fused `BN(+ReLU)+Pool` epilogue kernel
+2. channelwise BatchNorm inference kernel
+3. Pool2D kernel family (`k=2..3`, `stride=1..2`)
 
-- `oneshot`: Host-Input, pro Call MTLBuffer anlegen, GEMM, wait, Host-Output
-- `resident_sync`: A/B/C als wiederverwendete `SmMpsMatrix`, aber ein Wait pro GEMM
-- `resident_async_batch`: mehrere GEMMs in einen Stream encoden, ein Boundary-Wait
-- `resident_async_plan`: wie async batch, aber mit wiederverwendetem GEMM-Plan
-- `resident_direct_async_plan`: wie async plan, aber A/B/C werden direkt über
-  den shared `MTLBuffer` adressiert statt über Upload/Download-APIs kopiert
+Explizit aktuell **kein** Kandidat:
 
-Messstand vom 2026-05-20 auf Apple Silicon:
+- Transferpfad als „Kernelproblem“ (primär Residency/Boundary-Thema).
 
-- Kleine Matrizen (`128^3`, `256^3`) bleiben klar bei Accelerate.
-- `512^3` profitiert stark von async/plan, erreicht Accelerate aber noch nicht stabil.
-- `1024^3` ist die aktuelle Crossover-Zone; je nach Lauf ist async/plan gleichauf
-  bis schneller.
-- `2048^3` ist mit GPU-residentem async/plan klar schneller als Accelerate.
-- Direkter Unified-Memory-Zugriff entfernt die API-seitigen Upload/Download-
-  Zähler und hilft bei großen plain-GEMMs; als reine Kernel-Optimierung ist er
-  aber kein Ersatz für Batching, Plan-Reuse und Fusion.
+## Offene Themen (priorisiert)
 
-Die Counter bestätigen die Ursache: `resident_async_plan` reduziert die timed
-CommandBuffer/Waits auf wenige Boundary-Operationen und die Plan-Allokationen
-auf 1, während `oneshot` pro Iteration Upload, CommandBuffer, Wait und Download
-bezahlt.
+### P0 — Messbasis vereinheitlichen (CSV überall)
 
-### Fused Matrix GEMM + Bias + ReLU shifts the crossover lower
+**Ziel:** Maschinenlesbare Ausgabe konsistent für die zentralen MPS-Benchmarks.
 
-The matrix path now also has a GPU-resident fused epilogue for
-`GEMM + row-bias + ReLU`. It keeps the GEMM output in the same `SmMpsMatrix`
-and applies the bias/ReLU epilogue with a small Metal compute kernel in the
-same stream.
+Offen:
 
-Measured with `//share/simple_benchmark:bench_sm_mps` on 2026-05-20:
+- CSV-Export in `bench_st_pipeline` ergänzen
+- CSV-Export in `bench_st_transfer` ergänzen
+- gemeinsames Spalten-Set für Vergleichbarkeit definieren
 
-- `128^3` and `256^3` still favor Accelerate.
-- `512^3` becomes the first practical win for the fused GPU-resident path.
-- `1024^3` and `2048^3` are consistently faster with async/plan variants.
-- All measured fused rows reported `max_abs_diff=0` against the CPU
-  `sm_gemm_bias_relu` reference.
+Definition of Done:
 
-This supports the current recommendation: use Accelerate for small dense
-matrix work; use `sm_mps` when data can stay GPU-resident, especially for fused
-ML-style dense layers at `512^3+` and plain GEMM around `1024^3+`.
-The direct Unified-Memory variant is useful when callers can naturally produce
-or consume data inside the `SmMpsMatrix` buffer, but it is not currently the
-default recommendation for the fused path because the timed kernel results are
-mixed compared with `resident_async_plan`.
+- `bench_st_single_op`, `bench_st_pipeline`, `bench_st_transfer` liefern per
+  Env-Flag konsistente CSV-Ausgabe.
+- ein Parser/Notebook kann alle drei Formate ohne Sonderfälle einlesen.
 
-### Die Infrastruktur ist messbar robuster geworden
+---
 
-Neben den reinen Laufzeiten wurde auch die technische Basis verbessert:
+### P0 — Commit-/Sync-Strategie kalibrieren
 
-- Pool, BatchNorm und Conv nutzen nun ein konsistenteres Fastpath-Modell
-- Asynchrone GPU-Arbeit wird sauberer getrackt
-- Allocator-Reuse ist über Counter sichtbar
-- Build- und Test-Basis für die betroffenen Benchmarks ist intakt
+**Ausgangslage:** Profile (`throughput`, `balanced`, `stable`) sind vorhanden,
+aber noch nicht belastbar kalibriert.
 
-Zuletzt verifiziert:
+Offen:
 
-- `bazel test //app/tensor:test_st_batchnorm` ✅
-- `bazel build //app/tensor:bench_st_single_op` ✅
-- `bazel build //app/tensor:bench_st_pipeline` ✅
-- `bazel build //app/tensor:bench_st_transfer` ✅
+- systematische A/B-Matrix pro Pipeline-Typ (`conv+bn`, `conv+bn+pool`,
+  transfer-lastig)
+- klare Empfehlung, wann welches Profil Standard sein soll
+- Regression-Guards für ungünstige Profile
 
-## Noch ausstehende Themen
+Definition of Done:
 
-### Commit-Strategie weiter kalibrieren
+- dokumentierte Profil-Empfehlung pro Pipeline-Klasse
+- reproduzierbare Messung mit mindestens zwei Problemgrößen je Klasse
+- kein Profil mit signifikantem Regressionsrisiko als Default
 
-Die gemeinsame Stream-Schicht ist vorhanden, aber die optimale Commit-Politik
-ist noch nicht abschließend gefunden.
+---
 
-Offen sind insbesondere:
+### P1 — Fastpath-Helfer weiter vereinheitlichen
 
-- belastbare Profile wie `stable`, `balanced`, `throughput`
-- systematische A/B-Auswertung pro Pipeline-Typ
-- optionale Integration der Stream-Mechanik auch in weitere Fallback-Pfade
+**Ziel:** weniger Duplikation, schnelleres Hinzufügen neuer GPU-residenter Ops.
 
-### Fastpath-Helfer weiter verallgemeinern
+Offen:
 
-Der Conv-Fastpath ist leistungsstark, aber noch zu speziell. Die Extraktion
-gemeinsamer Helper für
+- einheitliche Helper für Feed-Mapping und preallocated Outputs
+- klarer Reuse-Pfad für Executable-/Graph-Caching
+- konsistentes async finalize/commit handling für neue Ops
 
-- Feed-Mapping
-- preallocated outputs
-- Executable-Reuse
-- async commit handling
+Definition of Done:
 
-steht noch aus.
+- neue oder angepasste Op-Fastpaths verwenden dieselben Kern-Helper
+- weniger op-spezifische Sonderlogik im Encode-/Finalize-Pfad
 
-Damit würde die Einführung weiterer GPU-residenter Operatoren einfacher und
-weniger dupliziert.
+---
 
-### Profiling weiter ausbauen
+### P1 — Layout-Strategie festziehen (NCHW/NHWC)
 
-Die Allocator-Counter sind vorhanden, aber das Profiling ist noch nicht am
-Ziel.
+**Ausgangslage:** NHWC-Vorarbeit ist vorhanden, aber keine verbindliche
+Strategie über den gesamten Pipeline-Fluss.
 
-Offen sind:
+Offen:
 
-- CSV-Export auch für `bench_st_pipeline` und `bench_st_transfer`
-- Profiling der Command-Buffer-Commit-Zyklen
-- eine noch einheitlichere Maschinen-Ausgabe über alle MPS-Benchmarks hinweg
+- bevorzugtes internes Layout für Conv-dominierte GPU-Pipelines festlegen
+- Transpose-Budget/Regeln definieren (wann erlaubt, wann zu teuer)
+- robuster Umgang mit nicht-kontiguierlichen Tensoren im Layout-Wechsel
 
-### Custom-Metal-Kernels für Hot Paths prüfen
+Definition of Done:
 
-Der aktuelle Ansatz ist stark MPSGraph-zentriert. Das ist für viele Fälle gut,
-aber nicht zwingend optimal für kleine, sehr häufige oder bandbreitenlimitierte
-Operatoren.
+- dokumentierte Layout-Policy mit klaren Entscheidungsregeln
+- Benchmarks zeigen reduzierte oder stabilere Transpose-Overheads
 
-Noch offen ist daher die Frage, welche Hot Paths von eigenen Metal-Kernels
-profitieren würden und welche weiterhin besser bei MPSGraph bleiben.
+---
 
-### Layout-Strategie für GPU-Pipelines festziehen
+### P2 — Custom-Metal-Kernels gezielt evaluieren
 
-Einzelne Vorarbeiten wie das NHWC-Experiment im Conv-Pfad existieren, aber eine
-klare interne Layout-Strategie fehlt noch.
+**Ziel:** nur dort eigene Kernel bauen, wo MPSGraph klar limitiert.
 
-Offen sind:
+Offen:
 
-- bevorzugtes GPU-Layout für Conv-dominierte Pipelines
-- Reduktion unnötiger Transposes
-- robustere Behandlung nicht-kontiguierlicher Tensoren
+- Hot-Path-Kandidaten anhand von Profiling priorisieren
+- für jeden Kandidaten: MPSGraph vs. Custom-Kernel A/B messen
+- nur Kandidaten mit robustem Vorteil übernehmen
 
-## Praktische Mindestprüfung für weitere MPS-Änderungen
+Definition of Done:
 
-Für jede weitere Backend-Optimierung sollten mindestens diese Fragen erneut
-beantwortet werden:
+- kurze Kandidatenliste mit Messdaten und Go/No-Go-Entscheidungen
+- keine „vorsorgliche“ Kernel-Implementierung ohne Benchmark-Nachweis
+
+## Mindestprüfung für jede neue MPS-Änderung
+
+Vor Merge müssen mindestens diese Fragen positiv beantwortet sein:
 
 1. Bleiben Daten länger GPU-resident?
 2. Wurden Readbacks oder unnötige Waits reduziert?
-3. Ist der Effekt in Benchmarks sichtbar?
-4. Wurde bestehende Infrastruktur wiederverwendet statt neue Sonderlogik
-   einzuführen?
+3. Ist der Effekt in Benchmarks/CSV sichtbar?
+4. Nutzt die Änderung bestehende Stream-/Buffer-/Fastpath-Infrastruktur?
+5. Gibt es einen klaren Regression-Check für den betroffenen Pfad?
+
+## Kurz-Roadmap (empfohlen)
+
+1. **P0 umsetzen:** CSV für Pipeline/Transfer + Profil-Kalibrierung.
+2. **P1 stabilisieren:** Fastpath-Helper und Layout-Policy konsolidieren.
+3. **P2 selektiv:** Custom-Kernel nur datengetrieben nachziehen.
+
+## Sprint-Backlog (2 Wochen, direkt umsetzbar)
+
+Die folgende Liste ist so formuliert, dass sie 1:1 als GitHub-Issues übernommen
+werden kann.
+
+### Sprint-Ziel
+
+- Reproduzierbare MPS-Messbasis für Pipeline/Transfer herstellen.
+- Commit-/Sync-Profile belastbar kalibrieren.
+- P1-Themen vorbereiten, ohne unnötige Refactors zu starten.
+
+### Ticket 1 — CSV-Export für `bench_st_pipeline`
+
+**Priorität:** P0  
+**Aufwand:** S
+
+- [x] Env-Flag analog zu `BENCH_CSV` in `bench_st_single_op` ergänzen.
+- [x] CSV-Header und Rows für alle Pipeline-Varianten ausgeben.
+- [x] Menschlich lesbare Ausgabe als Default beibehalten.
+
+**Akzeptanzkriterien**
+
+- [x] `bench_st_pipeline` liefert mit Env-Flag parsebare CSV-Zeilen.
+- [x] Ohne Env-Flag bleibt bestehende Console-Ausgabe unverändert.
+
+### Ticket 2 — CSV-Export für `bench_st_transfer`
+
+**Priorität:** P0  
+**Aufwand:** S
+
+- [x] Env-Flag für CSV ergänzen.
+- [x] Transfer-spezifische Kennzahlen als Spalten aufnehmen.
+- [x] Werte für Metal vs. CPU/Blit pro Case eindeutig markieren.
+
+**Akzeptanzkriterien**
+
+- [x] `bench_st_transfer` liefert reproduzierbare CSV-Zeilen pro Case.
+- [x] Spaltennamen sind stabil und dokumentiert.
+
+### Ticket 3 — Einheitliches CSV-Schema definieren
+
+**Priorität:** P0  
+**Aufwand:** S
+
+- [x] Kernspalten festlegen (suite, case, variant, iters, ms, counter deltas).
+- [x] Pflicht-/optional-Spalten dokumentieren.
+- [x] Kurz-Doku im Repo ergänzen (z. B. in `share/` oder `doc/`).
+
+**Akzeptanzkriterien**
+
+- [x] Ein Parser kann `single_op`, `pipeline`, `transfer` ohne Sonderfälle lesen.
+- [x] Keine mehrdeutigen Spaltennamen zwischen Benchmarks.
+
+### Ticket 4 — Profil-Matrix für Commit-/Sync-Strategie aufsetzen
+
+**Priorität:** P0  
+**Aufwand:** M
+
+- [x] Testmatrix definieren für `throughput|balanced|stable`.
+- [x] Mindestens 3 Pipeline-Klassen abdecken (`conv+bn`, `conv+bn+pool`, transfer).
+- [x] Je Klasse mindestens 2 Problemgrößen messen.
+
+**Akzeptanzkriterien**
+
+- [x] Vollständige Ergebnistabelle mit identischer Messmethodik vorhanden.
+- [x] Messergebnisse sind per CSV/Artefakt nachvollziehbar.
+
+### Ticket 5 — Default-Profil-Empfehlung mit Guardrails
+
+**Priorität:** P0  
+**Aufwand:** M
+
+- [x] Profil-Empfehlung pro Pipeline-Klasse aus Messmatrix ableiten.
+- [x] Regressionsgrenzen festlegen (z. B. max. tolerierbare Verschlechterung).
+- [x] Guard-Check in Benchmark-/CI-Workflow aufnehmen (wo sinnvoll).
+
+**Akzeptanzkriterien**
+
+- [x] Dokumentierte Default-Empfehlung im Repo vorhanden.
+- [x] Kein Default mit bekannter signifikanter Regression.
+
+### Ticket 6 — Fastpath-Helfer: minimaler Konsolidierungsschnitt
+
+**Priorität:** P1  
+**Aufwand:** M
+
+- [x] Duplizierte Feed-/Finalize-Muster in bestehenden MPS-Ops inventarisieren.
+- [x] 1–2 kleine gemeinsame Helper extrahieren (ohne Großrefactor).
+- [x] Bestehendes Verhalten mit Bench/Test absichern.
+
+**Akzeptanzkriterien**
+
+- [x] Reduzierte Duplikation in mindestens zwei Fastpaths.
+- [x] Keine funktionale Regression in betroffenen Benchmarks.
+
+### Ticket 7 — Layout-Policy Entwurf (NCHW/NHWC)
+
+**Priorität:** P1  
+**Aufwand:** M
+
+- [x] Entscheidungsregeln für internes Layout als Draft dokumentieren.
+- [x] Transpose-Budget definieren (wann Wechsel sinnvoll/zu teuer).
+- [x] Bezug auf vorhandene Layout-Benchmarks herstellen.
+
+**Akzeptanzkriterien**
+
+- [x] Policy-Dokument mit klaren If/Then-Regeln vorhanden.
+- [x] Mindestens ein Benchmark-Befund stützt jede Kernregel.
+
+### Ticket 8 — Custom-Kernel Kandidatenliste (No-Implementation)
+
+**Priorität:** P2  
+**Aufwand:** S
+
+- [x] Top-2/Top-3 Kandidaten aus Profiling ableiten.
+- [x] Für jeden Kandidaten Go/No-Go-Hypothese formulieren.
+- [x] Messplan für spätere A/B-Validierung definieren.
+
+**Akzeptanzkriterien**
+
+- [x] Kandidatenliste ist kurz, begründet und priorisiert.
+- [x] Keine Kernel-Implementierung ohne vorherige Messgrundlage.
+
+## Sprint-Exit-Kriterien
+
+Der Sprint gilt als erfolgreich, wenn alle Punkte erfüllt sind:
+
+- [x] CSV in `single_op`, `pipeline`, `transfer` ist einheitlich nutzbar.
+- [x] Profil-Kalibrierung liefert belastbare Default-Empfehlungen.
+- [x] P1 ist mit klaren, risikoarmen Folgeschritten vorbereitet.
+- [x] Für P2 liegt eine datengetriebene Kandidatenliste vor.

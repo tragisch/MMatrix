@@ -22,7 +22,16 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
+
+typedef struct PipelineCase {
+  const char *name;
+  size_t n, c_in, c_out, h, w, k, stride, pad;
+  size_t warmup, iters;
+} PipelineCase;
+
+static const char *buf_type(const FloatTensor *t);
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -36,6 +45,31 @@ static uint64_t now_ns(void) {
 
 static double elapsed_ms(uint64_t start, uint64_t end, size_t iters) {
   return (double)(end - start) / 1000000.0 / (double)iters;
+}
+
+static int bench_csv_enabled(void) {
+  const char *env = getenv("BENCH_CSV");
+  return env && strcmp(env, "0") != 0;
+}
+
+static const char *bench_async_profile(void) {
+  const char *p = getenv("MMATRIX_ST_ASYNC_PROFILE");
+  return (p && p[0] != '\0') ? p : "default";
+}
+
+static void print_csv_header(void) {
+  printf("suite,async_profile,pipeline,variant,case_name,N,Cin,Cout,H,W,K,stride,pad,iters,ms_per_iter,out_buf,mps_hit,mps_miss,fallback_gemm,fallback_ref,conv_readbytes,conv_fastpath_hit\n");
+}
+
+static void print_csv_row(const char *pipeline, const char *variant,
+                          const PipelineCase *cfg, const FloatTensor *out,
+                          double ms, StBackendCounters c) {
+  printf("pipeline,%s,%s,%s,%s,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%zu,%.6f,%s,%ld,%ld,%ld,%ld,%ld,%ld\n",
+    bench_async_profile(), pipeline, variant, cfg->name,
+    cfg->n, cfg->c_in, cfg->c_out,
+         cfg->h, cfg->w, cfg->k, cfg->stride, cfg->pad, cfg->iters, ms,
+         buf_type(out), c.mps_hit, c.mps_miss, c.fallback_gemm,
+         c.fallback_ref, c.conv_readbytes, c.conv_fastpath_hit);
 }
 
 static FloatTensor *make4d(size_t n, size_t c, size_t h, size_t w) {
@@ -73,12 +107,6 @@ static void print_counters(void) {
 /* ------------------------------------------------------------------ */
 /*  Pipeline case definition                                           */
 /* ------------------------------------------------------------------ */
-
-typedef struct PipelineCase {
-  const char *name;
-  size_t n, c_in, c_out, h, w, k, stride, pad;
-  size_t warmup, iters;
-} PipelineCase;
 
 static void print_case_header(const char *pipeline,
                               const char *variant,
@@ -158,11 +186,20 @@ static void bench_fused_conv_bn(const PipelineCase *cfg,
     st_tensor_sync(out);
   }
   uint64_t t1 = now_ns();
+  const double ms = elapsed_ms(t0, t1, cfg->iters);
+  const StBackendCounters c = st_backend_get_counters();
+
+  if (bench_csv_enabled()) {
+    print_csv_row("conv+bn(fused)",
+                  sync_each_iter ? "sync_each_iter" : "boundary_sync_only",
+                  cfg, out, ms, c);
+    goto cleanup_conv_bn;
+  }
 
   print_case_header("conv+bn(fused)",
                     sync_each_iter ? "sync_each_iter" : "boundary_sync_only",
                     cfg, out);
-  printf("    time: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
+  printf("    time: %.3f ms/iter\n", ms);
   print_counters();
 
 cleanup_conv_bn:
@@ -262,11 +299,20 @@ static void bench_fused_conv_bn_pool(const PipelineCase *cfg,
     st_tensor_sync(out);
   }
   uint64_t t1 = now_ns();
+  const double ms = elapsed_ms(t0, t1, cfg->iters);
+  const StBackendCounters c = st_backend_get_counters();
+
+  if (bench_csv_enabled()) {
+    print_csv_row("conv+bn+pool(fused)",
+                  sync_each_iter ? "sync_each_iter" : "boundary_sync_only",
+                  cfg, out, ms, c);
+    goto cleanup_conv_bn_relu;
+  }
 
   print_case_header("conv+bn+pool(fused)",
                     sync_each_iter ? "sync_each_iter" : "boundary_sync_only",
                     cfg, out);
-  printf("    time: %.3f ms/iter\n", elapsed_ms(t0, t1, cfg->iters));
+  printf("    time: %.3f ms/iter\n", ms);
   print_counters();
 
 cleanup_conv_bn_relu:
@@ -285,7 +331,12 @@ int main(void) {
   const bool prev_async = st_backend_get_conv_mps_async();
   st_backend_set_conv_mps_async(true);
   log_set_level(LOG_WARN);
-  printf("=== bench_st_pipeline ===\n\n");
+
+  if (bench_csv_enabled()) {
+    print_csv_header();
+  } else {
+    printf("=== bench_st_pipeline ===\n\n");
+  }
 
   static const PipelineCase cases[] = {
     /* small: forced-MPS stress case; may skip if MPS rejects the shape */
@@ -296,23 +347,33 @@ int main(void) {
     { "pipe-large",  8, 64,128,112,112, 3, 1, 1, 2,  5 },
   };
 
-  printf("-- Fused Conv+BN --\n");
+  if (!bench_csv_enabled()) {
+    printf("-- Fused Conv+BN --\n");
+  }
   for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
     bench_fused_conv_bn(&cases[i], false); /* boundary sync only */
 
-  printf("\n-- Fused Conv+BN (sync each iter) --\n");
+  if (!bench_csv_enabled()) {
+    printf("\n-- Fused Conv+BN (sync each iter) --\n");
+  }
   for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
     bench_fused_conv_bn(&cases[i], true);
 
-  printf("\n-- Fused Conv+BN+Pool --\n");
+  if (!bench_csv_enabled()) {
+    printf("\n-- Fused Conv+BN+Pool --\n");
+  }
   for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
     bench_fused_conv_bn_pool(&cases[i], false); /* boundary sync only */
 
-  printf("\n-- Fused Conv+BN+Pool (sync each iter) --\n");
+  if (!bench_csv_enabled()) {
+    printf("\n-- Fused Conv+BN+Pool (sync each iter) --\n");
+  }
   for (size_t i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i)
     bench_fused_conv_bn_pool(&cases[i], true);
 
-  printf("\n=== done ===\n");
+  if (!bench_csv_enabled()) {
+    printf("\n=== done ===\n");
+  }
   st_backend_set_conv_mps_async(prev_async);
   return 0;
 }

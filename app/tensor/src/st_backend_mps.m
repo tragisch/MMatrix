@@ -183,6 +183,40 @@ static bool st_mps_build_inputs_array(
   return true;
 }
 
+static void *st_mps_encode_preallocated_async(
+    id<MTLCommandQueue> queue,
+    MPSGraphExecutable *executable,
+    NSArray<MPSGraphTensorData *> *inputsArray,
+    NSArray<MPSGraphTensorData *> *resultsArray) {
+  if (!queue || !executable || !inputsArray || !resultsArray) {
+    return NULL;
+  }
+
+  id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
+  if (!cmdBuf) {
+    return NULL;
+  }
+
+  @try {
+    [executable encodeToCommandBuffer:cmdBuf
+                           inputsArray:inputsArray
+                          resultsArray:resultsArray
+                   executionDescriptor:nil];
+  } @catch (NSException *e) {
+    (void)e;
+    return NULL;
+  }
+
+  id<MTLCommandBuffer> pendingCmdBuf = nil;
+  if (!st_mps_stream_finalize_encoded_command_buffer(
+          cmdBuf, nil, /*force_commit=*/true,
+          &pendingCmdBuf) || !pendingCmdBuf) {
+    return NULL;
+  }
+
+  return (__bridge_retained void *)pendingCmdBuf;
+}
+
 /* ================================================================== */
 /*  supports_op                                                        */
 /* ================================================================== */
@@ -623,26 +657,8 @@ static void *mps_maxpool2d_forward_preallocated(
       initWithMTLBuffer:outBuf shape:@[@(n), @(c), @(oh), @(ow)]
             dataType:MPSDataTypeFloat32];
 
-  /* ---- Async encode ---- */
-  id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
-  if (!cmdBuf) return NULL;
-
-  @try {
-    [executable encodeToCommandBuffer:cmdBuf
-                           inputsArray:@[inData]
-                          resultsArray:@[outData]
-                   executionDescriptor:nil];
-  } @catch (NSException *e) {
-    return NULL;
-  }
-
-  id<MTLCommandBuffer> pendingCmdBuf = nil;
-    if (!st_mps_stream_finalize_encoded_command_buffer(
-      cmdBuf, nil, /*force_commit=*/true,
-      &pendingCmdBuf) || !pendingCmdBuf) {
-    return NULL;
-  }
-  return (__bridge_retained void *)pendingCmdBuf;
+  return st_mps_encode_preallocated_async(queue, executable,
+                                          @[inData], @[outData]);
   } // @autoreleasepool
 }
 
@@ -759,25 +775,8 @@ static void *mps_avgpool2d_forward_preallocated(
       initWithMTLBuffer:outBuf shape:@[@(n), @(c), @(oh), @(ow)]
             dataType:MPSDataTypeFloat32];
 
-  id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
-  if (!cmdBuf) return NULL;
-
-  @try {
-    [executable encodeToCommandBuffer:cmdBuf
-                           inputsArray:@[inData]
-                          resultsArray:@[outData]
-                   executionDescriptor:nil];
-  } @catch (NSException *e) {
-    return NULL;
-  }
-
-  id<MTLCommandBuffer> pendingCmdBuf = nil;
-    if (!st_mps_stream_finalize_encoded_command_buffer(
-      cmdBuf, nil, /*force_commit=*/true,
-      &pendingCmdBuf) || !pendingCmdBuf) {
-    return NULL;
-  }
-  return (__bridge_retained void *)pendingCmdBuf;
+  return st_mps_encode_preallocated_async(queue, executable,
+                                          @[inData], @[outData]);
   } // @autoreleasepool
 }
 
@@ -948,26 +947,9 @@ static void *mps_batchnorm2d_forward_preallocated(
                                               shape:@[@(n), @(c), @(h), @(w)]
                                            dataType:MPSDataTypeFloat32];
 
-  /* ---- Async encode ---- */
-  id<MTLCommandBuffer> cmdBuf = st_mps_stream_make_command_buffer(queue);
-  if (!cmdBuf) return NULL;
-
-  @try {
-    [executable encodeToCommandBuffer:cmdBuf
-                           inputsArray:@[inData, gamData, betData]
-                          resultsArray:@[outData]
-                   executionDescriptor:nil];
-  } @catch (NSException *e) {
-    return NULL;
-  }
-
-  id<MTLCommandBuffer> pendingCmdBuf = nil;
-    if (!st_mps_stream_finalize_encoded_command_buffer(
-      cmdBuf, nil, /*force_commit=*/true,
-      &pendingCmdBuf) || !pendingCmdBuf) {
-    return NULL;
-  }
-  return (__bridge_retained void *)pendingCmdBuf;
+  return st_mps_encode_preallocated_async(queue, executable,
+                                          @[inData, gamData, betData],
+                                          @[outData]);
   } // @autoreleasepool
 }
 
