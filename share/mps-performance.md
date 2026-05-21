@@ -161,6 +161,8 @@ Der Benchmark `//share/simple_benchmark:bench_sm_mps` vergleicht aktuell:
 - `resident_sync`: A/B/C als wiederverwendete `SmMpsMatrix`, aber ein Wait pro GEMM
 - `resident_async_batch`: mehrere GEMMs in einen Stream encoden, ein Boundary-Wait
 - `resident_async_plan`: wie async batch, aber mit wiederverwendetem GEMM-Plan
+- `resident_direct_async_plan`: wie async plan, aber A/B/C werden direkt über
+  den shared `MTLBuffer` adressiert statt über Upload/Download-APIs kopiert
 
 Messstand vom 2026-05-20 auf Apple Silicon:
 
@@ -169,11 +171,37 @@ Messstand vom 2026-05-20 auf Apple Silicon:
 - `1024^3` ist die aktuelle Crossover-Zone; je nach Lauf ist async/plan gleichauf
   bis schneller.
 - `2048^3` ist mit GPU-residentem async/plan klar schneller als Accelerate.
+- Direkter Unified-Memory-Zugriff entfernt die API-seitigen Upload/Download-
+  Zähler und hilft bei großen plain-GEMMs; als reine Kernel-Optimierung ist er
+  aber kein Ersatz für Batching, Plan-Reuse und Fusion.
 
 Die Counter bestätigen die Ursache: `resident_async_plan` reduziert die timed
 CommandBuffer/Waits auf wenige Boundary-Operationen und die Plan-Allokationen
 auf 1, während `oneshot` pro Iteration Upload, CommandBuffer, Wait und Download
 bezahlt.
+
+### Fused Matrix GEMM + Bias + ReLU shifts the crossover lower
+
+The matrix path now also has a GPU-resident fused epilogue for
+`GEMM + row-bias + ReLU`. It keeps the GEMM output in the same `SmMpsMatrix`
+and applies the bias/ReLU epilogue with a small Metal compute kernel in the
+same stream.
+
+Measured with `//share/simple_benchmark:bench_sm_mps` on 2026-05-20:
+
+- `128^3` and `256^3` still favor Accelerate.
+- `512^3` becomes the first practical win for the fused GPU-resident path.
+- `1024^3` and `2048^3` are consistently faster with async/plan variants.
+- All measured fused rows reported `max_abs_diff=0` against the CPU
+  `sm_gemm_bias_relu` reference.
+
+This supports the current recommendation: use Accelerate for small dense
+matrix work; use `sm_mps` when data can stay GPU-resident, especially for fused
+ML-style dense layers at `512^3+` and plain GEMM around `1024^3+`.
+The direct Unified-Memory variant is useful when callers can naturally produce
+or consume data inside the `SmMpsMatrix` buffer, but it is not currently the
+default recommendation for the fused path because the timed kernel results are
+mixed compared with `resident_async_plan`.
 
 ### Die Infrastruktur ist messbar robuster geworden
 

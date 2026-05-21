@@ -48,6 +48,14 @@ void sm_mps_reset_counters(void);
 
 SmMpsMatrix *sm_mps_matrix_create(size_t rows, size_t cols);
 void sm_mps_matrix_destroy(SmMpsMatrix *matrix);
+
+/*
+ * Direct shared-buffer access for Apple Silicon Unified Memory. Callers must
+ * wait on the owning stream before reading CPU-side results.
+ */
+float *sm_mps_matrix_contents(SmMpsMatrix *matrix);
+const float *sm_mps_matrix_const_contents(const SmMpsMatrix *matrix);
+
 bool sm_mps_matrix_upload(SmMpsMatrix *matrix, const float *values);
 bool sm_mps_matrix_download(const SmMpsMatrix *matrix, float *values);
 
@@ -72,6 +80,26 @@ bool sm_mps_matrix_gemm_async(SmMpsStream *stream, SmMpsMatrix *C, float alpha,
                               const SmMpsMatrix *A, bool transpose_left,
                               const SmMpsMatrix *B, bool transpose_right,
                               float beta);
+
+bool sm_mps_matrix_bias_relu_async(SmMpsStream *stream, SmMpsMatrix *C,
+                                   const SmMpsMatrix *bias,
+                                   bool bias_is_row);
+
+bool sm_mps_matrix_gemm_bias_relu_async(SmMpsStream *stream, SmMpsMatrix *C,
+                                        float alpha, const SmMpsMatrix *A,
+                                        bool transpose_left,
+                                        const SmMpsMatrix *B,
+                                        bool transpose_right,
+                                        const SmMpsMatrix *bias,
+                                        bool bias_is_row);
+
+bool sm_mps_matrix_gemm_bias_relu_ex(SmMpsMatrix *C, float alpha,
+                                     const SmMpsMatrix *A,
+                                     bool transpose_left,
+                                     const SmMpsMatrix *B,
+                                     bool transpose_right,
+                                     const SmMpsMatrix *bias,
+                                     bool bias_is_row);
 
 bool sm_mps_matrix_gemm_ex(SmMpsMatrix *C, float alpha,
                            const SmMpsMatrix *A, bool transpose_left,

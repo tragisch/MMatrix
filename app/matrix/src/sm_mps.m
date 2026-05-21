@@ -13,6 +13,7 @@
 
 #include <stdlib.h>
 #include <stdatomic.h>
+#include <stdint.h>
 #include <string.h>
 
 @interface SmMpsMatrixHandle : NSObject
@@ -118,6 +119,48 @@ static id<MTLCommandQueue> _mps_shared_command_queue(void) {
   return queue;
 }
 
+static id<MTLComputePipelineState> _sm_mps_bias_relu_pipeline(void) {
+  static id<MTLComputePipelineState> pipeline = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    id<MTLDevice> device = _mps_shared_device();
+    if (!device) {
+      return;
+    }
+    NSString *source =
+        @"#include <metal_stdlib>\n"
+         "using namespace metal;\n"
+         "kernel void sm_mps_bias_relu(device float *c [[buffer(0)]],\n"
+         "                            device const float *bias [[buffer(1)]],\n"
+         "                            constant uint &cols [[buffer(2)]],\n"
+         "                            constant uint &total [[buffer(3)]],\n"
+         "                            constant uint &has_bias [[buffer(4)]],\n"
+         "                            constant uint &bias_is_row [[buffer(5)]],\n"
+         "                            uint gid [[thread_position_in_grid]]) {\n"
+         "  if (gid >= total) return;\n"
+         "  float v = c[gid];\n"
+         "  if (has_bias != 0) {\n"
+         "    uint bias_idx = (bias_is_row != 0) ? (gid % cols) : gid;\n"
+         "    v += bias[bias_idx];\n"
+         "  }\n"
+         "  c[gid] = max(v, 0.0f);\n"
+         "}\n";
+    NSError *error = nil;
+    id<MTLLibrary> library = [device newLibraryWithSource:source
+                                                  options:nil
+                                                    error:&error];
+    if (!library) {
+      return;
+    }
+    id<MTLFunction> function = [library newFunctionWithName:@"sm_mps_bias_relu"];
+    if (!function) {
+      return;
+    }
+    pipeline = [device newComputePipelineStateWithFunction:function error:&error];
+  });
+  return pipeline;
+}
+
 void *mps_get_shared_device(void) {
   return (__bridge void *)_mps_shared_device();
 }
@@ -213,6 +256,22 @@ void sm_mps_matrix_destroy(SmMpsMatrix *matrix) {
     CFBridgingRelease(matrix->handle);
   }
   free(matrix);
+}
+
+float *sm_mps_matrix_contents(SmMpsMatrix *matrix) {
+  SmMpsMatrixHandle *handle = _sm_mps_matrix_handle(matrix);
+  if (!handle) {
+    return NULL;
+  }
+  return (float *)handle.buffer.contents;
+}
+
+const float *sm_mps_matrix_const_contents(const SmMpsMatrix *matrix) {
+  SmMpsMatrixHandle *handle = _sm_mps_matrix_handle(matrix);
+  if (!handle) {
+    return NULL;
+  }
+  return (const float *)handle.buffer.contents;
 }
 
 bool sm_mps_matrix_upload(SmMpsMatrix *matrix, const float *values) {
@@ -444,6 +503,102 @@ bool sm_mps_matrix_gemm_async(SmMpsStream *stream, SmMpsMatrix *C, float alpha,
   }
   bool ok = sm_mps_gemm_plan_encode(stream, plan, C, A, B);
   sm_mps_gemm_plan_destroy(plan);
+  return ok;
+}
+
+bool sm_mps_matrix_bias_relu_async(SmMpsStream *stream, SmMpsMatrix *C,
+                                   const SmMpsMatrix *bias,
+                                   bool bias_is_row) {
+  SmMpsStreamHandle *streamHandle = _sm_mps_stream_handle(stream);
+  SmMpsMatrixHandle *handleC = _sm_mps_matrix_handle(C);
+  SmMpsMatrixHandle *handleBias = _sm_mps_matrix_handle(bias);
+  if (!streamHandle || !handleC) {
+    return false;
+  }
+
+  const bool has_bias = handleBias != nil;
+  if (has_bias) {
+    if (bias_is_row) {
+      if (handleBias.rows != 1 || handleBias.cols != handleC.cols) {
+        return false;
+      }
+    } else if (handleBias.rows != handleC.rows || handleBias.cols != handleC.cols) {
+      return false;
+    }
+  }
+  if (handleC.cols > UINT32_MAX ||
+      handleC.rows > UINT32_MAX / handleC.cols) {
+    return false;
+  }
+
+  id<MTLComputePipelineState> pipeline = _sm_mps_bias_relu_pipeline();
+  id<MTLCommandBuffer> commandBuffer = _sm_mps_stream_command_buffer(streamHandle);
+  if (!pipeline || !commandBuffer) {
+    return false;
+  }
+  id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
+  if (!encoder) {
+    return false;
+  }
+
+  uint32_t cols = (uint32_t)handleC.cols;
+  uint32_t total = (uint32_t)(handleC.rows * handleC.cols);
+  uint32_t hasBias = has_bias ? 1u : 0u;
+  uint32_t biasIsRow = bias_is_row ? 1u : 0u;
+
+  [encoder setComputePipelineState:pipeline];
+  [encoder setBuffer:handleC.buffer offset:0 atIndex:0];
+  [encoder setBuffer:(has_bias ? handleBias.buffer : handleC.buffer)
+              offset:0
+             atIndex:1];
+  [encoder setBytes:&cols length:sizeof(cols) atIndex:2];
+  [encoder setBytes:&total length:sizeof(total) atIndex:3];
+  [encoder setBytes:&hasBias length:sizeof(hasBias) atIndex:4];
+  [encoder setBytes:&biasIsRow length:sizeof(biasIsRow) atIndex:5];
+
+  NSUInteger width = pipeline.threadExecutionWidth;
+  if (width == 0) {
+    width = 64;
+  }
+  MTLSize threadsPerThreadgroup = MTLSizeMake(width, 1, 1);
+  MTLSize threadsPerGrid = MTLSizeMake(total, 1, 1);
+  [encoder dispatchThreads:threadsPerGrid threadsPerThreadgroup:threadsPerThreadgroup];
+  [encoder endEncoding];
+  streamHandle.hasEncodedWork = YES;
+  return true;
+}
+
+bool sm_mps_matrix_gemm_bias_relu_async(SmMpsStream *stream, SmMpsMatrix *C,
+                                        float alpha, const SmMpsMatrix *A,
+                                        bool transpose_left,
+                                        const SmMpsMatrix *B,
+                                        bool transpose_right,
+                                        const SmMpsMatrix *bias,
+                                        bool bias_is_row) {
+  return sm_mps_matrix_gemm_async(stream, C, alpha, A, transpose_left, B,
+                                  transpose_right, 0.0f) &&
+         sm_mps_matrix_bias_relu_async(stream, C, bias, bias_is_row);
+}
+
+bool sm_mps_matrix_gemm_bias_relu_ex(SmMpsMatrix *C, float alpha,
+                                     const SmMpsMatrix *A,
+                                     bool transpose_left,
+                                     const SmMpsMatrix *B,
+                                     bool transpose_right,
+                                     const SmMpsMatrix *bias,
+                                     bool bias_is_row) {
+  SmMpsStream *stream = sm_mps_stream_create();
+  if (!stream) {
+    return false;
+  }
+  bool ok = sm_mps_matrix_gemm_bias_relu_async(stream, C, alpha, A,
+                                               transpose_left, B,
+                                               transpose_right, bias,
+                                               bias_is_row);
+  if (ok) {
+    ok = sm_mps_stream_wait(stream);
+  }
+  sm_mps_stream_destroy(stream);
   return ok;
 }
 
