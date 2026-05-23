@@ -6,6 +6,7 @@ It targets macOS and Linux, with CPU acceleration (BLAS/OpenMP) and optional MPS
 ## What is included
 
 - `app/matrix`: dense (`sm`, `dm`) and sparse (`dms`) matrix modules
+- `app/vector`: dense (`sv`, `dv`), strided view (`vv`), sparse (`dvs`) and fixed-size geometry (`vec3`) vector modules
 - `app/matrix:sm_mps`: explicit Apple Silicon MPS path for GPU-resident large
   dense GEMMs; check around `1024^3`, recommended for `2048^3`-class matrices.
 - `app/tensor`: N-dimensional tensor module (`st`) with CPU and optional MPS backend (only on Apple Silicon).
@@ -28,6 +29,7 @@ Build specific modules:
 
 ```bash
 bazel build //app/matrix
+bazel build //app/vector
 bazel build //app/tensor
 ```
 
