@@ -1,3 +1,4 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//tools:unity_test.bzl", "unity_test")
 
@@ -354,5 +355,17 @@ unity_test(
         ":vector_bridge",
         ":vector_tensor_bridge",
         "//app/tensor:st",
+    ],
+)
+
+cc_binary(
+    name = "bench_sv_dv",
+    srcs = ["tests/bench_sv_dv.c"],
+    copts = default_copts + perf_copts + package_copts,
+    linkopts = accelerate_linkopts + openblas_linkopts,
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        ":dv",
+        ":sv",
     ],
 )
