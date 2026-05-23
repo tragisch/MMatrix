@@ -12,6 +12,8 @@ installer(
         "//:LICENSE.txt",  # if available
         "//app/matrix",  # the target to be installed
         "//app/matrix:matrix_header",  # must be collected in a filegroup
+        "//app/vector",
+        "//app/vector:vector_header",
         "@log",
         "@matio",
         "@openblas//:install_files",
