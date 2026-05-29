@@ -13,11 +13,15 @@ It targets macOS and Linux, with CPU acceleration (BLAS/OpenMP) and optional MPS
 
 ## Build
 
-Install common dependencies on macOS (Homebrew):
+Install system libraries on macOS (Homebrew):
 
 ```bash
-brew install openblas libomp suitesparse matio llvm
+brew install openblas suite-sparse llvm
 ```
+
+`openmp` (`@openmp//:libomp`) and `matio` (`@matio//:matio`) are resolved via Bzlmod from the configured Bazel registry.
+
+`llvm` is optional for normal builds, but useful for tooling such as `clang-doc`.
 
 Build everything:
 

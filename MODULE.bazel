@@ -32,6 +32,8 @@ bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "rules_docs", version = "0.3.0")
 bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
+bazel_dep(name = "matio", version = "1.5.27")
+bazel_dep(name = "openmp", version = "22.1.1")
 
 git_override(
     module_name = "rules_docs",
@@ -90,8 +92,6 @@ bazel_dep(name = "wolfd_bazel_compile_commands", version = "0.5.2", dev_dependen
 
 host_local_library = use_repo_rule("//tools:host_local_library.bzl", "host_local_library")
 
-http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
 git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
 # unity - A simple unit testing library for C.
@@ -104,17 +104,6 @@ git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "g
 #         "https://github.com/ThrowTheSwitch/Unity/archive/refs/tags/v2.5.2.zip",
 #     ],
 # )
-
-# matio - A C library for reading and writing MATLAB MAT files.
-http_archive(
-    name = "matio",
-    build_file = "@//:third_party/matio/matio.BUILD",
-    sha256 = "0a6aa00b18c4512b63a8d27906b079c8c6ed41d4b2844f7a4ae598e18d22d3b3",
-    strip_prefix = "matio-1.5.27",
-    urls = [
-        "https://github.com/tbeu/matio/releases/download/v1.5.27/matio-1.5.27.tar.gz",
-    ],
-)
 
 git_repository(
     name = "pcg",
@@ -154,18 +143,6 @@ new_local_repository(
     name = "log",
     build_file = "@//:third_party/log.c/log.c.BUILD",
     path = "third_party/log.c",
-)
-
-host_local_library(
-    name = "openmp",
-    build_file = "@//:third_party/libomp.BUILD",
-    env_var = "LIBOMP_ROOT",
-    linux_path = "/home/linuxbrew/.linuxbrew/opt/libomp",
-    macos_path = "/opt/homebrew/opt/libomp",
-    required_subdirs = [
-        "include",
-        "lib",
-    ],
 )
 
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
