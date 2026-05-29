@@ -599,8 +599,26 @@ MioStatus dms_read_mat_file_ex(const char *filename,
 
   size_t count = 0;
   for (size_t col = 0; col < cols; ++col) {
-    for (size_t k = (size_t)s->jc[col]; k < (size_t)s->jc[col + 1]; ++k) {
-      mat->row_indices[count] = (size_t)s->ir[k];
+    size_t k_start = (size_t)s->jc[col];
+    size_t k_end = (size_t)s->jc[col + 1];
+    if (k_start > k_end || k_end > nnz) {
+      log_error("Corrupt MAT sparse column pointer at col %zu (jc[%zu]=%zu, "
+                "jc[%zu]=%zu, nzmax=%zu)",
+                col, col, k_start, col + 1, k_end, nnz);
+      dms_destroy(mat);
+      Mat_VarFree(matvar);
+      return MIO_STATUS_FORMAT_ERROR;
+    }
+    for (size_t k = k_start; k < k_end; ++k) {
+      size_t row = (size_t)s->ir[k];
+      if (row >= rows) {
+        log_error("Corrupt MAT sparse row index %zu at k=%zu (rows=%zu)", row,
+                  k, rows);
+        dms_destroy(mat);
+        Mat_VarFree(matvar);
+        return MIO_STATUS_FORMAT_ERROR;
+      }
+      mat->row_indices[count] = row;
       mat->col_indices[count] = col;
       mat->values[count] = ((double *)s->data)[k];
       count++;
@@ -751,9 +769,18 @@ DoubleSparseMatrix *dms_read_matrix_market(const char *filename) {
       break;
     }
 
+    if (row_idx == 0 || row_idx > nrows || col_idx == 0 || col_idx > ncols) {
+      log_error("Invalid matrix coordinates (%zu, %zu) at entry %zu — expected "
+                "1-based indices in [1..%zu] x [1..%zu]",
+                row_idx, col_idx, i, nrows, ncols);
+      dms_destroy(mat);
+      fclose(fp);
+      return NULL;
+    }
+
     if (val != 0.0) {
-      mat->row_indices[actual_nnz] = (size_t)(row_idx - 1);
-      mat->col_indices[actual_nnz] = (size_t)(col_idx - 1);
+      mat->row_indices[actual_nnz] = row_idx - 1;
+      mat->col_indices[actual_nnz] = col_idx - 1;
       mat->values[actual_nnz] = val;
       actual_nnz++;
     }
