@@ -7,6 +7,7 @@
  */
 
 #include "dm.h"
+#include "m_rng.h"
 
 #include <log.h>
 #include <math.h>
@@ -168,21 +169,11 @@ double *dm_to_column_major(const DoubleMatrix *mat) {
   return col_major;
 }
 
-static uint64_t dm_mix64(uint64_t x) {
-  x += 0x9E3779B97F4A7C15ull;
-  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
-  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
-  return x ^ (x >> 31);
-}
-
 static uint64_t dm_resolve_seed(uint64_t seed) {
-  if (seed != 0) {
-    return seed;
-  }
-  if (dm_seed_initialized) {
-    return dm_global_seed;
-  }
-  return ((uint64_t)time(NULL) ^ (uint64_t)(uintptr_t)&dm_global_seed);
+  const uint64_t fallback_seed =
+      ((uint64_t)time(NULL) ^ (uint64_t)(uintptr_t)&dm_global_seed);
+  return m_rng_resolve_seed(seed, dm_global_seed, dm_seed_initialized,
+                            fallback_seed);
 }
 
 void dm_set_random_seed(uint64_t seed) {
@@ -329,7 +320,8 @@ DoubleMatrix *dm_create_random_seeded(size_t rows, size_t cols, uint64_t seed) {
   const double inv_u53 = 1.0 / 9007199254740992.0;  // 2^53
 #pragma omp parallel for
   for (size_t i = 0; i < total; ++i) {
-    uint64_t mixed = dm_mix64(base_seed ^ ((uint64_t)i * 0x9E3779B97F4A7C15ull));
+    uint64_t mixed =
+        m_rng_mix64(base_seed ^ ((uint64_t)i * 0x9E3779B97F4A7C15ull));
     mat->values[i] = (double)(mixed >> 11) * inv_u53;
   }
 

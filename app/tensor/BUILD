@@ -98,26 +98,124 @@ clang_doc_target(
 )
 
 cc_library(
-    name = "st",
+    name = "st_runtime",
     srcs = [
-        "src/st.c",
-        "src/st_backend.c",
-        "src/st_backend.h",
-        "src/st_batchnorm.c",
-        "src/st_bf16_utils.h",
-        "src/st_buffer.c",
-        "src/st_buffer.h",
-        "src/st_conv.c",
-        "src/st_dtype.c",
-        "src/st_dtype.h",
-        "src/st_gpu_guard.c",
-        "src/st_gpu_guard.h",
-        "src/st_pool.c",
-        "src/st_shape_ops.c",
-        "src/st_warmup.c",
-        "src/st_workspace.c",
-        "src/st_workspace.h",
+        "src/runtime/st_buffer.c",
+        "src/runtime/st_gpu_guard.c",
+        "src/runtime/st_workspace.c",
     ],
+    hdrs = [
+        "include/st.h",
+        "src/runtime/st_buffer.h",
+        "src/runtime/st_gpu_guard.h",
+        "src/runtime/st_workspace.h",
+    ],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    includes = [
+        "include",
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/runtime",
+    ],
+    local_defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//app/tensor:__pkg__"],
+    deps = default_deps + [
+        ":st_mps_objc",
+    ],
+)
+
+cc_library(
+    name = "st_core",
+    srcs = [
+        "src/core/st.c",
+        "src/core/st_dtype.c",
+        "src/core/st_shape_ops.c",
+    ],
+    hdrs = [
+        "include/st.h",
+        "include/st_shape_ops.h",
+        "src/core/st_bf16_utils.h",
+        "src/core/st_dtype.h",
+    ],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    includes = [
+        "include",
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/runtime",
+    ],
+    local_defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//app/tensor:__pkg__"],
+    deps = default_deps + [
+        "//app/matrix:sm",
+        ":st_runtime",
+    ],
+)
+
+cc_library(
+    name = "st_backend",
+    srcs = [
+        "src/backend/mps/st_warmup.c",
+        "src/backend/st_backend.c",
+    ],
+    hdrs = [
+        "include/st.h",
+        "src/backend/st_backend.h",
+    ],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    includes = [
+        "include",
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/runtime",
+    ],
+    local_defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//app/tensor:__pkg__"],
+    deps = default_deps + [
+        ":st_mps_objc",
+    ],
+)
+
+cc_library(
+    name = "st_ops_nn",
+    srcs = [
+        "src/ops/nn/st_batchnorm.c",
+        "src/ops/nn/st_conv.c",
+        "src/ops/nn/st_pool.c",
+    ],
+    hdrs = [
+        "include/st_batchnorm.h",
+        "include/st_conv.h",
+        "include/st_pool.h",
+    ],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    includes = [
+        "include",
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/ops/nn",
+        "src/runtime",
+    ],
+    local_defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//app/tensor:__pkg__"],
+    deps = default_deps + [
+        ":st_backend",
+        ":st_core",
+        ":st_runtime",
+        "//app/matrix:sm",
+    ],
+)
+
+cc_library(
+    name = "st",
     hdrs = [
         "include/st.h",
         "include/st_batchnorm.h",
@@ -126,30 +224,43 @@ cc_library(
         "include/st_shape_ops.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
-    includes = ["include"],
+    includes = [
+        "include",
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/ops/nn",
+        "src/runtime",
+    ],
     linkopts = openmp_linkopts + accelerate_linkopts + mps_linkopts,
-    local_defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
     target_compatible_with = ["@platforms//os:macos"],
     visibility = ["//visibility:public"],
     deps = default_deps + [
-        ":st_mps_objc",
-        "//app/matrix:sm",
-        "//app/matrix:sm_mps",
+        ":st_backend",
+        ":st_core",
+        ":st_ops_nn",
+        ":st_runtime",
     ],
 )
 
 cc_library(
     name = "st_internal_headers",
     hdrs = [
-        "src/st_backend.h",
-        "src/st_bf16_utils.h",
-        "src/st_buffer.h",
-        "src/st_dtype.h",
-        "src/st_gpu_guard.h",
-        "src/st_workspace.h",
+        "src/backend/st_backend.h",
+        "src/core/st_bf16_utils.h",
+        "src/core/st_dtype.h",
+        "src/runtime/st_buffer.h",
+        "src/runtime/st_gpu_guard.h",
+        "src/runtime/st_workspace.h",
     ],
     defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
-    includes = ["src"],
+    includes = [
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/ops/nn",
+        "src/runtime",
+    ],
     visibility = ["//app/tensor:__pkg__"],
     deps = [
         ":st",
@@ -159,21 +270,21 @@ cc_library(
 objc_library(
     name = "st_mps_objc",
     srcs = [
-        "src/st_backend.h",
-        "src/st_backend_mps.m",
-        "src/st_buffer_metal.m",
-        "src/st_mps.m",
-        "src/st_stream_mps.m",
+        "src/backend/mps/st_backend_mps.m",
+        "src/backend/mps/st_mps.m",
+        "src/backend/mps/st_stream_mps.m",
+        "src/runtime/st_buffer_metal.m",
     ],
     hdrs = [
         "include/st.h",
         "include/st_conv.h",
         "include/st_pool.h",
-        "src/st_buffer.h",
-        "src/st_buffer_metal.h",
-        "src/st_dtype.h",
-        "src/st_mps.h",
-        "src/st_stream_mps.h",
+        "src/backend/st_backend.h",
+        "src/backend/mps/st_mps.h",
+        "src/backend/mps/st_stream_mps.h",
+        "src/core/st_dtype.h",
+        "src/runtime/st_buffer.h",
+        "src/runtime/st_buffer_metal.h",
     ],
     copts = [
         "-ObjC",
@@ -182,7 +293,10 @@ objc_library(
     defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
     includes = [
         "include",
-        "src",
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/runtime",
     ],
     target_compatible_with = ["@platforms//os:macos"],
     deps = ["//app/matrix:sm_mps"],
