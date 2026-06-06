@@ -7,6 +7,7 @@
  */
 
 #include "dms.h"
+#include "m_rng.h"
 
 #if defined(__has_include)
 #if __has_include(<cs.h>) && __has_include(<omp.h>)
@@ -999,21 +1000,11 @@ static DoubleSparseMatrix *dms_multiply_native(const DoubleSparseMatrix *mat1,
   return dms_multiply_serial(mat1, mat2, rA, rB, m, n);
 }
 
-static uint64_t dms_mix64(uint64_t x) {
-  x += 0x9E3779B97F4A7C15ull;
-  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
-  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
-  return x ^ (x >> 31);
-}
-
 static uint64_t dms_resolve_seed(uint64_t seed) {
-  if (seed != 0) {
-    return seed;
-  }
-  if (dms_seed_initialized) {
-    return dms_global_seed;
-  }
-  return ((uint64_t)time(NULL) ^ (uint64_t)(uintptr_t)&dms_global_seed);
+  const uint64_t fallback_seed =
+      ((uint64_t)time(NULL) ^ (uint64_t)(uintptr_t)&dms_global_seed);
+  return m_rng_resolve_seed(seed, dms_global_seed, dms_seed_initialized,
+                            fallback_seed);
 }
 
 void dms_set_random_seed(uint64_t seed) {
@@ -1313,11 +1304,11 @@ DoubleSparseMatrix *dms_create_random_seeded(size_t rows, size_t cols,
 #pragma omp parallel for
   for (size_t k = 0; k < nnz; ++k) {
     uint64_t row_mix =
-        dms_mix64(base_seed ^ ((uint64_t)k * 0x9E3779B97F4A7C15ull));
+        m_rng_mix64(base_seed ^ ((uint64_t)k * 0x9E3779B97F4A7C15ull));
     uint64_t col_mix =
-        dms_mix64(base_seed ^ ((uint64_t)k * 0xD2B74407B1CE6E93ull));
+        m_rng_mix64(base_seed ^ ((uint64_t)k * 0xD2B74407B1CE6E93ull));
     uint64_t val_mix =
-        dms_mix64(base_seed ^ ((uint64_t)k * 0x94D049BB133111EBull));
+        m_rng_mix64(base_seed ^ ((uint64_t)k * 0x94D049BB133111EBull));
 
     mat->row_indices[k] = (size_t)(row_mix % rows);
     mat->col_indices[k] = (size_t)(col_mix % cols);

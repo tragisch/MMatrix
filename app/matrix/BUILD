@@ -230,6 +230,21 @@ cc_library(
 )
 
 cc_library(
+    name = "m_rng",
+    srcs = ["src/m_rng.c"],
+    hdrs = ["src/m_rng.h"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    includes = ["src"],
+    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:private"],
+)
+
+cc_library(
     name = "dm",
     srcs = ["src/dm.c"],
     hdrs = ["include/dm.h"],
@@ -242,7 +257,9 @@ cc_library(
         "//conditions:default": [],
     }),
     visibility = ["//visibility:public"],
-    deps = default_deps + select({
+    deps = default_deps + [
+        ":m_rng",
+    ] + select({
         ":backend_openblas_linux": ["@openblas"],
         "//conditions:default": [],
     }),
@@ -261,7 +278,9 @@ cc_library(
         "//conditions:default": [],
     }),
     visibility = ["//visibility:public"],
-    deps = default_deps + select({
+    deps = default_deps + [
+        ":m_rng",
+    ] + select({
         ":backend_openblas_linux": ["@openblas"],
         "//conditions:default": [],
     }),
@@ -299,7 +318,10 @@ cc_library(
         "//conditions:default": [],
     }),
     visibility = ["//visibility:public"],
-    deps = default_deps + ["@suitesparse"],
+    deps = default_deps + [
+        ":m_rng",
+        "@suitesparse",
+    ],
 )
 
 #############################

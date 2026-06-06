@@ -7,6 +7,7 @@
  */
 
 #include "sm.h"
+#include "m_rng.h"
 
 #include <log.h>
 #include <math.h>
@@ -297,29 +298,18 @@ static bool sm_lu_forward_back_sub(float *restrict rhs_values,
 }
 #endif
 
-static uint64_t sm_mix64(uint64_t x) {
-  x += 0x9E3779B97F4A7C15ull;
-  x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
-  x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
-  return x ^ (x >> 31);
-}
-
 static uint64_t sm_resolve_seed(uint64_t seed) {
-  if (seed != 0) {
-    return seed;
-  }
-  if (sm_seed_initialized) {
-    return sm_global_seed;
-  }
   struct timespec ts;
   clock_gettime(CLOCK_REALTIME, &ts);
-  return (uint64_t)ts.tv_nsec ^ (uint64_t)ts.tv_sec ^
-         (uint64_t)(uintptr_t)&sm_global_seed;
+  const uint64_t fallback_seed = (uint64_t)ts.tv_nsec ^ (uint64_t)ts.tv_sec ^
+                                 (uint64_t)(uintptr_t)&sm_global_seed;
+  return m_rng_resolve_seed(seed, sm_global_seed, sm_seed_initialized,
+                            fallback_seed);
 }
 
 static float sm_uniform01(uint64_t seed, uint64_t stream, uint64_t idx) {
-  uint64_t x = sm_mix64(seed ^ (stream * 0xD2B74407B1CE6E93ull) ^
-                        (idx * 0x9E3779B97F4A7C15ull));
+  uint64_t x = m_rng_mix64(seed ^ (stream * 0xD2B74407B1CE6E93ull) ^
+                           (idx * 0x9E3779B97F4A7C15ull));
   return (float)((double)(x >> 11) / 9007199254740992.0);
 }
 
