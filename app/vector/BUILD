@@ -264,25 +264,6 @@ cc_library(
 )
 
 cc_library(
-    name = "vector_tensor_bridge",
-    srcs = ["src/vector_tensor_bridge.c"],
-    hdrs = ["include/vector_tensor_bridge.h"],
-    copts = default_copts + perf_copts + package_copts + openmp_copts,
-    includes = ["include"],
-    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
-    target_compatible_with = ["@platforms//os:macos"],
-    visibility = ["//visibility:public"],
-    deps = default_deps + [
-        ":sv",
-        ":vv",
-        "//app/tensor:st",
-    ] + select({
-        ":backend_openblas_linux": ["@openblas"],
-        "//conditions:default": [],
-    }),
-)
-
-cc_library(
     name = "vector",
     hdrs = glob(["include/*.h"]),
     includes = ["include"],
@@ -293,7 +274,6 @@ cc_library(
         ":sv",
         ":vec3",
         ":vector_bridge",
-        ":vector_tensor_bridge",
         ":vv",
     ],
 )
@@ -353,8 +333,6 @@ unity_test(
     deps = [
         ":sv",
         ":vector_bridge",
-        ":vector_tensor_bridge",
-        "//app/tensor:st",
     ],
 )
 

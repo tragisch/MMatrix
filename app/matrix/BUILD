@@ -225,7 +225,6 @@ cc_library(
         ":dm",
         ":dms",
         ":sm",
-        "//app/tensor:st",
     ],
 )
 

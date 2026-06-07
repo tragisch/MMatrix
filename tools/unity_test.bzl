@@ -12,7 +12,7 @@ def unity_test(name, srcs, my_config = None, deps = None, **kwargs):
         deps (optional): The dependencies of the test.
         **kwargs: Additional arguments to pass to the cc_test rule.
     """
-    deps = (deps or []) + [Label("@Unity//:Unity")]
+    deps = (deps or []) + [Label("@throw_the_switch//:Unity")]
     file_name = str(srcs[0])
     generate_test_runner(file_name, my_config, name)
 
@@ -56,10 +56,10 @@ def generate_test_runner(file_name, my_config, name = None):
     srcs = [file_name]
     if my_config != None:
         my_config_path = "$(location " + str(my_config[0]) + ")"
-        cmd = "ruby $(location @Unity//:TestRunnerGenerator) $(SRCS) $(OUTS) " + my_config_path
+        cmd = "ruby $(location @throw_the_switch//:TestRunnerGenerator) $(SRCS) $(OUTS) " + my_config_path
         srcs = [file_name] + my_config
     else:
-        cmd = "ruby $(location @Unity//:TestRunnerGenerator)  $(SRCS) $(OUTS)"
+        cmd = "ruby $(location @throw_the_switch//:TestRunnerGenerator)  $(SRCS) $(OUTS)"
     out_name = runner_file_name(file_name)
     if name == None:
         name = runner_base_name(file_name)
@@ -69,8 +69,8 @@ def generate_test_runner(file_name, my_config, name = None):
         outs = [out_name],
         cmd = cmd,
         tools = [
-            "@Unity//:TestRunnerGenerator",
-            "@Unity//:HelperScripts",
+            "@throw_the_switch//:TestRunnerGenerator",
+            "@throw_the_switch//:HelperScripts",
         ],
         visibility = ["//visibility:public"],
     )

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-#include "vector_tensor_bridge.h"
+#include "st_vector_bridge.h"
 
 static FloatVectorView vv_invalid(void) { return vv_make(NULL, 0, 0); }
 

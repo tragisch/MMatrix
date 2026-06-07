@@ -25,15 +25,14 @@ bazel_dep(name = "zlib", version = "1.3.1.bcr.5")
 bazel_dep(name = "apple_support", version = "1.24.2")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "rules_shell", version = "0.6.1")
-bazel_dep(name = "rules_java", version = "9.0.3")
-bazel_dep(name = "rules_foreign_cc", version = "0.14.0")
 bazel_dep(name = "google_benchmark", version = "1.9.2")
 bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "rules_docs", version = "0.3.0")
-bazel_dep(name = "depend_on_what_you_use", version = "0.8.0")
 bazel_dep(name = "matio", version = "1.5.27")
 bazel_dep(name = "openmp", version = "22.1.1")
+bazel_dep(name = "throw_the_switch", version = "2.6.1-bazel.1")
+bazel_dep(name = "pcg", version = "83252d9c23df9c82ecb42210afed61a7b42402d7")
 
 git_override(
     module_name = "rules_docs",
@@ -92,46 +91,12 @@ bazel_dep(name = "wolfd_bazel_compile_commands", version = "0.5.2", dev_dependen
 
 host_local_library = use_repo_rule("//tools:host_local_library.bzl", "host_local_library")
 
-git_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-
-# unity - A simple unit testing library for C.
-# http_archive(
-#     name = "Unity",
-#     build_file = "@//:third_party/Unity.BUILD",
-#     sha256 = "4598298723ecca1f242b8c540a253ae4ab591f6810cbde72f128961007683034",
-#     strip_prefix = "Unity-2.5.2",
-#     urls = [
-#         "https://github.com/ThrowTheSwitch/Unity/archive/refs/tags/v2.5.2.zip",
-#     ],
-# )
-
-git_repository(
-    name = "pcg",
-    build_file = "@//:third_party/pcg.BUILD",
-    commit = "83252d9c23df9c82ecb42210afed61a7b42402d7",
-    remote = "https://github.com/imneme/pcg-c.git",
-)
-
-# git_repository(
-#     name = "openblas",
-#     build_file = "@//:third_party/openblas.BUILD",
-#     commit = "02267d86f541fb82e3feae6647a0cbb4625f48df",  # 29.05.2025
-#     remote = "https://github.com/OpenMathLib/OpenBLAS.git",
-# )
-
 #############################
 # Hombrew Local Libraries (MacOS)
 #############################
 
 # define new_local_repository rule for local installed non-Bazel libraries:
 new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
-
-# unity from a local path
-new_local_repository(
-    name = "Unity",
-    build_file = "@//:third_party/Unity.BUILD",
-    path = "/Users/uwe/Documents/Programmierung/3Party/Unity",
-)
 
 # due to license issues in private lib folder.
 new_local_repository(

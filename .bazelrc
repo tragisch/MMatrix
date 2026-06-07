@@ -5,15 +5,15 @@ common --color=yes
 common --curses=yes
 common --enable_platform_specific_config
 
-# registries:
-# Verwende lokal den verifizierten Bazel-Registry-Checkout. Die frühere
-# Raw-GitHub-URL lieferte für openmp@22.1.1 einen abweichenden source.json-Hash
-# und blockierte dadurch reguläre Testläufe.
-common --registry=file:///Users/uwe/Documents/Programmierung/Bazel-Registry
+###############################
+# Registries                  #
+###############################
+
+common --registry=https://raw.githubusercontent.com/tragisch/bazel-registry/main
 common --registry=https://bcr.bazel.build
 
 ###############################
-# cache                        #
+# Cache                       #
 ###############################
 
 # Enable remote caching
@@ -74,8 +74,6 @@ build:debug_clang_report --copt=-O2
 # Report OpenMP              #
 ###############################
 
-# build:report_omp --copt=-Rpass=loop-vectorize
-# build:report_omp  --copt=-Rpass-missed=loop-vectorize
 build:report_omp  --copt=-Rpass-analysis=loop-vectorize
 
 ###############################
@@ -137,7 +135,6 @@ build:openmp_only --define=MATRIX_BACKEND=openmp
 # macOS defaults: OpenMP + Accelerate. MPS stays available as an optional
 # runtime backend via sm_set_backend(SM_BACKEND_MPS).
 build:macos --config=accelerate
-build:macos --repo_env=OPENBLAS_ROOT=/opt/homebrew/opt/openblas
 build:macos --repo_env=SUITESPARSE_ROOT=/opt/homebrew/opt/suite-sparse
 
 # Linux defaults: OpenMP + OpenBLAS.
@@ -145,21 +142,3 @@ build:linux --config=openblas
 build:linux --repo_env=OPENBLAS_ROOT=/home/linuxbrew/.linuxbrew/opt/openblas
 build:linux --repo_env=SUITESPARSE_ROOT=/home/linuxbrew/.linuxbrew/opt/suite-sparse
 
-
-###############################
-# Linux Toolchain (LLVM)      #
-###############################
-
-build:linux_llvm --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
-build:linux_llvm --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
-build:linux_llvm --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
-build:linux_llvm --cxxopt=-stdlib=libc++  # optional
-build:linux_llvm --linkopt=-fuse-ld=lld
-
-test:linux_llvm --action_env=CC=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang
-test:linux_llvm --action_env=CXX=/home/linuxbrew/.linuxbrew/opt/llvm/bin/clang++
-test:linux_llvm --action_env=BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
-test:linux_llvm --cxxopt=-stdlib=libc++  # optional
-test:linux_llvm --linkopt=-fuse-ld=lld
-
-build:linux --config=linux_llvm

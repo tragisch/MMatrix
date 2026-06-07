@@ -130,12 +130,16 @@ cc_library(
     name = "st_core",
     srcs = [
         "src/core/st.c",
+        "src/core/st_convert.c",
         "src/core/st_dtype.c",
         "src/core/st_shape_ops.c",
+        "src/core/st_vector_bridge.c",
     ],
     hdrs = [
         "include/st.h",
+        "include/st_convert.h",
         "include/st_shape_ops.h",
+        "include/st_vector_bridge.h",
         "src/core/st_bf16_utils.h",
         "src/core/st_dtype.h",
     ],
@@ -152,6 +156,8 @@ cc_library(
     visibility = ["//app/tensor:__pkg__"],
     deps = default_deps + [
         "//app/matrix:sm",
+        "//app/vector:sv",
+        "//app/vector:vv",
         ":st_runtime",
     ],
 )
@@ -221,7 +227,9 @@ cc_library(
         "include/st_batchnorm.h",
         "include/st_conv.h",
         "include/st_pool.h",
+        "include/st_convert.h",
         "include/st_shape_ops.h",
+        "include/st_vector_bridge.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = [
@@ -438,6 +446,28 @@ unity_test(
 unity_test(
     name = "test_st_shape_ops",
     srcs = ["tests/test_st_shape_ops.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
+)
+
+unity_test(
+    name = "test_st_convert",
+    srcs = ["tests/test_st_convert.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
+)
+
+unity_test(
+    name = "test_st_vector_bridge",
+    srcs = ["tests/test_st_vector_bridge.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = [

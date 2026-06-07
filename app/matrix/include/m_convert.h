@@ -1,6 +1,6 @@
 /**
  * @file m_convert.h
- * @brief Public conversion API between dense/sparse matrix and tensor types.
+ * @brief Public conversion API between dense and sparse matrix types.
  */
 
 /*
@@ -17,10 +17,9 @@
 #include "dm.h"
 #include "dms.h"
 #include "sm.h"
-#include "st.h"
 
 /**************************************/
-/*       Matrix/Tensor Conversion     */
+/*      Dense/Sparse Matrix Conversion */
 /**************************************/
 
 /**
@@ -47,17 +46,4 @@ DoubleMatrix *sm_to_dm(const FloatMatrix *sm);
  * @return Dense float matrix with precision-reduced values, or NULL on allocation failure.
  */
 FloatMatrix *dm_to_sm(const DoubleMatrix *src);
-/**
- * @brief Convert dense float matrix to float tensor.
- * @param src Source float matrix (shape: rows x cols interpreted as batch 1, rows, cols, 1).
- * @return Float tensor with matrix reshaped, or NULL on allocation failure.
- */
-FloatTensor *st_from_sm(const FloatMatrix *src);
-/**
- * @brief Convert float tensor to dense float matrix.
- * @param src Source float tensor (extracted as 2D: flatten/reshape to rows x cols).
- * @return Dense float matrix, or NULL on allocation failure or invalid tensor shape.
- */
-FloatMatrix *sm_from_st(const FloatTensor *src);
-
 #endif  // DM_CONVERT_H
