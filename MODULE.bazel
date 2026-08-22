@@ -33,6 +33,12 @@ bazel_dep(name = "matio", version = "1.5.27")
 bazel_dep(name = "openmp", version = "22.1.1")
 bazel_dep(name = "throw_the_switch", version = "2.6.1-bazel.1")
 bazel_dep(name = "pcg", version = "83252d9c23df9c82ecb42210afed61a7b42402d7")
+bazel_dep(name = "suitesparse", version = "7.12.2")
+
+local_path_override(
+    module_name = "suitesparse",
+    path = "/Users/uwe/Documents/Programmierung/C/05_Libraries/SuiteSparse",
+)
 
 git_override(
     module_name = "rules_docs",
@@ -123,9 +129,22 @@ host_local_library(
     ],
 )
 
-# suite-sparse is a collection of sparse matrix libraries
+# Optional Homebrew SuiteSparse wrapper for the GraphBLAS benchmark only.
 host_local_library(
-    name = "suitesparse",
+    name = "suitesparse_graphblas_host",
+    build_file = "@//:third_party/suitesparse.BUILD",
+    env_var = "SUITESPARSE_ROOT",
+    linux_path = "/home/linuxbrew/.linuxbrew/opt/suite-sparse",
+    macos_path = "/opt/homebrew/opt/suite-sparse",
+    required_subdirs = [
+        "include",
+        "lib",
+    ],
+)
+
+# Homebrew SuiteSparse wrapper for native-vs-host comparison benchmarks.
+host_local_library(
+    name = "suitesparse_host",
     build_file = "@//:third_party/suitesparse.BUILD",
     env_var = "SUITESPARSE_ROOT",
     linux_path = "/home/linuxbrew/.linuxbrew/opt/suite-sparse",

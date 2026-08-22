@@ -319,7 +319,28 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = default_deps + [
         ":m_rng",
-        "@suitesparse",
+        "@suitesparse//CXSparse:cxsparse",
+    ],
+)
+
+cc_library(
+    name = "dms_homebrew",
+    srcs = ["src/dms.c"],
+    hdrs = ["include/dms.h"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts + [
+        "-O3",
+    ],
+    includes = ["include"],
+    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+    deps = default_deps + [
+        ":m_rng",
+        "@suitesparse_host//:suitesparse",
     ],
 )
 

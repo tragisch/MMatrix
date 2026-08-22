@@ -16,12 +16,10 @@ It targets macOS and Linux, with CPU acceleration (BLAS/OpenMP) and optional MPS
 Install system libraries on macOS (Homebrew):
 
 ```bash
-brew install openblas suite-sparse llvm
+brew install suite-sparse
 ```
 
-`openmp` (`@openmp//:libomp`) and `matio` (`@matio//:matio`) are resolved via Bzlmod from the configured Bazel registry.
-
-`llvm` is optional for normal builds, but useful for tooling such as `clang-doc`.
+All other third-party dependencies such as `openmp`,  `matio`,  `openblas`  [on Linux, Apple Silicon uses Accelerate] and `llvm` compiler  are resolved via Bzlmod from the configured Bazel registries.
 
 Build everything:
 
