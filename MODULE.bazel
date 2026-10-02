@@ -37,7 +37,7 @@ bazel_dep(name = "suitesparse", version = "7.12.2")
 
 local_path_override(
     module_name = "suitesparse",
-    path = "/Users/uwe/Documents/Programmierung/C/05_Libraries/SuiteSparse",
+    path = "/Users/uwe/Documents/Programmierung/3Party/SuiteSparse",
 )
 
 git_override(
