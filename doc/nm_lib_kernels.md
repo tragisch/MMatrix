@@ -103,20 +103,9 @@ helpers (1024×256 and 4096×256 cases):
 | `argmax_rows` | 4096×256 | 1 | 6,444.250 | 1,134.750 | 5.68× |
 | `argmax_rows` | 4096×256 | 4 | 6,001.250 | 735.250 | 8.16× |
 
-For a 1024×256 matrix, the three row helpers measured as follows (median µs):
-
-| Operation | Threads | Scalar before | mMatrix after | Speedup |
-| --- | ---: | ---: | ---: | ---: |
-| `add_rowwise` | 1 | 1,200.500 | 60.750 | 19.76× |
-| `sum_rows` | 1 | 1,315.250 | 387.500 | 3.39× |
-| `argmax_rows` | 1 | 1,558.500 | 295.500 | 5.27× |
-| `add_rowwise` | 4 | 1,014.500 | 51.750 | 19.60× |
-| `sum_rows` | 4 | 1,808.500 | 458.000 | 3.95× |
-| `argmax_rows` | 4 | 2,213.250 | 158.250 | 13.99× |
-
 ## Optimizer parallelization
 
-The optimizer elementwise loops use OpenMP only for `n > 16,384`. Adam bias
+The optimizer elementwise loops use OpenMP only for `n > 1,048,576`. Adam bias
 correction and all update formulas match `optimizer_apply_array`; optional
 decoupled weight decay is disabled when its argument is zero. `sv_clip_norm`
 computes its norm in a fixed scalar order and parallelizes only the independent
@@ -124,5 +113,26 @@ scaling pass.
 
 `//app/vector:bench_sv_optim` compares scalar-reference and API medians for
 SGD, momentum, RMSprop, Adam, and clipping at 1k, 10k, 100k, and 1M elements,
-with one and default OpenMP thread counts. The measured threshold results are
-recorded after that benchmark is run.
+with one and default OpenMP thread counts. A 16,384 threshold regressed several
+optimizers at 100k. A follow-up trial at 262,144 activated a team at 1M but also
+regressed most optimizers. The selected threshold is therefore above the
+largest measured input, keeping tested models out of parallel regions. The
+behavior beyond 1M remains unmeasured and should be retuned on the deployment
+machine if larger parameter buffers are common.
+
+Selected medians from the 262,144-threshold trial at 1M elements
+(microseconds/call; default thread count 4). `API` uses the thresholded
+optimizer; `forced OMP` is the parallel reference loop:
+
+| Optimizer | Scalar | API (262k) | Forced OMP | Forced speedup |
+| --- | ---: | ---: | ---: | ---: |
+| SGD | 121.000 | 124.000 | 110.000 | 1.10× |
+| Momentum | 201.000 | 429.000 | 153.000 | 1.31× |
+| RMSprop | 220.000 | 266.000 | 156.000 | 1.41× |
+| Adam | 467.000 | 408.000 | 316.000 | 1.48× |
+| Clip norm | 137.000 | 127.000 | 115.000 | 1.19× |
+
+The API-level OpenMP path still regressed momentum and RMSprop in this trial,
+so the final threshold was raised above 1M. The direct parallel reference shows
+potential benefit for later tuning, but does not justify parallelizing the
+tested small-network range today.

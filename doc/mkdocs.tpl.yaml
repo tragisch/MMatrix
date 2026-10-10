@@ -13,6 +13,7 @@ nav:
         - Sparse Double (dms): doc/api/matrix/dms.md
         - I/O (m_io): doc/api/matrix/m_io.md
         - Conversion (m_convert): doc/api/matrix/m_convert.md
+      - Vector optimizers: doc/api/vector/sv_optim.md
       - Tensor Core: doc/api/tensor/st.md
       - BatchNorm: doc/api/tensor/st_batchnorm.md
       - Convolution: doc/api/tensor/st_conv.md

@@ -25,6 +25,10 @@ static float reference_gelu_erf(float x) {
   return 0.5f * x * (1.0f + erff(x * 0.7071067812f));
 }
 
+static float reference_sigmoid(float x) {
+  return 1.0f / (1.0f + expf(-x));
+}
+
 static float reference_activation(SmActivation activation, float x) {
   switch (activation) {
     case SM_ACT_NONE: return x;
@@ -44,8 +48,10 @@ void test_sm_activation_kernels_match_scalar_reference_sizes(void) {
     const size_t n = sizes[s];
     FloatMatrix *mat = sm_create(1, n);
     TEST_ASSERT_NOT_NULL(mat);
+    uint32_t random_state = 0x12345678u;
     for (size_t i = 0; i < n; ++i) {
-      mat->values[i] = 4.0f * sinf((float)i * 0.013f);
+      random_state = random_state * 1664525u + 1013904223u;
+      mat->values[i] = ((float)(random_state >> 8) / 16777216.0f - 0.5f) * 8.0f;
     }
 
     FloatMatrix *actual = sm_clone(mat);
@@ -147,42 +153,40 @@ void test_sm_softmax_is_stable_for_large_values_and_propagates_nan(void) {
 void test_sm_backward_kernels_match_numerical_derivatives(void) {
   const float inputs[] = {-1.7f, -0.25f, 0.8f, 2.1f};
   const size_t n = sizeof(inputs) / sizeof(inputs[0]);
+  const float original_grads[] = {0.5f, -1.0f, 2.0f, 3.0f};
   const float h = 1.0e-3f;
 
   FloatMatrix *x = sm_create_with_values(1, n, (float *)inputs);
   FloatMatrix *activation = sm_clone(x);
-  FloatMatrix *grad = sm_create_with_values(1, n,
-                                             (float[]){0.5f, -1.0f, 2.0f, 3.0f});
+  FloatMatrix *grad = sm_create_with_values(1, n, (float *)original_grads);
   TEST_ASSERT_NOT_NULL(x);
   TEST_ASSERT_NOT_NULL(activation);
   TEST_ASSERT_NOT_NULL(grad);
   TEST_ASSERT_TRUE(sm_apply_sigmoid(activation));
   TEST_ASSERT_TRUE(sm_apply_sigmoid_backward(activation, grad));
   for (size_t i = 0; i < n; ++i) {
-    const float y = 1.0f / (1.0f + expf(-inputs[i]));
-    const float expected = 1.0f * y * (1.0f - y) *
-                           (i == 0 ? 0.5f : i == 1 ? -1.0f : i == 2 ? 2.0f : 3.0f);
-    TEST_ASSERT_TRUE(near_value(grad->values[i], expected));
+    const float numeric =
+        (reference_sigmoid(inputs[i] + h) -
+         reference_sigmoid(inputs[i] - h)) /
+        (2.0f * h) * original_grads[i];
+    TEST_ASSERT_FLOAT_WITHIN(2.0e-4f, numeric, grad->values[i]);
   }
   sm_destroy(activation);
   sm_destroy(grad);
 
   activation = sm_clone(x);
-  grad = sm_create_with_values(1, n,
-                               (float[]){0.5f, -1.0f, 2.0f, 3.0f});
+  grad = sm_create_with_values(1, n, (float *)original_grads);
   TEST_ASSERT_TRUE(sm_apply_tanh(activation));
   TEST_ASSERT_TRUE(sm_apply_tanh_backward(activation, grad));
   for (size_t i = 0; i < n; ++i) {
-    const float y = tanhf(inputs[i]);
-    const float original_grad =
-        i == 0 ? 0.5f : i == 1 ? -1.0f : i == 2 ? 2.0f : 3.0f;
-    TEST_ASSERT_TRUE(
-        near_value(grad->values[i], original_grad * (1.0f - y * y)));
+    const float numeric =
+      (tanhf(inputs[i] + h) - tanhf(inputs[i] - h)) /
+      (2.0f * h) * original_grads[i];
+    TEST_ASSERT_FLOAT_WITHIN(2.0e-4f, numeric, grad->values[i]);
   }
   sm_destroy(activation);
   sm_destroy(grad);
 
-  const float original_grads[] = {0.5f, -1.0f, 2.0f, 3.0f};
   for (int variant = 0; variant < 2; ++variant) {
     grad = sm_create_with_values(1, n, (float *)original_grads);
     TEST_ASSERT_NOT_NULL(grad);
@@ -204,6 +208,26 @@ void test_sm_backward_kernels_match_numerical_derivatives(void) {
   sm_destroy(x);
 }
 
+void test_sm_relu_backward_matches_finite_difference(void) {
+  const float inputs[] = {-2.0f, -0.01f, 0.02f, 3.0f};
+  const float original_grad[] = {1.0f, -2.0f, 0.5f, 3.0f};
+  FloatMatrix *activation = sm_create_with_values(1, 4, (float *)inputs);
+  FloatMatrix *grad = sm_create_with_values(1, 4, (float *)original_grad);
+  TEST_ASSERT_NOT_NULL(activation);
+  TEST_ASSERT_NOT_NULL(grad);
+  TEST_ASSERT_TRUE(sm_apply_relu(activation));
+  TEST_ASSERT_TRUE(sm_apply_relu_backward(activation, grad));
+  const float h = 1.0e-3f;
+  for (size_t i = 0; i < 4; ++i) {
+    const float plus = fmaxf(0.0f, inputs[i] + h);
+    const float minus = fmaxf(0.0f, inputs[i] - h);
+    const float numeric = (plus - minus) / (2.0f * h) * original_grad[i];
+    TEST_ASSERT_FLOAT_WITHIN(5.0e-4f, numeric, grad->values[i]);
+  }
+  sm_destroy(grad);
+  sm_destroy(activation);
+}
+
 void test_sm_elementwise_activation_results_are_thread_count_independent(void) {
   FloatMatrix *input = sm_create(1, 100000);
   FloatMatrix *one_thread = sm_create(1, 100000);
@@ -219,6 +243,20 @@ void test_sm_elementwise_activation_results_are_thread_count_independent(void) {
 
   const int previous_threads = omp_get_max_threads();
   omp_set_dynamic(0);
+  for (int activation = SM_ACT_RELU; activation <= SM_ACT_TANH; ++activation) {
+    memcpy(one_thread->values, input->values, input->cols * sizeof(float));
+    memcpy(many_threads->values, input->values, input->cols * sizeof(float));
+    omp_set_num_threads(1);
+    TEST_ASSERT_TRUE(sm_kernel_apply_activation(one_thread->values,
+                                                one_thread->cols,
+                                                (SmActivation)activation));
+    omp_set_num_threads(8);
+    TEST_ASSERT_TRUE(sm_kernel_apply_activation(many_threads->values,
+                                                many_threads->cols,
+                                                (SmActivation)activation));
+    TEST_ASSERT_EQUAL(0, memcmp(one_thread->values, many_threads->values,
+                                input->cols * sizeof(float)));
+  }
   omp_set_num_threads(1);
   TEST_ASSERT_TRUE(sm_apply_gelu_tanh(one_thread));
   omp_set_num_threads(8);

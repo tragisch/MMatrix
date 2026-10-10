@@ -160,6 +160,22 @@ cc_library(
 )
 
 cc_library(
+    name = "sv_optim",
+    srcs = ["src/sv_optim.c"],
+    hdrs = ["include/sv_optim.h"],
+    copts = default_copts + perf_copts + openmp_copts,
+    includes = ["include"],
+    linkopts = openmp_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+    deps = default_deps,
+)
+
+cc_library(
     name = "dv",
     srcs = ["src/dv.c"],
     hdrs = ["include/dv.h"],
@@ -272,6 +288,7 @@ cc_library(
         ":dv",
         ":dvs",
         ":sv",
+        ":sv_optim",
         ":vec3",
         ":vector_bridge",
         ":vv",
@@ -284,6 +301,14 @@ unity_test(
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = [":sv"],
+)
+
+unity_test(
+    name = "test_sv_optim",
+    srcs = ["tests/test_sv_optim.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [":sv_optim"],
 )
 
 unity_test(
@@ -346,4 +371,17 @@ cc_binary(
         ":dv",
         ":sv",
     ],
+)
+
+cc_binary(
+    name = "bench_sv_optim",
+    srcs = ["tests/bench_sv_optim.c"],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
+    target_compatible_with = select({
+        ":backend_accelerate": ["@platforms//os:macos"],
+        ":backend_openblas": ["@platforms//os:linux"],
+        "//conditions:default": [],
+    }),
+    deps = [":sv_optim"],
 )

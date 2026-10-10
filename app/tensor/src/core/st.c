@@ -967,9 +967,13 @@ bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad) {
 }
 
 static bool st_kernel_tensor_valid(const FloatTensor *t) {
-  return t != NULL && t->values != NULL && t->numel > 0 && t->ndim > 0 &&
-         t->shape[t->ndim - 1] > 0 &&
-         t->numel % t->shape[t->ndim - 1] == 0 && st_is_contiguous(t);
+  if (t == NULL || t->values == NULL || t->numel == 0 || t->ndim == 0 ||
+      t->ndim > ST_MAX_DIMS || !st_is_contiguous(t)) {
+    return false;
+  }
+  size_t expected_numel = 0;
+  return st_numel_from_shape(t->ndim, t->shape, &expected_numel) &&
+         expected_numel == t->numel;
 }
 
 static bool st_kernel_tensors_compatible(const FloatTensor *a,

@@ -19,6 +19,10 @@ This documentation is fully located under `doc/`.
 - [I/O (m_io)](api/matrix/m_io.md)
 - [Conversion (m_convert)](api/matrix/m_convert.md)
 
+## Vector API
+
+- [Vector optimizers](api/vector/sv_optim.md)
+
 ## Examples
 
 - [Tensor NN forward pass](examples/tensor_basic.md)
