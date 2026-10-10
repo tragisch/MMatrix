@@ -2,6 +2,7 @@
 
 #include "st.h"
 #include "st_interp.h"
+#include "st_shape_ops.h"
 
 #include <math.h>
 #include <omp.h>
@@ -1150,4 +1151,297 @@ void test_st_matmul_batched_promotes_bf16(void) {
   st_destroy(a);
   st_destroy(b_f32);
   st_destroy(a_f32);
+}
+
+/* ---- Gather -------------------------------------------------------------- */
+
+/* Naive gather reference: out[o, j, inner] = table[o, indices[j], inner]. */
+static void ref_gather(const FloatTensor *table, const int64_t *indices,
+                       size_t count, size_t axis, float *out) {
+  size_t outer = 1;
+  size_t inner = 1;
+  for (size_t i = 0; i < axis; ++i) {
+    outer *= table->shape[i];
+  }
+  for (size_t i = axis + 1; i < table->ndim; ++i) {
+    inner *= table->shape[i];
+  }
+  const size_t dim = table->shape[axis];
+  for (size_t o = 0; o < outer; ++o) {
+    for (size_t j = 0; j < count; ++j) {
+      const int64_t index = indices[j] < 0 ? indices[j] + (int64_t)dim : indices[j];
+      memcpy(out + (o * count + j) * inner,
+             table->values + (o * dim + (size_t)index) * inner,
+             inner * sizeof(float));
+    }
+  }
+}
+
+static void check_gather_case(const FloatTensor *table, const int64_t *indices,
+                              size_t count, size_t axis) {
+  size_t out_dims[ST_MAX_DIMS];
+  memcpy(out_dims, table->shape, table->ndim * sizeof(size_t));
+  out_dims[axis] = count;
+  FloatTensor *out = st_create(table->ndim, out_dims);
+  TEST_ASSERT_NOT_NULL(out);
+  float *expected = malloc(st_tensor_numel(out) * sizeof(float));
+  TEST_ASSERT_NOT_NULL(expected);
+  ref_gather(table, indices, count, axis, expected);
+
+  TEST_ASSERT_TRUE(st_gather(table, indices, count, axis, out));
+  TEST_ASSERT_EQUAL_MEMORY(expected, out->values,
+                           st_tensor_numel(out) * sizeof(float));
+  free(expected);
+  st_destroy(out);
+}
+
+void test_st_gather_matches_reference(void) {
+  const size_t table_shapes[][4] = {
+      {7}, {16, 7}, {100, 7, 3}, {2, 3, 5, 7}, {30000, 16},
+  };
+  const size_t ranks[] = {1, 2, 3, 4, 2};
+  for (size_t c = 0; c < sizeof(ranks) / sizeof(ranks[0]); ++c) {
+    FloatTensor *table = make_tensor(ranks[c], table_shapes[c]);
+    for (size_t axis = 0; axis < ranks[c]; ++axis) {
+      const int64_t dim = (int64_t)table_shapes[c][axis];
+      const int64_t half = dim / 2;
+      const int64_t indices[] = {0, 1, -1, half, -half - 1, dim - 1, -dim};
+      const size_t count = sizeof(indices) / sizeof(indices[0]);
+      check_gather_case(table, indices, count, axis);
+    }
+    st_destroy(table);
+  }
+
+  /* Larger count on a realistic embedding table. */
+  FloatTensor *table = make_tensor(2, (size_t[2]){30000, 64});
+  int64_t indices[512];
+  for (size_t i = 0; i < 512; ++i) {
+    indices[i] = (int64_t)((i * 7919) % 30000);
+    if (i % 3 == 0) {
+      indices[i] -= 30000;  /* negative form */
+    }
+  }
+  check_gather_case(table, indices, 512, 0);
+  st_destroy(table);
+}
+
+void test_st_gather_rejects_bad_input(void) {
+  FloatTensor *table = make_tensor(2, (size_t[2]){4, 3});
+  const size_t out_shape[2] = {2, 3};
+  FloatTensor *out = make_tensor(2, out_shape);
+  const int64_t ok_indices[2] = {0, 1};
+  const int64_t bad_high[2] = {0, 4};
+  const int64_t bad_low[2] = {0, -5};
+
+  /* Out-of-range indices fail without writing. */
+  for (size_t i = 0; i < out->numel; ++i) {
+    out->values[i] = 42.0f;
+  }
+  TEST_ASSERT_FALSE(st_gather(table, bad_high, 2, 0, out));
+  TEST_ASSERT_FALSE(st_gather(table, bad_low, 2, 0, out));
+  for (size_t i = 0; i < out->numel; ++i) {
+    TEST_ASSERT_EQUAL_FLOAT(42.0f, out->values[i]);
+  }
+
+  /* count == 0, NULL, wrong axis, wrong shape, non-contiguous. */
+  TEST_ASSERT_FALSE(st_gather(table, ok_indices, 0, 0, out));
+  TEST_ASSERT_FALSE(st_gather(NULL, ok_indices, 2, 0, out));
+  TEST_ASSERT_FALSE(st_gather(table, NULL, 2, 0, out));
+  TEST_ASSERT_FALSE(st_gather(table, ok_indices, 2, 2, out));
+  TEST_ASSERT_FALSE(st_gather(table, ok_indices, 2, 1, out));
+  FloatTensor *view_base = make_tensor(2, (size_t[2]){4, 4});
+  const size_t view_shape[2] = {4, 2};
+  const ptrdiff_t view_strides[2] = {4, 1};
+  FloatTensor *view = st_view(view_base, 2, view_shape, view_strides, 0);
+  TEST_ASSERT_NOT_NULL(view);
+  TEST_ASSERT_FALSE(st_gather(view, ok_indices, 2, 0, out));
+  st_destroy(view);
+  st_destroy(view_base);
+
+  /* Valid call still works after the failures. */
+  TEST_ASSERT_TRUE(st_gather(table, ok_indices, 2, 0, out));
+
+  st_destroy(out);
+  st_destroy(table);
+}
+
+void test_st_gather_raw_handles_i64_and_bool(void) {
+  /* int64 table, gather along axis 0. */
+  const size_t shape[2] = {5, 3};
+  int64_t table[15];
+  for (size_t i = 0; i < 15; ++i) {
+    table[i] = (int64_t)(i * i) - 20;
+  }
+  const int64_t indices[4] = {4, -5, 2, 0};
+  int64_t out[12];
+  TEST_ASSERT_TRUE(st_gather_raw(table, 2, shape, indices, 4, 0,
+                                 sizeof(int64_t), out));
+  for (size_t j = 0; j < 4; ++j) {
+    const int64_t row = indices[j] < 0 ? indices[j] + 5 : indices[j];
+    for (size_t e = 0; e < 3; ++e) {
+      TEST_ASSERT_EQUAL_INT64(table[row * 3 + (int64_t)e], out[j * 3 + e]);
+    }
+  }
+
+  /* bool table, gather along axis 1. */
+  const size_t bool_shape[2] = {2, 5};
+  uint8_t bools[10];
+  for (size_t i = 0; i < 10; ++i) {
+    bools[i] = (uint8_t)(i % 2);
+  }
+  const int64_t bool_indices[3] = {1, -1, 3};
+  uint8_t bool_out[6];
+  TEST_ASSERT_TRUE(st_gather_raw(bools, 2, bool_shape, bool_indices, 3, 1, 1,
+                                 bool_out));
+  const size_t picked[3] = {1, 4, 3};
+  for (size_t o = 0; o < 2; ++o) {
+    for (size_t j = 0; j < 3; ++j) {
+      TEST_ASSERT_EQUAL_UINT8(bools[o * 5 + picked[j]], bool_out[o * 3 + j]);
+    }
+  }
+
+  TEST_ASSERT_FALSE(st_gather_raw(table, 2, shape, indices, 4, 2, 8, out));
+  TEST_ASSERT_FALSE(st_gather_raw(table, 2, shape, indices, 0, 0, 8, out));
+  TEST_ASSERT_FALSE(st_gather_raw(NULL, 2, shape, indices, 4, 0, 8, out));
+}
+
+void test_st_gather_copies_bf16_bits(void) {
+  const size_t shape[2] = {8, 5};
+  FloatTensor *table_f32 = make_tensor(2, shape);
+  FloatTensor *table = st_to_bf16(table_f32);
+  TEST_ASSERT_NOT_NULL(table);
+  const size_t out_shape[2] = {3, 5};
+  FloatTensor *out = st_create_bf16(2, out_shape);
+  TEST_ASSERT_NOT_NULL(out);
+  const int64_t indices[3] = {7, 0, -4};
+  TEST_ASSERT_TRUE(st_gather(table, indices, 3, 0, out));
+  const uint16_t *table_bf16 = (const uint16_t *)table->values;
+  const uint16_t *out_bf16 = (const uint16_t *)out->values;
+  const size_t picked[3] = {7, 0, 4};
+  for (size_t j = 0; j < 3; ++j) {
+    for (size_t e = 0; e < 5; ++e) {
+      TEST_ASSERT_EQUAL_UINT16(table_bf16[picked[j] * 5 + e],
+                               out_bf16[j * 5 + e]);
+    }
+  }
+  st_destroy(out);
+  st_destroy(table);
+  st_destroy(table_f32);
+}
+
+/* ---- Materializing permute ------------------------------------------------ */
+
+static void ref_permute_copy(const FloatTensor *src, const size_t *perm,
+                             float *out, size_t out_numel) {
+  size_t index[ST_MAX_DIMS] = {0};
+  for (size_t flat = 0; flat < out_numel; ++flat) {
+    size_t src_index[ST_MAX_DIMS];
+    for (size_t d = 0; d < src->ndim; ++d) {
+      src_index[perm[d]] = index[d];
+    }
+    size_t src_flat = 0;
+    for (size_t d = 0; d < src->ndim; ++d) {
+      src_flat = src_flat * src->shape[d] + src_index[d];
+    }
+    out[flat] = src->values[src_flat];
+    for (size_t d = src->ndim; d-- > 0;) {
+      if (++index[d] < src->shape[perm[d]]) {
+        break;
+      }
+      index[d] = 0;
+    }
+  }
+}
+
+static void check_permute_case(const FloatTensor *src, const size_t *perm) {
+  size_t out_dims[ST_MAX_DIMS];
+  for (size_t i = 0; i < src->ndim; ++i) {
+    out_dims[i] = src->shape[perm[i]];
+  }
+  FloatTensor *out = st_create(src->ndim, out_dims);
+  TEST_ASSERT_NOT_NULL(out);
+  float *expected = malloc(src->numel * sizeof(float));
+  TEST_ASSERT_NOT_NULL(expected);
+  ref_permute_copy(src, perm, expected, src->numel);
+
+  TEST_ASSERT_TRUE(st_permute_copy_into(src, perm, out));
+  TEST_ASSERT_EQUAL_MEMORY(expected, out->values, src->numel * sizeof(float));
+
+  /* The view variant agrees on values. */
+  FloatTensor *view = st_permute(src, perm);
+  TEST_ASSERT_NOT_NULL(view);
+  FloatTensor *materialized = st_to_f32(view);
+  TEST_ASSERT_NOT_NULL(materialized);
+  /* st_permute is a view; st_to_f32 materializes it. */
+  TEST_ASSERT_EQUAL_MEMORY(expected, materialized->values,
+                           src->numel * sizeof(float));
+
+  free(expected);
+  st_destroy(materialized);
+  st_destroy(view);
+  st_destroy(out);
+}
+
+void test_st_permute_copy_into_matches_reference(void) {
+  const size_t shape4[4] = {2, 3, 4, 5};
+  FloatTensor *x4 = make_tensor(4, shape4);
+  check_permute_case(x4, (size_t[4]){0, 2, 1, 3});
+  check_permute_case(x4, (size_t[4]){0, 2, 3, 1});
+  check_permute_case(x4, (size_t[4]){3, 2, 1, 0});
+  check_permute_case(x4, (size_t[4]){1, 0, 3, 2});
+  st_destroy(x4);
+
+  FloatTensor *x2 = make_tensor(2, (size_t[2]){97, 65});
+  check_permute_case(x2, (size_t[2]){1, 0});
+  st_destroy(x2);
+
+  FloatTensor *x1 = make_tensor(1, (size_t[1]){7});
+  check_permute_case(x1, (size_t[1]){0});
+  st_destroy(x1);
+
+  /* Attention-style [B, H, T, dk] -> [B, T, H, dk]. */
+  FloatTensor *attn = make_tensor(4, (size_t[4]){2, 4, 128, 64});
+  check_permute_case(attn, (size_t[4]){0, 2, 1, 3});
+  st_destroy(attn);
+}
+
+void test_st_permute_copy_into_rejects_bad_input(void) {
+  FloatTensor *src = make_tensor(3, (size_t[3]){2, 3, 4});
+  FloatTensor *out = make_tensor(3, (size_t[3]){3, 2, 4});
+  FloatTensor *wrong = make_tensor(3, (size_t[3]){2, 3, 4});
+
+  TEST_ASSERT_FALSE(st_permute_copy_into(src, (size_t[3]){0, 1, 3}, out));
+  TEST_ASSERT_FALSE(st_permute_copy_into(src, (size_t[3]){0, 1, 1}, out));
+  TEST_ASSERT_FALSE(st_permute_copy_into(src, NULL, out));
+  TEST_ASSERT_FALSE(st_permute_copy_into(src, (size_t[3]){1, 0, 2}, wrong));
+  TEST_ASSERT_FALSE(st_permute_copy_into(NULL, (size_t[3]){1, 0, 2}, out));
+
+  TEST_ASSERT_TRUE(st_permute_copy_into(src, (size_t[3]){1, 0, 2}, out));
+
+  st_destroy(wrong);
+  st_destroy(out);
+  st_destroy(src);
+}
+
+void test_st_permute_copy_into_bytes_handles_i64(void) {
+  const size_t shape[3] = {2, 3, 4};
+  int64_t src[24];
+  for (size_t i = 0; i < 24; ++i) {
+    src[i] = (int64_t)i;
+  }
+  int64_t out[24];
+  const size_t perm[3] = {1, 2, 0};
+  TEST_ASSERT_TRUE(
+      st_permute_copy_into_bytes(src, 3, shape, perm, sizeof(int64_t), out));
+  /* out[i1][i2][i0] = src[i0][i1][i2] */
+  for (size_t i1 = 0; i1 < 3; ++i1) {
+    for (size_t i2 = 0; i2 < 4; ++i2) {
+      for (size_t i0 = 0; i0 < 2; ++i0) {
+        TEST_ASSERT_EQUAL_INT64(src[i0 * 12 + i1 * 4 + i2],
+                                out[i1 * 8 + i2 * 2 + i0]);
+      }
+    }
+  }
+  TEST_ASSERT_FALSE(st_permute_copy_into_bytes(src, 3, shape,
+                                               (size_t[3]){0, 0, 1}, 8, out));
 }

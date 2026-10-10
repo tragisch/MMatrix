@@ -1335,3 +1335,204 @@ bool st_matmul_batched(const FloatTensor *a, const FloatTensor *b,
   st_destroy(a_f32);
   return ok;
 }
+
+/* ---- Gather --------------------------------------------------------------- */
+
+/* OpenMP over the outer x count copy blocks only above this many copied
+ * elements: bench_st_gather measured a 2x regression at 1M copied elements
+ * (memcpy-bound work plus per-block index math), so realistic gathers stay
+ * sequential. */
+#define ST_GATHER_OMP_THRESHOLD 4194304u
+
+bool st_gather_raw(const void *table, size_t table_ndim,
+                   const size_t *table_shape, const int64_t *indices,
+                   size_t count, size_t axis, size_t elem_bytes, void *out) {
+  if (table == NULL || table_shape == NULL || indices == NULL || out == NULL ||
+      table_ndim == 0 || table_ndim > ST_MAX_DIMS || count == 0 ||
+      axis >= table_ndim || elem_bytes == 0) {
+    ST_LOG_ERROR("st_gather_raw: invalid input.");
+    return false;
+  }
+  size_t outer = 1;
+  size_t dim = table_shape[axis];
+  size_t inner = 1;
+  for (size_t i = 0; i < table_ndim; ++i) {
+    if (table_shape[i] == 0) {
+      ST_LOG_ERROR("st_gather_raw: invalid shape.");
+      return false;
+    }
+    if (i < axis) {
+      outer *= table_shape[i];
+    } else if (i > axis) {
+      inner *= table_shape[i];
+    }
+  }
+  const size_t bytes = inner * elem_bytes;
+  const size_t row_bytes = dim * bytes;
+  const size_t total = count * bytes;
+  if (row_bytes > SIZE_MAX / outer || total > SIZE_MAX / (outer * dim)) {
+    return false;
+  }
+
+  /* Validate every index before writing anything, so an out-of-range index
+   * fails without partial output (nm_lib copies until it hits the bad one). */
+  for (size_t j = 0; j < count; ++j) {
+    const int64_t index = indices[j] < 0 ? indices[j] + (int64_t)dim : indices[j];
+    if (index < 0 || index >= (int64_t)dim) {
+      ST_LOG_ERROR("st_gather_raw: index out of range.");
+      return false;
+    }
+  }
+
+  const uint8_t *src = table;
+  uint8_t *dst = out;
+  const size_t blocks = outer * count;
+  const size_t copied = blocks * bytes;
+  if (copied > ST_GATHER_OMP_THRESHOLD && omp_get_max_threads() > 1) {
+#pragma omp parallel for schedule(static)
+    for (size_t block = 0; block < blocks; ++block) {
+      const size_t o = block / count;
+      const size_t j = block % count;
+      const int64_t index =
+          indices[j] < 0 ? indices[j] + (int64_t)dim : indices[j];
+      memcpy(dst + block * bytes,
+             src + (o * dim + (size_t)index) * bytes, bytes);
+    }
+    return true;
+  }
+  for (size_t o = 0; o < outer; ++o) {
+    for (size_t j = 0; j < count; ++j) {
+      const int64_t index =
+          indices[j] < 0 ? indices[j] + (int64_t)dim : indices[j];
+      memcpy(dst, src + (o * dim + (size_t)index) * bytes, bytes);
+      dst += bytes;
+    }
+  }
+  return true;
+}
+
+bool st_gather(const FloatTensor *table, const int64_t *indices, size_t count,
+               size_t axis, FloatTensor *out) {
+  if (!st_interp_tensor_valid(table) || !st_interp_tensor_valid(out)) {
+    ST_LOG_ERROR("st_gather: invalid tensor input.");
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(table);
+  ST_ASSERT_NOT_PENDING(out);
+  if (axis >= table->ndim) {
+    ST_LOG_ERROR("st_gather: axis out of range.");
+    return false;
+  }
+  if (table->dtype != out->dtype) {
+    ST_LOG_ERROR("st_gather: dtype mismatch.");
+    return false;
+  }
+  if (out->ndim != table->ndim ||
+      memcmp(out->shape, table->shape, axis * sizeof(size_t)) != 0 ||
+      out->shape[axis] != count ||
+      memcmp(out->shape + axis + 1, table->shape + axis + 1,
+             (table->ndim - axis - 1) * sizeof(size_t)) != 0) {
+    ST_LOG_ERROR("st_gather: output shape mismatch.");
+    return false;
+  }
+  return st_gather_raw(table->values, table->ndim, table->shape, indices,
+                      count, axis, st_dtype_size(table->dtype), out->values);
+}
+
+/* ---- Materializing permute ------------------------------------------------ */
+
+bool st_permute_copy_into_bytes(const void *src, size_t ndim,
+                                const size_t *shape, const size_t *perm,
+                                size_t elem_bytes, void *out) {
+  if (src == NULL || shape == NULL || perm == NULL || out == NULL ||
+      ndim == 0 || ndim > ST_MAX_DIMS || elem_bytes == 0) {
+    ST_LOG_ERROR("st_permute_copy_into_bytes: invalid input.");
+    return false;
+  }
+  bool seen[ST_MAX_DIMS] = {false};
+  size_t in_stride[ST_MAX_DIMS];
+  size_t running = 1;
+  for (size_t i = ndim; i-- > 0;) {
+    if (shape[i] == 0) {
+      ST_LOG_ERROR("st_permute_copy_into_bytes: invalid shape.");
+      return false;
+    }
+    in_stride[i] = running;
+    running *= shape[i];
+  }
+  for (size_t i = 0; i < ndim; ++i) {
+    if (perm[i] >= ndim || seen[perm[i]]) {
+      ST_LOG_ERROR("st_permute_copy_into_bytes: perm is not a permutation.");
+      return false;
+    }
+    seen[perm[i]] = true;
+  }
+
+  /* Walk the output space (the permuted shape); output axis i steps
+   * through the input with in_stride[perm[i]] (nm_lib's run_transpose +
+   * walk_copy). */
+  size_t out_shape[ST_MAX_DIMS];
+  for (size_t i = 0; i < ndim; ++i) {
+    out_shape[i] = shape[perm[i]];
+  }
+  StWalk w;
+  st_walk_init(&w, ndim, out_shape, 1);
+  {
+    const size_t offset = ST_WALK_DIMS - ndim;
+    for (size_t i = 0; i < ndim; ++i) {
+      w.stride[0][offset + i] = (ptrdiff_t)in_stride[perm[i]];
+    }
+  }
+  st_walk_finish(&w);
+  const size_t inner = st_walk_inner(&w);
+  const size_t rows = st_walk_rows(&w);
+  const ptrdiff_t step = w.stride[0][w.rank - 1];
+  uint8_t *dst = out;
+  for (size_t r = 0; r < rows; ++r, st_walk_next_row(&w), dst += inner * elem_bytes) {
+    const uint8_t *from = (const uint8_t *)src +
+                           (size_t)w.offset[0] * elem_bytes;
+    if (step == 1) {
+      memcpy(dst, from, inner * elem_bytes);
+    } else if (elem_bytes == 4) {
+      const float *from_f = (const float *)(const void *)from;
+      float *to_f = (float *)(void *)dst;
+      for (size_t i = 0; i < inner; ++i) {
+        to_f[i] = from_f[(ptrdiff_t)i * step];
+      }
+    } else if (elem_bytes == 8) {
+      const int64_t *from_i = (const int64_t *)(const void *)from;
+      int64_t *to_i = (int64_t *)(void *)dst;
+      for (size_t i = 0; i < inner; ++i) {
+        to_i[i] = from_i[(ptrdiff_t)i * step];
+      }
+    } else {
+      for (size_t i = 0; i < inner; ++i) {
+        memcpy(dst + i * elem_bytes,
+               from + (size_t)((ptrdiff_t)i * step) * elem_bytes, elem_bytes);
+      }
+    }
+  }
+  return true;
+}
+
+bool st_permute_copy_into(const FloatTensor *src, const size_t *perm,
+                          FloatTensor *out) {
+  if (!st_interp_tensor_valid(src) || !st_interp_tensor_valid(out)) {
+    ST_LOG_ERROR("st_permute_copy_into: invalid tensor input.");
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(src);
+  ST_ASSERT_NOT_PENDING(out);
+  if (perm == NULL || src->dtype != out->dtype || out->ndim != src->ndim) {
+    ST_LOG_ERROR("st_permute_copy_into: invalid input.");
+    return false;
+  }
+  for (size_t i = 0; i < src->ndim; ++i) {
+    if (out->shape[i] != src->shape[perm[i]]) {
+      ST_LOG_ERROR("st_permute_copy_into: output shape mismatch.");
+      return false;
+    }
+  }
+  return st_permute_copy_into_bytes(src->values, src->ndim, src->shape, perm,
+                                    st_dtype_size(src->dtype), out->values);
+}

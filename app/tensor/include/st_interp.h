@@ -146,4 +146,84 @@ bool st_reduce_max_into(const FloatTensor *x, uint32_t axes_mask,
 bool st_matmul_batched(const FloatTensor *a, const FloatTensor *b,
                        FloatTensor *c);
 
+/**
+ * @brief Gather slices along one axis, indexed by int64 values.
+ * @param table Source tensor, contiguous, f32 or bf16.
+ * @param indices Index array of length @p count; negative indices count
+ *        from the end of @p axis.
+ * @param count Number of indices; must be greater than zero.
+ * @param axis Gather axis, below the tensor rank.
+ * @param out Output tensor, contiguous, same dtype as @p table, shape equal
+ *        to the table shape with @p axis replaced by @p count.
+ * @retval true Success.
+ * @retval false Invalid input or an index out of range; nothing is written.
+ *
+ * @details Indices are validated before any copy, so an out-of-range index
+ *          fails without partial output (unlike the nm_lib reference, which
+ *          copies until it hits the bad index). Slices are copied as
+ *          contiguous blocks with memcpy. Index tensors of higher rank are
+ *          covered by flattening them, matching the reference's
+ *          [outer, count, inner] layout.
+ */
+bool st_gather(const FloatTensor *table, const int64_t *indices, size_t count,
+               size_t axis, FloatTensor *out);
+
+/**
+ * @brief Gather for raw buffers of any element size.
+ * @param table Source buffer, row-major, shape @p table_shape.
+ * @param table_ndim Rank of @p table, `[1, 8]`.
+ * @param table_shape Shape of @p table, all dimensions non-zero.
+ * @param indices Index array of length @p count, negative counts from the
+ *        end of @p axis (see @ref st_gather).
+ * @param count Number of indices, greater than zero.
+ * @param axis Gather axis, below @p table_ndim.
+ * @param elem_bytes Element size in bytes (4 for f32/bf16-packed, 8 for
+ *        int64, 1 for bool).
+ * @param out Output buffer with `outer * count * inner` elements.
+ * @retval true Success.
+ * @retval false Invalid input or an index out of range; nothing is written.
+ *
+ * @details nm_lib gathers int64 and bool buffers too; the tensor API only
+ *          has float dtypes, so this raw variant carries the element size.
+ */
+bool st_gather_raw(const void *table, size_t table_ndim,
+                   const size_t *table_shape, const int64_t *indices,
+                   size_t count, size_t axis, size_t elem_bytes, void *out);
+
+/**
+ * @brief Materialize a permuted copy into a prepared output tensor.
+ * @param src Source tensor, contiguous, f32 or bf16.
+ * @param perm Permutation where output axis `i` reads input axis
+ *        `perm[i]` (same convention as @ref st_permute and nm_lib's
+ *        run_transpose).
+ * @param out Output tensor, contiguous, same dtype as @p src, shape equal
+ *        to the permuted source shape.
+ * @retval true Success.
+ * @retval false Invalid input; nothing is written.
+ *
+ * @details @ref st_permute only creates views; the interpreter writes into
+ *          pooled buffers, so it needs this materializing variant.
+ */
+bool st_permute_copy_into(const FloatTensor *src, const size_t *perm,
+                          FloatTensor *out);
+
+/**
+ * @brief Materializing permute for raw buffers of any element size.
+ * @param src Source buffer, row-major, shape @p shape.
+ * @param ndim Rank, `[1, 8]`.
+ * @param shape Source shape, all dimensions non-zero.
+ * @param perm Permutation array where output axis `i` reads input axis
+ *        `perm[i]`.
+ * @param elem_bytes Element size in bytes.
+ * @param out Output buffer with the permuted shape's element count.
+ * @retval true Success.
+ * @retval false Invalid input.
+ *
+ * @details Covers nm_lib's run_transpose for int64 and bool buffers, which
+ *          the float-only tensor API cannot express.
+ */
+bool st_permute_copy_into_bytes(const void *src, size_t ndim,
+                                const size_t *shape, const size_t *perm,
+                                size_t elem_bytes, void *out);
+
 #endif  // ST_INTERP_H

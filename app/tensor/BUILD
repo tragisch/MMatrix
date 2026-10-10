@@ -457,6 +457,16 @@ cc_binary(
     ],
 )
 
+cc_binary(
+    name = "bench_st_gather",
+    srcs = ["tests/bench_st_gather.c"],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        ":st",
+        "//app/matrix:sm",
+    ],
+)
+
 unity_test(
     name = "test_st_batchnorm",
     srcs = ["tests/test_st_batchnorm.c"],

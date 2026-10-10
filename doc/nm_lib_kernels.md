@@ -32,6 +32,10 @@ graph-interpreter tensor operators.
 | Interpreter `run_layernorm` | `st_layernorm` |
 | Interpreter `run_reducemax` | `st_reduce_max`, `st_reduce_max_into` |
 | Interpreter `run_matmul` | `st_matmul_batched` |
+| Interpreter `run_gather` | `st_gather`, `st_gather_raw` |
+| Interpreter `run_transpose` | `st_permute_copy_into`, `st_permute_copy_into_bytes` (view: `st_permute`) |
+| `run_concat` | `st_concat` (existing, materializing) |
+| `run_slice` | not covered; `st_split` only does equal splits, so the reference keeps its clamped start/end/step logic |
 
 ## Accuracy and determinism
 
@@ -80,6 +84,38 @@ runs take the same sequential path):
 
 The 1,024-element walk case is the fixed API overhead (validation and shape
 checks) on a sub-microsecond kernel; larger walk inputs are 1.5× or better.
+
+## Gather and materializing permute
+
+`//app/tensor:bench_st_gather` replicates nm_lib's `run_gather` and
+`run_transpose` as the `before` baseline (medians, µs/call). Both kernels
+are memcpy-bound, so the comparison is near parity with the fixed API
+overhead on small inputs; the gather validates every index before writing,
+so out-of-range indices fail without partial output.
+
+| Case | Threads | nm_lib before | `st` kernel | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| gather [30000,256] axis 0, count 128 | default | 18.698 | 22.980 | 0.81× |
+| gather [2,30000,1024] axis 1, count 512 | default | 1,857.517 | 1,389.117 | 1.34× |
+| gather [30000,64] axis 0, count 16 | default | 0.177 | 0.250 | 0.71× |
+| permute [2,4,128,64] -> [2,128,4,64] | default | 17.657 | 21.848 | 0.81× |
+| permute [2,4,128,64] -> [2,4,64,128] (strided) | default | 85.198 | 93.487 | 0.91× |
+| permute [1,4,16,16] -> [1,16,4,16] | default | 0.438 | 0.725 | 0.60× |
+
+The gather distributes copy blocks over OpenMP only above 4,194,304 copied
+elements (`ST_GATHER_OMP_THRESHOLD`); a trial at 1M regressed 2x on this
+machine, so realistic embedding-table gathers stay sequential. The
+strided permute rows use typed 4/8-byte loops like the reference's
+`walk_copy`; a variable-size `memcpy` per element is 8x slower.
+
+### Phase 2 shape-op coverage (task: can existing ops replace the reference?)
+
+| nm_lib function | mMatrix coverage |
+| --- | --- |
+| `run_transpose` (float tensors) | `st_permute` (view) + `st_permute_copy_into` (materializing, pooled buffers) |
+| `run_transpose` (int64/bool buffers) | `st_permute_copy_into_bytes` (raw, element-size parameter) |
+| `run_concat` | `st_concat` already materializes and covers it |
+| `run_slice` | not covered: `st_split` only splits evenly; the reference's clamped start/end/step slicing (including negative steps) has no mMatrix equivalent and stays in nm_lib |
 
 ## LayerNorm and ReduceMax
 
