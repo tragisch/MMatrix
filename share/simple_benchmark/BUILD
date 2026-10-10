@@ -29,15 +29,6 @@ cc_binary(
 )
 
 cc_binary(
-    name = "bench_dms_homebrew",
-    srcs = ["bench_dms.c"],
-    deps = [
-        ":simple_bench",
-        "//app/matrix:dms_homebrew",
-    ],
-)
-
-cc_binary(
     name = "bench_dm_multiply_number",
     srcs = ["bench_dm_multiply_number.c"],
     deps = [

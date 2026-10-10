@@ -14,14 +14,8 @@
 #ifndef DMS_SPARSE_H
 #define DMS_SPARSE_H
 
-#if defined(__has_include)
-#if __has_include(<cs.h>)
-#include <cs.h>  // SuiteSparse: Common Sparse Matrix Package
-#define DMS_HAS_CSPARSE 1
-#endif
-#endif
-
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -33,14 +27,9 @@
 #endif
 #endif
 
-/** @brief Forward declaration for SuiteSparse type when `cs.h` is unavailable. */
-#ifndef DMS_HAS_CSPARSE
-typedef struct cs_di_sparse cs;
-#endif
-
 /**
  * @brief Sparse COO matrix stored as `(row, col, value)` triples.
- * @details COO is the builder format; CSC/CSR caches are built lazily and
+ * @details COO is the builder format; row offsets are cached lazily and
  * invalidated on COO mutations.
  */
 typedef struct DoubleSparseMatrix {
@@ -51,8 +40,6 @@ typedef struct DoubleSparseMatrix {
   size_t *row_indices;
   size_t *col_indices;
   double *values;
-  cs *csc_cache;
-  bool csc_valid;
   size_t *csr_cache;   // lazily computed row_offsets[rows+1], NULL if invalid
   bool csr_valid;
 } DoubleSparseMatrix;
@@ -142,25 +129,6 @@ void dms_set_random_seed(uint64_t seed);
 uint64_t dms_get_random_seed(void);
 
 /**
- * @brief Convert COO sparse matrix to SuiteSparse `cs` matrix.
- * @param coo Source COO matrix.
- * @return New SuiteSparse `cs` matrix, or NULL on allocation failure.
- */
-cs *dms_to_cs(const DoubleSparseMatrix *coo);
-/**
- * @brief Convert SuiteSparse `cs` matrix to COO sparse matrix.
- * @param A Source SuiteSparse `cs` matrix.
- * @return New COO sparse matrix, or NULL on allocation failure.
- */
-DoubleSparseMatrix *dms_from_cs(const cs *A);
-/**
- * @deprecated Use dms_from_cs instead.
- * @param A Source SuiteSparse `cs` matrix.
- * @return New COO sparse matrix, or NULL on allocation failure.
- */
-MMATRIX_DEPRECATED("Use dms_from_cs instead")
-DoubleSparseMatrix *cs_to_dms(const cs *A);
-/**
  * @brief Export sparse matrix as newly allocated dense row-major array.
  * @param mat Source sparse matrix.
  * @return Newly allocated dense array (size rows x cols), or NULL on allocation failure. Caller must free.
@@ -202,7 +170,7 @@ DoubleSparseMatrix *dms_create_from_2D_array(size_t rows, size_t cols,
  * @param i Row index (0-based, must be < rows).
  * @param j Column index (0-based, must be < cols).
  * @param value New value (replaces or adds to existing).
- * @details Internal ordering may be deferred, but sorted COO order is restored before binary-search access or CSparse conversion.
+ * @details Internal ordering may be deferred, but sorted COO order is restored before binary-search access.
  * @return true on success, false on allocation/bound error.
  */
 bool dms_set(DoubleSparseMatrix *mat, size_t i, size_t j, double value);

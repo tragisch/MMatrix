@@ -22,13 +22,6 @@
 // #include "unity_internals.h"
 #endif
 
-#if defined(__has_include)
-#if __has_include(<cs.h>)
-#include <cs.h>
-#define TEST_DMS_HAS_CSPARSE 1
-#endif
-#endif
-
 #ifndef TEST_ASSERT_EQUAL
 #define TEST_ASSERT_EQUAL(expected, actual) \
   do {                                      \
@@ -61,13 +54,6 @@
     (void)(actual);                             \
   } while (0)
 #endif
-#ifndef TEST_IGNORE_MESSAGE
-#define TEST_IGNORE_MESSAGE(message) \
-  do {                               \
-    (void)(message);                 \
-  } while (0)
-#endif
-
 /******************************
  ** Creation of matrices:
  *******************************/
@@ -271,8 +257,32 @@ void test_dms_get_col(void) {
   TEST_ASSERT_EQUAL(1, m2->cols);
   TEST_ASSERT_EQUAL(3, m2->nnz);
   TEST_ASSERT_EQUAL(3, m2->capacity);
+  TEST_ASSERT_EQUAL(4, m2->values[0]);
+  TEST_ASSERT_EQUAL(5, m2->values[1]);
+  TEST_ASSERT_EQUAL(6, m2->values[2]);
   dms_destroy(m);
   dms_destroy(m2);
+}
+
+void test_dms_get_col_unsorted_input(void) {
+  size_t row_indices[] = {2, 0, 1};
+  size_t col_indices[] = {1, 1, 1};
+  double values[] = {30.0, 10.0, 20.0};
+  DoubleSparseMatrix *m =
+      dms_create_with_values(3, 2, 3, row_indices, col_indices, values);
+  DoubleSparseMatrix *col = dms_get_col(m, 1);
+
+  TEST_ASSERT_NOT_NULL(col);
+  TEST_ASSERT_EQUAL(3, col->nnz);
+  TEST_ASSERT_EQUAL(0, col->row_indices[0]);
+  TEST_ASSERT_EQUAL(1, col->row_indices[1]);
+  TEST_ASSERT_EQUAL(2, col->row_indices[2]);
+  TEST_ASSERT_EQUAL(10.0, col->values[0]);
+  TEST_ASSERT_EQUAL(20.0, col->values[1]);
+  TEST_ASSERT_EQUAL(30.0, col->values[2]);
+
+  dms_destroy(m);
+  dms_destroy(col);
 }
 
 void test_dms_get_last_col(void) {
@@ -339,60 +349,6 @@ void test_dms_transpose_basic(void) {
 //   dms_destroy(mat);
 //   dms_destroy(transposed);
 // }
-
-#if defined(TEST_DMS_HAS_CSPARSE)
-void test_dms_to_cs(void) {
-  double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
-  cs *A = dms_to_cs(m);
-  TEST_ASSERT_EQUAL(3, A->m);
-  TEST_ASSERT_EQUAL(3, A->n);
-  TEST_ASSERT_EQUAL(9, A->nzmax);
-  dms_destroy(m);
-  cs_spfree(A);
-}
-
-void test_dms_from_cs(void) {
-  cs *A = cs_spalloc(3, 3, 9, 1, 1);
-  A->p[0] = 0;
-  A->p[1] = 3;
-  A->p[2] = 6;
-  A->p[3] = 9;
-  A->i[0] = 0;
-  A->i[1] = 1;
-  A->i[2] = 2;
-  A->i[3] = 0;
-  A->i[4] = 1;
-  A->i[5] = 2;
-  A->i[6] = 0;
-  A->i[7] = 1;
-  A->i[8] = 2;
-  A->x[0] = 1;
-  A->x[1] = 2;
-  A->x[2] = 3;
-  A->x[3] = 4;
-  A->x[4] = 5;
-  A->x[5] = 6;
-  A->x[6] = 7;
-  A->x[7] = 8;
-  A->x[8] = 9;
-  DoubleSparseMatrix *m = dms_from_cs(A);
-  TEST_ASSERT_EQUAL(3, m->rows);
-  TEST_ASSERT_EQUAL(3, m->cols);
-  TEST_ASSERT_EQUAL(9, m->nnz);
-  TEST_ASSERT_EQUAL(109, m->capacity);
-  dms_destroy(m);
-  cs_spfree(A);
-}
-#else
-void test_dms_to_cs(void) {
-  TEST_IGNORE_MESSAGE("cs.h not available for editor-only parse context");
-}
-
-void test_dms_from_cs(void) {
-  TEST_IGNORE_MESSAGE("cs.h not available for editor-only parse context");
-}
-#endif
 
 // /******************************
 //  ** Matrix operations:

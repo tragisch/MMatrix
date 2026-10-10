@@ -6,7 +6,6 @@ Public API for sparse double matrices in COO format.
 
 ### Typedefs
 
-- `struct cs_di_sparse cs` — Forward declaration for SuiteSparse type when cs.h is unavailable.
 - `struct DoubleSparseMatrix DoubleSparseMatrix` — Sparse COO matrix stored as (row, col, value) triples.
 
 ## Functions
@@ -140,42 +139,6 @@ Parameters:
 - `(unnamed)` (`void`)
 
 Returns: Current global RNG seed value.
-
-### `dms_to_cs`
-
-`dms_to_cs(const DoubleSparseMatrix *coo)`
-
-Convert COO sparse matrix to SuiteSparse cs matrix.
-
-Parameters:
-
-- `coo` (`const DoubleSparseMatrix *`): Source COO matrix.
-
-Returns: New SuiteSparse cs matrix, or NULL on allocation failure.
-
-### `dms_from_cs`
-
-`dms_from_cs(const cs *A)`
-
-Convert SuiteSparse cs matrix to COO sparse matrix.
-
-Parameters:
-
-- `A` (`const cs *`): Source SuiteSparse cs matrix.
-
-Returns: New COO sparse matrix, or NULL on allocation failure.
-
-### `cs_to_dms`
-
-`cs_to_dms(const cs *A)`
-
-DeprecatedUse dms_from_cs instead. A Source SuiteSparse cs matrix. New COO sparse matrix, or NULL on allocation failure.
-
-Parameters:
-
-- `A` (`const cs *`): Source SuiteSparse cs matrix.
-
-Returns: New COO sparse matrix, or NULL on allocation failure.
 
 ### `dms_to_array`
 
