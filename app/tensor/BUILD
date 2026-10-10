@@ -221,12 +221,40 @@ cc_library(
 )
 
 cc_library(
+    name = "st_ops_interp",
+    srcs = [
+        "src/ops/st_interp.c",
+    ],
+    hdrs = [
+        "include/st_interp.h",
+    ],
+    copts = default_copts + perf_copts + package_copts + openmp_copts,
+    includes = [
+        "include",
+        "src/backend",
+        "src/backend/mps",
+        "src/core",
+        "src/ops",
+        "src/runtime",
+    ],
+    local_defines = ["ST_INTERNAL_TENSOR_LAYOUT"],
+    visibility = ["//app/tensor:__pkg__"],
+    deps = default_deps + [
+        ":st_backend",
+        ":st_core",
+        ":st_runtime",
+        "//app/matrix:sm",
+    ],
+)
+
+cc_library(
     name = "st",
     hdrs = [
         "include/st.h",
         "include/st_batchnorm.h",
         "include/st_conv.h",
         "include/st_convert.h",
+        "include/st_interp.h",
         "include/st_pool.h",
         "include/st_shape_ops.h",
         "include/st_vector_bridge.h",
@@ -246,6 +274,7 @@ cc_library(
     deps = default_deps + [
         ":st_backend",
         ":st_core",
+        ":st_ops_interp",
         ":st_ops_nn",
         ":st_runtime",
     ],
@@ -380,6 +409,27 @@ unity_test(
 cc_binary(
     name = "bench_nn_activations",
     srcs = ["tests/bench_nn_activations.c"],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        ":st",
+        "//app/matrix:sm",
+    ],
+)
+
+unity_test(
+    name = "test_st_interp",
+    srcs = ["tests/test_st_interp.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
+)
+
+cc_binary(
+    name = "bench_st_binary",
+    srcs = ["tests/bench_st_binary.c"],
     target_compatible_with = ["@platforms//os:macos"],
     deps = [
         ":st",

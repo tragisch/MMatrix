@@ -1,8 +1,8 @@
 # nm_lib Kernel Migration Map
 
 This checklist maps scalar kernels in `14_NN/app/nm_lib` to the reusable
-mMatrix APIs. Phase 1 covers dense NN kernels; interpreter-only tensor
-operators remain a separate phase.
+mMatrix APIs. Phase 1 covers dense NN kernels; Phase 2 covers the
+graph-interpreter tensor operators.
 
 | nm_lib function / operation | mMatrix function |
 | --- | --- |
@@ -28,6 +28,7 @@ operators remain a separate phase.
 | `optimizer_apply_array` (RMSprop) | `sv_optim_rmsprop` |
 | `optimizer_apply_array` (Adam) | `sv_optim_adam` |
 | Gradient L2 clipping | `sv_clip_norm` |
+| Interpreter `run_binary` (add/sub/mul/div) | `st_binary_broadcast`, `st_binary_broadcast_into` |
 
 ## Accuracy and determinism
 
@@ -40,6 +41,67 @@ Elementwise work is partitioned by index and is independent of OpenMP thread
 count. Softmax and row reductions keep each row/column sum in a fixed order to
 avoid thread-count-dependent accumulation. BF16 tensor activation kernels
 promote to F32, compute, then round back to BF16.
+
+The interpreter broadcast kernels (`st_binary_broadcast*`) are bit-exact
+against the scalar reference for all four operations, including IEEE results
+for division by zero. Two caveats under the vector packages' `-ffast-math`:
+
+* `vDSP_vadd`/`vsub`/`vmul` are single IEEE operations and used on the
+  Accelerate path; `vDSP_vdiv` differs from scalar division by 1 ulp, so
+  division always runs on the C path.
+* `-ffast-math` rewrites a division by a loop-invariant scalar into a
+  multiply with a once-rounded reciprocal (double rounding). The scalar
+  operand path uses an IEEE-exact division helper compiled with
+  `#pragma float_control(precise, on)` (clang) or
+  `__attribute__((optimize("no-fast-math")))` (gcc).
+
+## Broadcast binary benchmark
+
+`//app/tensor:bench_st_binary` replicates nm_lib's `run_binary` (walk plus
+row kernels) as the `before` baseline and compares medians for transformer
+shapes (default OpenMP thread count was 4 on this 4-performance-core Apple
+Silicon machine; with the thread threshold below, default and single-thread
+runs take the same sequential path):
+
+| Case | Threads | Elements | nm_lib before | `st_binary_broadcast_into` | Speedup |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| same-shape add [8,256,512] | 1 | 1,048,576 | 389.500 | 77.025 | 5.06× |
+| bias add [4,128,256]+[256] | 1 | 131,072 | 60.150 | 31.550 | 1.91× |
+| bias add [4,512,768]+[768] | 1 | 1,572,864 | 1,077.750 | 663.125 | 1.63× |
+| attn mask add (walk) [2,4,128,128]+[1,1,128,128] | 1 | 131,072 | 59.975 | 39.200 | 1.53× |
+| attn mask add (suffix) [2,4,128,128]+[128,128] | 1 | 131,072 | 70.950 | 37.500 | 1.89× |
+| scale mul [4,128,256]*[1] | 1 | 131,072 | 46.375 | 18.925 | 2.45× |
+| scale mul (mid) [4,1,256]*[1,128,1] | 1 | 131,072 | 48.975 | 16.800 | 2.92× |
+| suffix div [4,128,256]/[256] | 1 | 131,072 | 49.625 | 20.550 | 2.41× |
+| attn mask add (walk) [1,4,16,16]+[1,1,16,16] | 1 | 1,024 | 0.628 | 0.760 | 0.83× |
+
+The 1,024-element walk case is the fixed API overhead (validation and shape
+checks) on a sub-microsecond kernel; larger walk inputs are 1.5× or better.
+
+### Binary OpenMP threshold
+
+The benchmark's thread sweep measures `st_binary_broadcast_into` at one
+versus default threads (median µs/call):
+
+| Elements | Path | 1 thread | default (4) | parallel gain |
+| ---: | --- | ---: | ---: | ---: |
+| 4,096 | same-shape | 1.409 | 2.350 | 0.60× |
+| 16,384 | same-shape | 7.107 | 11.805 | 0.60× |
+| 65,536 | same-shape | 5.018 | 4.688 | 1.07× |
+| 262,144 | same-shape | 24.525 | 24.625 | 1.00× |
+| 1,048,576 | same-shape | 124.300 | 236.050 | 0.53× |
+| 2,097,152 | same-shape | 2,280.125 | 2,064.250 | 1.10× |
+| 4,194,304 | same-shape | 1,422.750 | 1,280.500 | 1.11× |
+| 8,388,608 | same-shape | 2,583.000 | 2,175.875 | 1.19× |
+| 4,194,304 | scalar | 1,633.500 | 779.125 | 2.10× |
+| 8,388,608 | scalar | 1,850.000 | 1,207.875 | 1.53× |
+
+Parallel regions regress or stay flat below roughly one million elements
+(OpenMP fork/join cost dominates a memory-bound kernel) and only gain
+modestly above two million. `ST_BIN_OMP_THRESHOLD` is therefore 2,097,152
+output elements, which keeps every tested transformer shape on the
+sequential path; this follows the same rationale as the optimizer
+threshold in Phase 1 and should be retuned on the deployment machine.
 
 ## Activation benchmark
 
