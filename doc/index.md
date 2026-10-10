@@ -9,6 +9,7 @@ This documentation is fully located under `doc/`.
 - [Convolution](api/tensor/st_conv.md)
 - [Pooling](api/tensor/st_pool.md)
 - [Shape Ops](api/tensor/st_shape_ops.md)
+- [NN Kernel Migration Map](nm_lib_kernels.md)
 
 ## Matrix API
 

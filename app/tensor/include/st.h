@@ -284,6 +284,27 @@ bool st_apply_relu(FloatTensor *t);
 /** @brief Apply ReLU backward mask in-place to @p grad. */
 bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad);
 
+/** @brief Apply sigmoid in-place to every tensor element. */
+bool st_apply_sigmoid(FloatTensor *t);
+/** @brief Apply hyperbolic tangent in-place to every tensor element. */
+bool st_apply_tanh(FloatTensor *t);
+/** @brief Apply tanh-approximation GELU in-place. */
+bool st_apply_gelu_tanh(FloatTensor *t);
+/** @brief Apply erf-form GELU in-place. */
+bool st_apply_gelu_erf(FloatTensor *t);
+/** @brief Apply softmax independently over the last tensor axis. */
+bool st_apply_softmax(FloatTensor *t);
+
+/** @brief Multiply @p grad in-place by the sigmoid derivative at @p activation. */
+bool st_apply_sigmoid_backward(const FloatTensor *activation,
+                               FloatTensor *grad);
+/** @brief Multiply @p grad in-place by the tanh derivative at @p activation. */
+bool st_apply_tanh_backward(const FloatTensor *activation, FloatTensor *grad);
+/** @brief Multiply @p grad in-place by the tanh-GELU derivative at @p input. */
+bool st_apply_gelu_tanh_backward(const FloatTensor *input, FloatTensor *grad);
+/** @brief Multiply @p grad in-place by the erf-GELU derivative at @p input. */
+bool st_apply_gelu_erf_backward(const FloatTensor *input, FloatTensor *grad);
+
 // ---- Reduction ----
 
 /**

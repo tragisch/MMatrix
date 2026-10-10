@@ -266,10 +266,19 @@ cc_library(
 
 cc_library(
     name = "sm",
-    srcs = ["src/sm.c"],
-    hdrs = ["include/sm.h"],
+    hdrs = [
+        "include/sm.h",
+        "src/sm_kernels.h",
+    ],
+    srcs = [
+        "src/sm.c",
+        "src/sm_kernels.c",
+    ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
-    includes = ["include"],
+    includes = [
+        "include",
+        "src",
+    ],
     linkopts = openmp_linkopts + accelerate_linkopts + openblas_linkopts,
     target_compatible_with = select({
         ":backend_accelerate": ["@platforms//os:macos"],
@@ -343,6 +352,14 @@ unity_test(
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
     deps = ["@//app/matrix:sm"],
+)
+
+unity_test(
+    name = "test_sm_nn",
+    srcs = ["tests/test_sm_nn.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [":sm"],
 )
 
 unity_test(

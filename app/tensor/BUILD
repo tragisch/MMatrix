@@ -367,6 +367,27 @@ unity_test(
 )
 
 unity_test(
+    name = "test_st_nn",
+    srcs = ["tests/test_st_nn.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
+)
+
+cc_binary(
+    name = "bench_nn_activations",
+    srcs = ["tests/bench_nn_activations.c"],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        "//app/matrix:sm",
+        ":st",
+    ],
+)
+
+unity_test(
     name = "test_st_batchnorm",
     srcs = ["tests/test_st_batchnorm.c"],
     my_config = ["tests/my_config.yml"],

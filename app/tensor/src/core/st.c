@@ -56,6 +56,7 @@
 #include "st_dtype.h"
 #include "st_gpu_guard.h"
 #include "sm.h"
+#include "sm_kernels.h"
 #include "st_bf16_utils.h"
 
 #include <stdio.h>
@@ -963,6 +964,131 @@ bool st_apply_relu_backward(const FloatTensor *activation, FloatTensor *grad) {
     }
   }
   return true;
+}
+
+static bool st_kernel_tensor_valid(const FloatTensor *t) {
+  return t != NULL && t->values != NULL && t->numel > 0 && t->ndim > 0 &&
+         t->shape[t->ndim - 1] > 0 &&
+         t->numel % t->shape[t->ndim - 1] == 0 && st_is_contiguous(t);
+}
+
+static bool st_kernel_tensors_compatible(const FloatTensor *a,
+                                         const FloatTensor *b) {
+  return st_kernel_tensor_valid(a) && st_kernel_tensor_valid(b) &&
+         a->ndim == b->ndim && a->numel == b->numel &&
+         memcmp(a->shape, b->shape, a->ndim * sizeof(size_t)) == 0;
+}
+
+bool st_apply_sigmoid(FloatTensor *t) {
+  if (!st_kernel_tensor_valid(t)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(t);
+  ST_INPLACE_UNARY_BF16_PROMOTE(t, st_apply_sigmoid);
+  return sm_kernel_apply_sigmoid(t->values, t->numel);
+}
+
+bool st_apply_tanh(FloatTensor *t) {
+  if (!st_kernel_tensor_valid(t)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(t);
+  ST_INPLACE_UNARY_BF16_PROMOTE(t, st_apply_tanh);
+  return sm_kernel_apply_tanh(t->values, t->numel);
+}
+
+bool st_apply_gelu_tanh(FloatTensor *t) {
+  if (!st_kernel_tensor_valid(t)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(t);
+  ST_INPLACE_UNARY_BF16_PROMOTE(t, st_apply_gelu_tanh);
+  return sm_kernel_apply_gelu_tanh(t->values, t->numel);
+}
+
+bool st_apply_gelu_erf(FloatTensor *t) {
+  if (!st_kernel_tensor_valid(t)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(t);
+  ST_INPLACE_UNARY_BF16_PROMOTE(t, st_apply_gelu_erf);
+  return sm_kernel_apply_gelu_erf(t->values, t->numel);
+}
+
+bool st_apply_softmax(FloatTensor *t) {
+  if (!st_kernel_tensor_valid(t)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(t);
+  ST_INPLACE_UNARY_BF16_PROMOTE(t, st_apply_softmax);
+  const size_t cols = t->shape[t->ndim - 1];
+  return sm_kernel_apply_softmax(t->values, t->numel / cols, cols);
+}
+
+static bool st_apply_sigmoid_backward_promote(FloatTensor *grad,
+                                               const FloatTensor *activation) {
+  return st_apply_sigmoid_backward(activation, grad);
+}
+
+static bool st_apply_tanh_backward_promote(FloatTensor *grad,
+                                            const FloatTensor *activation) {
+  return st_apply_tanh_backward(activation, grad);
+}
+
+static bool st_apply_gelu_tanh_backward_promote(FloatTensor *grad,
+                                                 const FloatTensor *input) {
+  return st_apply_gelu_tanh_backward(input, grad);
+}
+
+static bool st_apply_gelu_erf_backward_promote(FloatTensor *grad,
+                                                const FloatTensor *input) {
+  return st_apply_gelu_erf_backward(input, grad);
+}
+
+bool st_apply_sigmoid_backward(const FloatTensor *activation,
+                               FloatTensor *grad) {
+  if (!st_kernel_tensors_compatible(activation, grad)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(activation);
+  ST_ASSERT_NOT_PENDING(grad);
+  ST_INPLACE_BINARY_BF16_PROMOTE(grad, activation,
+                                 st_apply_sigmoid_backward_promote);
+  return sm_kernel_sigmoid_backward(activation->values, grad->values,
+                                    grad->numel);
+}
+
+bool st_apply_tanh_backward(const FloatTensor *activation, FloatTensor *grad) {
+  if (!st_kernel_tensors_compatible(activation, grad)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(activation);
+  ST_ASSERT_NOT_PENDING(grad);
+  ST_INPLACE_BINARY_BF16_PROMOTE(grad, activation,
+                                 st_apply_tanh_backward_promote);
+  return sm_kernel_tanh_backward(activation->values, grad->values, grad->numel);
+}
+
+bool st_apply_gelu_tanh_backward(const FloatTensor *input, FloatTensor *grad) {
+  if (!st_kernel_tensors_compatible(input, grad)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(input);
+  ST_ASSERT_NOT_PENDING(grad);
+  ST_INPLACE_BINARY_BF16_PROMOTE(grad, input,
+                                 st_apply_gelu_tanh_backward_promote);
+  return sm_kernel_gelu_tanh_backward(input->values, grad->values, grad->numel);
+}
+
+bool st_apply_gelu_erf_backward(const FloatTensor *input, FloatTensor *grad) {
+  if (!st_kernel_tensors_compatible(input, grad)) {
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(input);
+  ST_ASSERT_NOT_PENDING(grad);
+  ST_INPLACE_BINARY_BF16_PROMOTE(grad, input,
+                                 st_apply_gelu_erf_backward_promote);
+  return sm_kernel_gelu_erf_backward(input->values, grad->values, grad->numel);
 }
 
 /* ---- Reduction: sum over axes ---- */

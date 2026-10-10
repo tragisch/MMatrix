@@ -351,6 +351,39 @@ typedef enum SmTranspose {
   SM_TRANSPOSE = 1,
 } SmTranspose;
 
+/** @brief Activation applied by fused matrix kernels. */
+typedef enum SmActivation {
+  SM_ACT_NONE = 0,
+  SM_ACT_RELU = 1,
+  SM_ACT_SIGMOID = 2,
+  SM_ACT_TANH = 3,
+} SmActivation;
+
+/** @brief Apply ReLU in-place to every matrix element. */
+bool sm_apply_relu(FloatMatrix *mat);
+/** @brief Apply sigmoid in-place to every matrix element. */
+bool sm_apply_sigmoid(FloatMatrix *mat);
+/** @brief Apply hyperbolic tangent in-place to every matrix element. */
+bool sm_apply_tanh(FloatMatrix *mat);
+/** @brief Apply tanh-approximation GELU in-place. */
+bool sm_apply_gelu_tanh(FloatMatrix *mat);
+/** @brief Apply erf-form GELU in-place. */
+bool sm_apply_gelu_erf(FloatMatrix *mat);
+/** @brief Apply numerically stable softmax independently to each row. */
+bool sm_apply_softmax(FloatMatrix *mat);
+
+/** @brief Multiply @p grad in-place by the ReLU mask at @p activation. */
+bool sm_apply_relu_backward(const FloatMatrix *activation, FloatMatrix *grad);
+/** @brief Multiply @p grad in-place by the sigmoid derivative at @p activation. */
+bool sm_apply_sigmoid_backward(const FloatMatrix *activation,
+                               FloatMatrix *grad);
+/** @brief Multiply @p grad in-place by the tanh derivative at @p activation. */
+bool sm_apply_tanh_backward(const FloatMatrix *activation, FloatMatrix *grad);
+/** @brief Multiply @p grad in-place by the tanh-GELU derivative at @p input. */
+bool sm_apply_gelu_tanh_backward(const FloatMatrix *input, FloatMatrix *grad);
+/** @brief Multiply @p grad in-place by the erf-GELU derivative at @p input. */
+bool sm_apply_gelu_erf_backward(const FloatMatrix *input, FloatMatrix *grad);
+
 /**
  * @brief BLAS-style GEMM kernel.
  * @param C Output matrix (shape must be compatible with A and B).

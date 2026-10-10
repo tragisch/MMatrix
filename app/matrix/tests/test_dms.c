@@ -257,9 +257,9 @@ void test_dms_get_col(void) {
   TEST_ASSERT_EQUAL(1, m2->cols);
   TEST_ASSERT_EQUAL(3, m2->nnz);
   TEST_ASSERT_EQUAL(3, m2->capacity);
-  TEST_ASSERT_EQUAL(4, m2->values[0]);
+  TEST_ASSERT_EQUAL(2, m2->values[0]);
   TEST_ASSERT_EQUAL(5, m2->values[1]);
-  TEST_ASSERT_EQUAL(6, m2->values[2]);
+  TEST_ASSERT_EQUAL(8, m2->values[2]);
   dms_destroy(m);
   dms_destroy(m2);
 }

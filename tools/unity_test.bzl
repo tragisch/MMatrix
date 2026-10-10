@@ -38,7 +38,7 @@ def unity_test(name, srcs, my_config = None, deps = None, **kwargs):
         deps = deps,
         srcs = [runner_file_name(file_name)] + srcs,
         size = "small",
-        copts = ["-DUNITY_USE_COMMAND_LINE_ARGS"] + coverage_copts,
+        copts = coverage_copts,
         linkopts = coverage_linkopts,
         visibility = ["//visibility:public"],
         linkstatic = True,

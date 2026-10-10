@@ -18,5 +18,6 @@ nav:
       - Convolution: doc/api/tensor/st_conv.md
       - Pooling: doc/api/tensor/st_pool.md
       - Shape Ops: doc/api/tensor/st_shape_ops.md
+      - nm_lib kernel migration: doc/nm_lib_kernels.md
   - Examples:
       - Tensor NN forward pass: doc/examples/tensor_basic.md

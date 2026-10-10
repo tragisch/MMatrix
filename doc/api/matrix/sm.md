@@ -490,6 +490,25 @@ Parameters:
 
 Returns: Solution vector x, or NULL on allocation/singularity error.
 
+### In-place activation kernels
+
+`sm_apply_relu`, `sm_apply_sigmoid`, `sm_apply_tanh`, `sm_apply_gelu_tanh`,
+`sm_apply_gelu_erf`, and `sm_apply_softmax` update a matrix in place. Softmax
+is applied independently to each row and subtracts the row maximum before
+exponentiation.
+
+The backward kernels `sm_apply_relu_backward`, `sm_apply_sigmoid_backward`,
+`sm_apply_tanh_backward`, `sm_apply_gelu_tanh_backward`, and
+`sm_apply_gelu_erf_backward` multiply the supplied gradient in place. Sigmoid
+and tanh backward consume the activation output; GELU backward consumes the
+original input.
+
+These functions return `false` for null storage or incompatible shapes.
+Accelerate builds use vForce for vector transcendental operations; the
+OpenMP/scalar fallback uses the corresponding C math functions. The two GELU
+forms are explicitly named: `*_gelu_tanh` is the tanh approximation, while
+`*_gelu_erf` uses the erf definition.
+
 ### `sm_gemm`
 
 `bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A, SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b, float beta)`

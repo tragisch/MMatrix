@@ -8,6 +8,7 @@
 
 #include "sm.h"
 #include "m_rng.h"
+#include "sm_kernels.h"
 
 #include <log.h>
 #include <math.h>
@@ -570,6 +571,102 @@ FloatMatrix *sm_get_col(const FloatMatrix *mat, size_t j) {
 
 FloatMatrix *sm_get_last_col(const FloatMatrix *mat) {
   return sm_get_col(mat, mat->cols - 1);
+}
+
+static bool sm_kernel_matrix_valid(const FloatMatrix *mat) {
+  return mat != NULL && mat->values != NULL && mat->rows > 0 && mat->cols > 0 &&
+         mat->rows <= SIZE_MAX / mat->cols &&
+         mat->capacity >= mat->rows * mat->cols;
+}
+
+static bool sm_kernel_matrices_compatible(const FloatMatrix *a,
+                                          const FloatMatrix *b) {
+  return sm_kernel_matrix_valid(a) && sm_kernel_matrix_valid(b) &&
+         a->rows == b->rows && a->cols == b->cols;
+}
+
+bool sm_apply_relu(FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return false;
+  }
+  return sm_kernel_apply_activation(mat->values, mat->rows * mat->cols,
+                                    SM_ACT_RELU);
+}
+
+bool sm_apply_sigmoid(FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return false;
+  }
+  return sm_kernel_apply_sigmoid(mat->values, mat->rows * mat->cols);
+}
+
+bool sm_apply_tanh(FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return false;
+  }
+  return sm_kernel_apply_tanh(mat->values, mat->rows * mat->cols);
+}
+
+bool sm_apply_gelu_tanh(FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return false;
+  }
+  return sm_kernel_apply_gelu_tanh(mat->values, mat->rows * mat->cols);
+}
+
+bool sm_apply_gelu_erf(FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return false;
+  }
+  return sm_kernel_apply_gelu_erf(mat->values, mat->rows * mat->cols);
+}
+
+bool sm_apply_softmax(FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return false;
+  }
+  return sm_kernel_apply_softmax(mat->values, mat->rows, mat->cols);
+}
+
+bool sm_apply_relu_backward(const FloatMatrix *activation, FloatMatrix *grad) {
+  if (!sm_kernel_matrices_compatible(activation, grad)) {
+    return false;
+  }
+  return sm_kernel_relu_backward(activation->values, grad->values,
+                                 activation->rows * activation->cols);
+}
+
+bool sm_apply_sigmoid_backward(const FloatMatrix *activation,
+                               FloatMatrix *grad) {
+  if (!sm_kernel_matrices_compatible(activation, grad)) {
+    return false;
+  }
+  return sm_kernel_sigmoid_backward(activation->values, grad->values,
+                                   activation->rows * activation->cols);
+}
+
+bool sm_apply_tanh_backward(const FloatMatrix *activation, FloatMatrix *grad) {
+  if (!sm_kernel_matrices_compatible(activation, grad)) {
+    return false;
+  }
+  return sm_kernel_tanh_backward(activation->values, grad->values,
+                                activation->rows * activation->cols);
+}
+
+bool sm_apply_gelu_tanh_backward(const FloatMatrix *input, FloatMatrix *grad) {
+  if (!sm_kernel_matrices_compatible(input, grad)) {
+    return false;
+  }
+  return sm_kernel_gelu_tanh_backward(input->values, grad->values,
+                                      input->rows * input->cols);
+}
+
+bool sm_apply_gelu_erf_backward(const FloatMatrix *input, FloatMatrix *grad) {
+  if (!sm_kernel_matrices_compatible(input, grad)) {
+    return false;
+  }
+  return sm_kernel_gelu_erf_backward(input->values, grad->values,
+                                     input->rows * input->cols);
 }
 
 // Performance & usage guidance: see .github/skills/sm-gemm-optimization/SKILL.md

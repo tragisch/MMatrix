@@ -392,6 +392,18 @@ Parameters:
 - `activation` (`const FloatTensor *`)
 - `grad` (`FloatTensor *`)
 
+### Tensor activation kernels
+
+`st_apply_sigmoid`, `st_apply_tanh`, `st_apply_gelu_tanh`,
+`st_apply_gelu_erf`, and `st_apply_softmax` update a contiguous tensor in place.
+Softmax is applied over the last axis. These operations promote BF16 tensors to
+F32 for computation and convert results back to BF16.
+
+The corresponding `st_apply_*_backward` functions update a contiguous gradient
+in place. Sigmoid and tanh backward consume the activation output; GELU
+backward consumes the original input. Functions return `false` for invalid,
+non-contiguous, or shape-incompatible tensors.
+
 ### `st_sum_axes`
 
 `st_sum_axes(const FloatTensor *t, const size_t *axes, size_t num_axes)`
