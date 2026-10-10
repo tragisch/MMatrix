@@ -250,3 +250,61 @@ void test_st_f16_nan_policy_is_documented_behavior(void) {
   const float largest = st_f16_to_f32(0x7bffu);
   TEST_ASSERT_EQUAL_UINT16(0x7bffu, st_f32_to_f16(largest));
 }
+
+void test_st_f16_bulk_subnormals_survive_fast_math(void) {
+  /* Flush-to-zero would zero the subnormal outputs of the NEON path; this
+   * builds f32 values around every subnormal half, at and between the
+   * rounding boundaries, and requires bit-exact bulk == scalar. */
+  float src[8192];
+  uint16_t dst[8192];
+  uint16_t ref[8192];
+  size_t n = 0;
+  for (uint32_t h = 0x0001u; h <= 0x03ffu && n + 5 <= 8192; h += 1u) {
+    /* f32 values whose halves round around h: exact value and the
+     * values just below/at/above the halfway points. */
+    const uint32_t base = h << 13;
+    static const uint32_t offsets[] = {0x0000u, 0x0fffu, 0x1000u,
+                                       0x1001u, 0x1fffu};
+    for (size_t k = 0; k < 5; ++k) {
+      src[n++] = float_of_bits(base + offsets[k]);
+    }
+  }
+  /* Denormal-region f32 inputs that round to zero / smallest subnormal. */
+  static const uint32_t extra[] = {
+      0x33000000u, 0x33fffffdu, 0x34000000u, 0x337fffffu, 0x33800000u,
+      0x33ffffffu, 0x33fff800u, 0x33fff7ffu, 0x33fff000u, 0x33efffffu,
+  };
+  for (size_t k = 0; k < sizeof(extra) / sizeof(extra[0]); ++k) {
+    src[n++] = float_of_bits(extra[k]);
+  }
+  TEST_ASSERT_TRUE(n > 0);
+
+  st_f32_to_f16_bulk(src, dst, n);
+  for (size_t i = 0; i < n; ++i) {
+    ref[i] = st_f32_to_f16(src[i]);
+  }
+  TEST_ASSERT_EQUAL_MEMORY(ref, dst, n * sizeof(uint16_t));
+  /* And against the copied nm_lib reference. */
+  for (size_t i = 0; i < n; ++i) {
+    TEST_ASSERT_EQUAL_UINT16(nm_f32_to_f16(src[i]), dst[i]);
+  }
+
+  /* Full roundtrip through both bulk kernels for all 65536 patterns:
+   * h -> f32 -> h' must be the identity for non-NaN patterns (NaN
+   * payloads canonicalize, matching the scalar functions). */
+  static uint16_t patterns[65536];
+  static float expanded[65536];
+  static uint16_t back[65536];
+  for (uint32_t bits = 0; bits <= 0xffffu; ++bits) {
+    patterns[bits] = (uint16_t)bits;
+  }
+  st_f16_to_f32_bulk(patterns, expanded, 65536);
+  st_f32_to_f16_bulk(expanded, back, 65536);
+  for (uint32_t bits = 0; bits <= 0xffffu; ++bits) {
+    TEST_ASSERT_EQUAL_UINT16(st_f32_to_f16(expanded[bits]), back[bits]);
+    const bool is_nan = (bits & 0x7c00u) == 0x7c00u && (bits & 0x03ffu) != 0u;
+    if (!is_nan) {
+      TEST_ASSERT_EQUAL_UINT16((uint16_t)bits, back[bits]);
+    }
+  }
+}

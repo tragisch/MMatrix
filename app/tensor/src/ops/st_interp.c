@@ -657,7 +657,11 @@ static float st_interp_sum8(const float *x, size_t n) {
 
 /* One normalization group, verbatim run_layernorm from nm_lib: mean via
  * sum8, centered values into y, variance via eight partial sums, then
- * scale and bias. Safe in-place when in == out. */
+ * scale and bias. Safe in-place when in == out. The test compares against
+ * this algorithm with a tolerance relative to the intermediate magnitude
+ * (see test_st_interp.c): the library's -ffast-math reassociation rounds
+ * each operation differently, and result-relative tolerances blow up on
+ * outputs where the scaled value cancels against beta. */
 static void st_layernorm_group(const float *in, const float *scale,
                                const float *bias, size_t group, float eps,
                                float *out) {
@@ -699,6 +703,9 @@ static void st_layernorm_group(const float *in, const float *scale,
     }
   }
 }
+#if defined(__clang__)
+#pragma float_control(pop)
+#endif
 
 static bool st_layernorm_f32(const float *in, const float *scale,
                              const float *bias, size_t group, size_t groups,
@@ -1344,13 +1351,13 @@ bool st_matmul_batched(const FloatTensor *a, const FloatTensor *b,
  * sequential. */
 #define ST_GATHER_OMP_THRESHOLD 4194304u
 
-bool st_gather_raw(const void *table, size_t table_ndim,
+bool st_gather_bytes(const void *table, size_t table_ndim,
                    const size_t *table_shape, const int64_t *indices,
                    size_t count, size_t axis, size_t elem_bytes, void *out) {
   if (table == NULL || table_shape == NULL || indices == NULL || out == NULL ||
       table_ndim == 0 || table_ndim > ST_MAX_DIMS || count == 0 ||
       axis >= table_ndim || elem_bytes == 0) {
-    ST_LOG_ERROR("st_gather_raw: invalid input.");
+    ST_LOG_ERROR("st_gather_bytes: invalid input.");
     return false;
   }
   size_t outer = 1;
@@ -1358,7 +1365,7 @@ bool st_gather_raw(const void *table, size_t table_ndim,
   size_t inner = 1;
   for (size_t i = 0; i < table_ndim; ++i) {
     if (table_shape[i] == 0) {
-      ST_LOG_ERROR("st_gather_raw: invalid shape.");
+      ST_LOG_ERROR("st_gather_bytes: invalid shape.");
       return false;
     }
     if (i < axis) {
@@ -1379,7 +1386,7 @@ bool st_gather_raw(const void *table, size_t table_ndim,
   for (size_t j = 0; j < count; ++j) {
     const int64_t index = indices[j] < 0 ? indices[j] + (int64_t)dim : indices[j];
     if (index < 0 || index >= (int64_t)dim) {
-      ST_LOG_ERROR("st_gather_raw: index out of range.");
+      ST_LOG_ERROR("st_gather_bytes: index out of range.");
       return false;
     }
   }
@@ -1435,7 +1442,7 @@ bool st_gather(const FloatTensor *table, const int64_t *indices, size_t count,
     ST_LOG_ERROR("st_gather: output shape mismatch.");
     return false;
   }
-  return st_gather_raw(table->values, table->ndim, table->shape, indices,
+  return st_gather_bytes(table->values, table->ndim, table->shape, indices,
                       count, axis, st_dtype_size(table->dtype), out->values);
 }
 

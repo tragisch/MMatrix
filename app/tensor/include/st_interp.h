@@ -5,9 +5,15 @@
  * These kernels mirror the scalar reference loops of the nm_lib graph
  * interpreter (broadcast binary ops, LayerNorm, ReduceMax, batched matmul,
  * gather, and materializing permute) so the interpreter can reuse them
- * instead of its own loops. All functions require contiguous f32 tensors;
- * bf16 tensors are promoted to f32 for the computation and rounded back
- * where the destination is bf16.
+ * instead of its own loops. All functions require contiguous f32 tensors
+ * (views are rejected, matching the Phase 1 activation kernels); bf16
+ * tensors are promoted to f32 for the computation and rounded back where
+ * the destination is bf16.
+ *
+ * Aliasing policy for the write-in variants: an output may alias an input
+ * only where the individual kernel documents it (element-wise aligned
+ * operands for @ref st_binary_broadcast_into, x for @ref st_layernorm);
+ * every other output must not overlap any input buffer.
  */
 
 /*
@@ -58,7 +64,11 @@ FloatTensor *st_binary_broadcast(StBinOp op, const FloatTensor *a,
  * @param a Left input tensor (contiguous, f32 or bf16).
  * @param b Right input tensor (contiguous, f32 or bf16).
  * @param out Output tensor; contiguous with the broadcast shape of @p a and
- *        @p b, f32 or bf16. Must not alias @p a or @p b.
+ *        @p b, f32 or bf16. May alias @p a or @p b when that operand's
+ *        shape equals the output shape (the row kernels read and write
+ *        the same element-wise position, so in-place accumulation like
+ *        `a += bias` is safe); it must not partially overlap any operand
+ *        with a different shape.
  * @retval true Success.
  * @retval false Invalid input or shape mismatch; nothing is written.
  *
@@ -114,7 +124,9 @@ FloatTensor *st_reduce_max(const FloatTensor *x, uint32_t axes_mask,
  * @param x Input tensor (contiguous, f32 or bf16).
  * @param axes_mask Bitmask of axes to reduce; see @ref st_reduce_max.
  * @param keepdims Keep reduced axes as size-1 axes in the output.
- * @param out Output tensor with the reduced shape, f32 or bf16.
+ * @param out Output tensor with the reduced shape, f32 or bf16. Must not
+ *        alias @p x (an empty mask copies; use @ref st_reduce_max instead
+ *        for in-place results).
  * @retval true Success.
  * @retval false Invalid input or shape mismatch; nothing is written.
  */
@@ -128,7 +140,8 @@ bool st_reduce_max_into(const FloatTensor *x, uint32_t axes_mask,
  * @param b Right tensor, rank 2 to 4, contiguous, f32 or bf16; the last two
  *        axes are `[K, N]`.
  * @param c Output tensor with the broadcast batch shape plus `[M, N]`,
- *        contiguous, f32 or bf16. Must not alias @p a or @p b.
+ *        contiguous, f32 or bf16. Must not alias @p a or @p b (the GEMM
+ *        backend reads inputs while accumulating).
  * @retval true Success.
  * @retval false Invalid input or shape mismatch; nothing is written.
  *
@@ -154,7 +167,8 @@ bool st_matmul_batched(const FloatTensor *a, const FloatTensor *b,
  * @param count Number of indices; must be greater than zero.
  * @param axis Gather axis, below the tensor rank.
  * @param out Output tensor, contiguous, same dtype as @p table, shape equal
- *        to the table shape with @p axis replaced by @p count.
+ *        to the table shape with @p axis replaced by @p count. Must not
+ *        alias @p table.
  * @retval true Success.
  * @retval false Invalid input or an index out of range; nothing is written.
  *
@@ -186,7 +200,7 @@ bool st_gather(const FloatTensor *table, const int64_t *indices, size_t count,
  * @details nm_lib gathers int64 and bool buffers too; the tensor API only
  *          has float dtypes, so this raw variant carries the element size.
  */
-bool st_gather_raw(const void *table, size_t table_ndim,
+bool st_gather_bytes(const void *table, size_t table_ndim,
                    const size_t *table_shape, const int64_t *indices,
                    size_t count, size_t axis, size_t elem_bytes, void *out);
 
@@ -197,7 +211,8 @@ bool st_gather_raw(const void *table, size_t table_ndim,
  *        `perm[i]` (same convention as @ref st_permute and nm_lib's
  *        run_transpose).
  * @param out Output tensor, contiguous, same dtype as @p src, shape equal
- *        to the permuted source shape.
+ *        to the permuted source shape. Must not alias @p src (including
+ *        identity permutations, which would copy onto itself).
  * @retval true Success.
  * @retval false Invalid input; nothing is written.
  *

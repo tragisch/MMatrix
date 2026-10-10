@@ -32,7 +32,7 @@ graph-interpreter tensor operators.
 | Interpreter `run_layernorm` | `st_layernorm` |
 | Interpreter `run_reducemax` | `st_reduce_max`, `st_reduce_max_into` |
 | Interpreter `run_matmul` | `st_matmul_batched` |
-| Interpreter `run_gather` | `st_gather`, `st_gather_raw` |
+| Interpreter `run_gather` | `st_gather`, `st_gather_bytes` |
 | Interpreter `run_transpose` | `st_permute_copy_into`, `st_permute_copy_into_bytes` (view: `st_permute`) |
 | `run_concat` | `st_concat` (existing, materializing) |
 | `run_slice` | not covered; `st_split` only does equal splits, so the reference keeps its clamped start/end/step logic |
@@ -112,7 +112,10 @@ canonicalizes to `sign | 0x7e00`, so the bulk kernel blends the
 reference pattern into NaN lanes; tests sweep every f16 pattern (all
 65,536, both directions), a strided sample of the full f32 pattern
 space, the conversion-critical exponent range, an explicit edge table,
-and all bulk lengths 0 to 33. Flush-to-zero was not observed: FCVT is
+and all bulk lengths 0 to 33. A dedicated bulk test converts f32 values
+around every subnormal half (including the rounding boundaries) and
+round-trips all 65,536 patterns through both bulk kernels, so
+flush-to-zero would fail loudly; it was not observed, because FCVT is
 exact for subnormals under the packages' `-ffast-math` flags, which do
 not change FPCR. Conversion stays a pure `uint16_t` buffer API; no
 `StDtype` entry was added because bf16 promotion and buffer layouts
