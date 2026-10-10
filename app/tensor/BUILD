@@ -132,12 +132,14 @@ cc_library(
         "src/core/st.c",
         "src/core/st_convert.c",
         "src/core/st_dtype.c",
+        "src/core/st_f16.c",
         "src/core/st_shape_ops.c",
         "src/core/st_vector_bridge.c",
     ],
     hdrs = [
         "include/st.h",
         "include/st_convert.h",
+        "include/st_f16.h",
         "include/st_shape_ops.h",
         "include/st_vector_bridge.h",
         "src/core/st_bf16_utils.h",
@@ -254,6 +256,7 @@ cc_library(
         "include/st_batchnorm.h",
         "include/st_conv.h",
         "include/st_convert.h",
+        "include/st_f16.h",
         "include/st_interp.h",
         "include/st_pool.h",
         "include/st_shape_ops.h",
@@ -464,6 +467,26 @@ cc_binary(
     deps = [
         ":st",
         "//app/matrix:sm",
+    ],
+)
+
+unity_test(
+    name = "test_st_f16",
+    srcs = ["tests/test_st_f16.c"],
+    my_config = ["tests/my_config.yml"],
+    tags = ["smoke"],
+    deps = [
+        ":st",
+        ":st_internal_headers",
+    ],
+)
+
+cc_binary(
+    name = "bench_st_f16",
+    srcs = ["tests/bench_st_f16.c"],
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [
+        ":st",
     ],
 )
 

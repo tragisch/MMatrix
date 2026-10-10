@@ -36,6 +36,7 @@ graph-interpreter tensor operators.
 | Interpreter `run_transpose` | `st_permute_copy_into`, `st_permute_copy_into_bytes` (view: `st_permute`) |
 | `run_concat` | `st_concat` (existing, materializing) |
 | `run_slice` | not covered; `st_split` only does equal splits, so the reference keeps its clamped start/end/step logic |
+| `nm_f32_to_f16` / `nm_f16_to_f32` (nm_halfprec.h) | `st_f32_to_f16`, `st_f16_to_f32`, `st_f32_to_f16_bulk`, `st_f16_to_f32_bulk` |
 
 ## Accuracy and determinism
 
@@ -84,6 +85,38 @@ runs take the same sequential path):
 
 The 1,024-element walk case is the fixed API overhead (validation and shape
 checks) on a sub-microsecond kernel; larger walk inputs are 1.5× or better.
+
+## f16 conversion
+
+`//app/tensor:bench_st_f16` compares nm_lib's per-element conversion loop
+with the bulk kernels (NEON `vcvt_f16_f32`/`vcvt_f32_f16`, scalar
+fallback elsewhere; single-threaded by design):
+
+| Case | Elements | scalar loop | bulk | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| f32 -> f16 | 4,096 | 18.082 | 1.540 | 11.74× |
+| f32 -> f16 | 65,536 | 297.582 | 28.727 | 10.36× |
+| f32 -> f16 | 1,048,576 | 3,524.700 | 298.575 | 11.81× |
+| f16 -> f32 | 4,096 | 11.163 | 0.701 | 15.94× |
+| f16 -> f32 | 262,144 | 696.600 | 42.150 | 16.53× |
+| f16 -> f32 | 1,048,576 | 3,157.950 | 206.775 | 15.27× |
+
+### f16 accuracy and determinism
+
+The scalar converters reproduce nm_lib's nm_halfprec.h bit for bit:
+round-to-nearest-even, exact subnormals, overflow to infinity, NaN kept
+quiet with the sign preserved (payload dropped), and the sign of ±0
+preserved. The bulk NEON path is bit-identical to the scalar path: for
+f32 to f16 the hardware keeps the NaN payload where the reference
+canonicalizes to `sign | 0x7e00`, so the bulk kernel blends the
+reference pattern into NaN lanes; tests sweep every f16 pattern (all
+65,536, both directions), a strided sample of the full f32 pattern
+space, the conversion-critical exponent range, an explicit edge table,
+and all bulk lengths 0 to 33. Flush-to-zero was not observed: FCVT is
+exact for subnormals under the packages' `-ffast-math` flags, which do
+not change FPCR. Conversion stays a pure `uint16_t` buffer API; no
+`StDtype` entry was added because bf16 promotion and buffer layouts
+would need wider changes.
 
 ## Gather and materializing permute
 
