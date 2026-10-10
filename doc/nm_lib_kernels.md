@@ -17,6 +17,17 @@ operators remain a separate phase.
 | `nm_tanh_grad` | `sm_apply_tanh_backward`, `st_apply_tanh_backward` |
 | `nm_relu_grad` | `sm_apply_relu_backward`, existing `st_apply_relu_backward` |
 | Interpreter GELU gradient | `sm_apply_gelu_*_backward`, `st_apply_gelu_*_backward` |
+| `nm_softmax_ce_grad` | `sm_softmax_ce_grad` |
+| `nm_loss_mse` | `sm_loss_mse` |
+| `nm_loss_cross_entropy` | `sm_loss_cross_entropy` |
+| `nm_add_rowwise` | `sm_add_rowwise` |
+| `nm_sum_rows` | `sm_sum_rows` |
+| `nm_argmax_rows` | `sm_argmax_rows` |
+| `optimizer_apply_array` (SGD) | `sv_optim_sgd` |
+| `optimizer_apply_array` (Momentum) | `sv_optim_momentum` |
+| `optimizer_apply_array` (RMSprop) | `sv_optim_rmsprop` |
+| `optimizer_apply_array` (Adam) | `sv_optim_adam` |
+| Gradient L2 clipping | `sv_clip_norm` |
 
 ## Accuracy and determinism
 
@@ -71,3 +82,47 @@ Accelerate build.
 | 64×64 | 4 | 21.917 | 3.750 | 5.84× |
 | 128×128 | 4 | 107.167 | 16.500 | 6.49× |
 | 256×256 | 4 | 493.000 | 87.000 | 5.67× |
+
+## Row-helper benchmark
+
+Median µs/call on the same machine, comparing scalar row loops with mMatrix
+helpers (1024×256 and 4096×256 cases):
+
+| Operation | Shape | Threads | Scalar before | mMatrix after | Speedup |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `add_rowwise` | 1024×256 | 1 | 1,422.250 | 56.750 | 25.06× |
+| `add_rowwise` | 1024×256 | 4 | 1,374.000 | 60.500 | 22.71× |
+| `sum_rows` | 1024×256 | 1 | 1,735.250 | 491.000 | 3.53× |
+| `sum_rows` | 1024×256 | 4 | 1,516.250 | 464.250 | 3.27× |
+| `argmax_rows` | 1024×256 | 1 | 1,596.250 | 352.250 | 4.53× |
+| `argmax_rows` | 1024×256 | 4 | 1,592.750 | 256.250 | 6.22× |
+| `add_rowwise` | 4096×256 | 1 | 5,726.750 | 253.500 | 22.59× |
+| `add_rowwise` | 4096×256 | 4 | 5,232.750 | 258.000 | 20.28× |
+| `sum_rows` | 4096×256 | 1 | 8,220.500 | 3,115.750 | 2.64× |
+| `sum_rows` | 4096×256 | 4 | 8,619.500 | 1,383.250 | 6.23× |
+| `argmax_rows` | 4096×256 | 1 | 6,444.250 | 1,134.750 | 5.68× |
+| `argmax_rows` | 4096×256 | 4 | 6,001.250 | 735.250 | 8.16× |
+
+For a 1024×256 matrix, the three row helpers measured as follows (median µs):
+
+| Operation | Threads | Scalar before | mMatrix after | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| `add_rowwise` | 1 | 1,200.500 | 60.750 | 19.76× |
+| `sum_rows` | 1 | 1,315.250 | 387.500 | 3.39× |
+| `argmax_rows` | 1 | 1,558.500 | 295.500 | 5.27× |
+| `add_rowwise` | 4 | 1,014.500 | 51.750 | 19.60× |
+| `sum_rows` | 4 | 1,808.500 | 458.000 | 3.95× |
+| `argmax_rows` | 4 | 2,213.250 | 158.250 | 13.99× |
+
+## Optimizer parallelization
+
+The optimizer elementwise loops use OpenMP only for `n > 16,384`. Adam bias
+correction and all update formulas match `optimizer_apply_array`; optional
+decoupled weight decay is disabled when its argument is zero. `sv_clip_norm`
+computes its norm in a fixed scalar order and parallelizes only the independent
+scaling pass.
+
+`//app/vector:bench_sv_optim` compares scalar-reference and API medians for
+SGD, momentum, RMSprop, Adam, and clipping at 1k, 10k, 100k, and 1M elements,
+with one and default OpenMP thread counts. The measured threshold results are
+recorded after that benchmark is run.

@@ -803,6 +803,142 @@ bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a
   return sm_gemm_bias_act(C, A, trans_a, B, trans_b, bias, SM_ACT_RELU);
 }
 
+bool sm_add_rowwise(FloatMatrix *mat, const FloatMatrix *row) {
+  if (!sm_kernel_matrix_valid(mat) || !sm_kernel_matrix_valid(row) ||
+      row->rows != 1 || row->cols != mat->cols) {
+    return false;
+  }
+
+  const size_t count = mat->rows * mat->cols;
+  if (count > SIZE_MAX / sizeof(float)) {
+    return false;
+  }
+
+  const float *bias = row->values;
+  float *bias_copy = NULL;
+  const uintptr_t mat_begin = (uintptr_t)mat->values;
+  const uintptr_t row_begin = (uintptr_t)row->values;
+  const size_t mat_bytes = count * sizeof(float);
+  const size_t row_bytes = row->cols * sizeof(float);
+  if (mat_begin <= UINTPTR_MAX - mat_bytes &&
+      row_begin <= UINTPTR_MAX - row_bytes &&
+      row_begin < mat_begin + mat_bytes && mat_begin < row_begin + row_bytes) {
+    bias_copy = (float *)malloc(row_bytes);
+    if (!bias_copy) {
+      return false;
+    }
+    memcpy(bias_copy, row->values, row_bytes);
+    bias = bias_copy;
+  }
+
+#if defined(USE_ACCELERATE)
+  for (size_t r = 0; r < mat->rows; ++r) {
+    vDSP_vadd(mat->values + r * mat->cols, 1, bias, 1,
+              mat->values + r * mat->cols, 1, (vDSP_Length)mat->cols);
+  }
+#else
+#pragma omp parallel for simd schedule(static) if (count > 10000)
+  for (size_t i = 0; i < count; ++i) {
+    mat->values[i] += bias[i % mat->cols];
+  }
+#endif
+
+  free(bias_copy);
+  return true;
+}
+
+FloatMatrix *sm_sum_rows(const FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return NULL;
+  }
+
+  FloatMatrix *sum = sm_create(1, mat->cols);
+  if (!sum) {
+    return NULL;
+  }
+
+#pragma omp parallel for schedule(static) if (mat->rows * mat->cols > 10000)
+  for (size_t col = 0; col < mat->cols; ++col) {
+    float value = 0.0f;
+    for (size_t row = 0; row < mat->rows; ++row) {
+      value += mat->values[row * mat->cols + col];
+    }
+    sum->values[col] = value;
+  }
+  return sum;
+}
+
+FloatMatrix *sm_argmax_rows(const FloatMatrix *mat) {
+  if (!sm_kernel_matrix_valid(mat)) {
+    return NULL;
+  }
+
+  FloatMatrix *argmax = sm_create(mat->rows, 1);
+  if (!argmax) {
+    return NULL;
+  }
+
+#pragma omp parallel for schedule(static) if (mat->rows * mat->cols > 10000)
+  for (size_t row = 0; row < mat->rows; ++row) {
+    size_t best = 0;
+    float best_value = mat->values[row * mat->cols];
+    for (size_t col = 1; col < mat->cols; ++col) {
+      const float value = mat->values[row * mat->cols + col];
+      if (value > best_value) {
+        best = col;
+        best_value = value;
+      }
+    }
+    argmax->values[row] = (float)best;
+  }
+  return argmax;
+}
+
+bool sm_softmax_ce_grad(const FloatMatrix *predicted,
+                        const FloatMatrix *target, FloatMatrix *grad) {
+  if (!sm_kernel_matrices_compatible(predicted, target) ||
+      !sm_kernel_matrices_compatible(predicted, grad)) {
+    return false;
+  }
+
+  const size_t count = predicted->rows * predicted->cols;
+#pragma omp parallel for simd schedule(static) if (count > 10000)
+  for (size_t i = 0; i < count; ++i) {
+    grad->values[i] = predicted->values[i] - target->values[i];
+  }
+  return true;
+}
+
+float sm_loss_mse(const FloatMatrix *predicted, const FloatMatrix *target) {
+  if (!sm_kernel_matrices_compatible(predicted, target)) {
+    return -1.0f;
+  }
+
+  const size_t count = predicted->rows * predicted->cols;
+  float loss = 0.0f;
+  for (size_t i = 0; i < count; ++i) {
+    const float difference = predicted->values[i] - target->values[i];
+    loss += difference * difference;
+  }
+  return loss / (float)count;
+}
+
+float sm_loss_cross_entropy(const FloatMatrix *predicted,
+                            const FloatMatrix *target) {
+  if (!sm_kernel_matrices_compatible(predicted, target) ||
+      predicted->rows == 0) {
+    return -1.0f;
+  }
+
+  const size_t count = predicted->rows * predicted->cols;
+  float loss = 0.0f;
+  for (size_t i = 0; i < count; ++i) {
+    const float probability = fmaxf(predicted->values[i], 1.0e-7f);
+    loss += -target->values[i] * logf(probability);
+  }
+  return loss / (float)predicted->rows;
+}
+
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
   if (!mat1 || !mat2 || mat1->cols != mat2->rows) {
     log_error("Error: invalid matrix dimensions.\n");

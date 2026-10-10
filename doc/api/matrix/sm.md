@@ -562,6 +562,54 @@ Parameters:
 
 Returns: true on success, false on shape/allocation error.
 
+### `sm_add_rowwise`
+
+`bool sm_add_rowwise(FloatMatrix *mat, const FloatMatrix *row)`
+
+Add the `1 x cols` row to every row of `mat` in place. If `row` aliases the
+matrix storage, its values are snapshotted before the update.
+
+Returns: true on success, false on null storage or shape mismatch.
+
+### `sm_sum_rows`
+
+`FloatMatrix *sm_sum_rows(const FloatMatrix *mat)`
+
+Sum each column in fixed row order and return the result as a `1 x cols`
+matrix. Columns may be processed in parallel without changing their
+accumulation order.
+
+Returns: New row-sum matrix, or NULL on invalid input/allocation failure.
+
+### `sm_argmax_rows`
+
+`FloatMatrix *sm_argmax_rows(const FloatMatrix *mat)`
+
+Return each row's first maximal column index in a `rows x 1` float matrix.
+
+Returns: New index matrix, or NULL on invalid input/allocation failure.
+
+### `sm_softmax_ce_grad`
+
+`bool sm_softmax_ce_grad(const FloatMatrix *predicted, const FloatMatrix *target, FloatMatrix *grad)`
+
+Write `predicted - target` to `grad` in place.
+
+Returns: true on success, false on shape mismatch.
+
+### Losses
+
+`float sm_loss_mse(const FloatMatrix *predicted, const FloatMatrix *target)`
+
+Return mean squared error over all elements.
+
+`float sm_loss_cross_entropy(const FloatMatrix *predicted, const FloatMatrix *target)`
+
+Return cross entropy summed over elements and averaged by the number of rows;
+probabilities are clamped below at `1e-7`, matching nm_lib.
+
+Both return `-1.0f` for invalid inputs.
+
 ### `sm_inplace_add`
 
 `bool sm_inplace_add(FloatMatrix *mat1, const FloatMatrix *mat2)`

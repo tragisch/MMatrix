@@ -431,6 +431,39 @@ bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a
                        const FloatMatrix *B, SmTranspose trans_b,
                        const FloatMatrix *bias);
 
+/**
+ * @brief Add a `1 x cols` row to every row of a matrix in place.
+ * @return true on success, false on null input or shape mismatch.
+ */
+bool sm_add_rowwise(FloatMatrix *mat, const FloatMatrix *row);
+/**
+ * @brief Sum matrix rows in fixed row order.
+ * @return New `1 x cols` matrix, or NULL on invalid input/allocation failure.
+ */
+FloatMatrix *sm_sum_rows(const FloatMatrix *mat);
+/**
+ * @brief Return the first maximal column index for every row as float values.
+ * @return New `rows x 1` matrix, or NULL on invalid input/allocation failure.
+ */
+FloatMatrix *sm_argmax_rows(const FloatMatrix *mat);
+/**
+ * @brief In-place softmax-cross-entropy gradient `predicted - target`.
+ * @return true on success, false on null input or shape mismatch.
+ */
+bool sm_softmax_ce_grad(const FloatMatrix *predicted,
+                        const FloatMatrix *target, FloatMatrix *grad);
+/**
+ * @brief Mean squared error, matching nm_lib reduction semantics.
+ * @return Loss value, or -1.0f for invalid/empty inputs.
+ */
+float sm_loss_mse(const FloatMatrix *predicted, const FloatMatrix *target);
+/**
+ * @brief Cross-entropy loss, averaged over rows and clamped at 1e-7.
+ * @return Loss value, or -1.0f for invalid inputs.
+ */
+float sm_loss_cross_entropy(const FloatMatrix *predicted,
+                            const FloatMatrix *target);
+
 /**************************************/
 /*        Matrix In-Place Ops         */
 /**************************************/

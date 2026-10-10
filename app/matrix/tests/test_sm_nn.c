@@ -302,3 +302,180 @@ void test_sm_gemm_bias_act_matches_reference_with_transposes_and_bias_shapes(voi
   sm_destroy(b);
   sm_destroy(a);
 }
+
+void test_sm_row_helpers_and_losses_match_nm_lib_semantics(void) {
+  FloatMatrix *mat = sm_create_with_values(
+      3, 4, (float[]){1.0f, 5.0f, 5.0f, 0.0f,
+                      -1.0f, -2.0f, -3.0f, -4.0f,
+                      2.0f, 2.0f, 3.0f, 3.0f});
+  FloatMatrix *row = sm_create_with_values(
+      1, 4, (float[]){10.0f, -1.0f, -1.0f, 2.0f});
+  TEST_ASSERT_NOT_NULL(mat);
+  TEST_ASSERT_NOT_NULL(row);
+  TEST_ASSERT_TRUE(sm_add_rowwise(mat, row));
+  const float expected_values[] = {11.0f, 4.0f, 4.0f, 2.0f,
+                                   9.0f, -3.0f, -4.0f, -2.0f,
+                                   12.0f, 1.0f, 2.0f, 5.0f};
+  for (size_t i = 0; i < 12; ++i) {
+    TEST_ASSERT_TRUE(near_value(mat->values[i], expected_values[i]));
+  }
+
+  FloatMatrix *sum = sm_sum_rows(mat);
+  FloatMatrix *argmax = sm_argmax_rows(mat);
+  TEST_ASSERT_NOT_NULL(sum);
+  TEST_ASSERT_NOT_NULL(argmax);
+  const float expected_sum[] = {32.0f, 2.0f, 2.0f, 5.0f};
+  for (size_t col = 0; col < 4; ++col) {
+    TEST_ASSERT_TRUE(near_value(sum->values[col], expected_sum[col]));
+  }
+  TEST_ASSERT_EQUAL_FLOAT(1.0f, argmax->values[0]);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, argmax->values[1]);
+  TEST_ASSERT_EQUAL_FLOAT(0.0f, argmax->values[2]);
+
+  FloatMatrix *predicted = sm_create_with_values(
+      2, 2, (float[]){0.5f, 0.5f, 0.25f, 0.75f});
+  FloatMatrix *target = sm_create_with_values(
+      2, 2, (float[]){1.0f, 0.0f, 0.0f, 1.0f});
+  FloatMatrix *grad = sm_create(2, 2);
+  TEST_ASSERT_NOT_NULL(predicted);
+  TEST_ASSERT_NOT_NULL(target);
+  TEST_ASSERT_NOT_NULL(grad);
+  TEST_ASSERT_TRUE(near_value(sm_loss_mse(predicted, target), 0.15625f));
+  TEST_ASSERT_TRUE(near_value(
+      sm_loss_cross_entropy(predicted, target),
+      (-logf(0.5f) - logf(0.75f)) / 2.0f));
+  TEST_ASSERT_TRUE(sm_softmax_ce_grad(predicted, target, grad));
+  TEST_ASSERT_TRUE(near_value(grad->values[0], -0.5f));
+  TEST_ASSERT_TRUE(near_value(grad->values[1], 0.5f));
+  TEST_ASSERT_TRUE(near_value(grad->values[2], 0.25f));
+  TEST_ASSERT_TRUE(near_value(grad->values[3], -0.25f));
+
+  TEST_ASSERT_FALSE(sm_add_rowwise(mat, predicted));
+  TEST_ASSERT_EQUAL_FLOAT(-1.0f, sm_loss_mse(predicted, row));
+  TEST_ASSERT_FALSE(sm_softmax_ce_grad(predicted, target, row));
+
+  sm_destroy(grad);
+  sm_destroy(target);
+  sm_destroy(predicted);
+  sm_destroy(argmax);
+  sm_destroy(sum);
+  sm_destroy(row);
+  sm_destroy(mat);
+}
+
+void test_sm_rowwise_add_handles_aliased_bias_and_sum_is_thread_deterministic(void) {
+  FloatMatrix *aliased = sm_create_with_values(
+      2, 3, (float[]){1.0f, 2.0f, 3.0f, 10.0f, 20.0f, 30.0f});
+  TEST_ASSERT_NOT_NULL(aliased);
+  FloatMatrix row_view = {
+      .rows = 1,
+      .cols = 3,
+      .capacity = 3,
+      .values = aliased->values,
+  };
+  TEST_ASSERT_TRUE(sm_add_rowwise(aliased, &row_view));
+  const float expected[] = {2.0f, 4.0f, 6.0f, 11.0f, 22.0f, 33.0f};
+  for (size_t i = 0; i < 6; ++i) {
+    TEST_ASSERT_TRUE(near_value(aliased->values[i], expected[i]));
+  }
+  sm_destroy(aliased);
+
+  FloatMatrix *many_rows = sm_create(4096, 7);
+  TEST_ASSERT_NOT_NULL(many_rows);
+  for (size_t i = 0; i < many_rows->rows * many_rows->cols; ++i) {
+    many_rows->values[i] = (float)((i * 29u) % 101u) * 0.01f - 0.5f;
+  }
+  const int previous_threads = omp_get_max_threads();
+  omp_set_dynamic(0);
+  omp_set_num_threads(1);
+  FloatMatrix *one_thread = sm_sum_rows(many_rows);
+  omp_set_num_threads(8);
+  FloatMatrix *eight_threads = sm_sum_rows(many_rows);
+  TEST_ASSERT_NOT_NULL(one_thread);
+  TEST_ASSERT_NOT_NULL(eight_threads);
+  TEST_ASSERT_EQUAL(0, memcmp(one_thread->values, eight_threads->values,
+                              many_rows->cols * sizeof(float)));
+  omp_set_num_threads(previous_threads);
+
+  sm_destroy(eight_threads);
+  sm_destroy(one_thread);
+  sm_destroy(many_rows);
+}
+
+void test_sm_row_kernels_and_losses_match_scalar_references_sizes(void) {
+  const size_t widths[] = {1, 7, 1000, 100000};
+  for (size_t s = 0; s < sizeof(widths) / sizeof(widths[0]); ++s) {
+    const size_t rows = 4;
+    const size_t cols = widths[s];
+    const size_t count = rows * cols;
+    FloatMatrix *mat = sm_create(rows, cols);
+    FloatMatrix *bias = sm_create(1, cols);
+    FloatMatrix *target = sm_create(rows, cols);
+    TEST_ASSERT_NOT_NULL(mat);
+    TEST_ASSERT_NOT_NULL(bias);
+    TEST_ASSERT_NOT_NULL(target);
+    for (size_t col = 0; col < cols; ++col) {
+      bias->values[col] = 0.25f * cosf((float)col * 0.017f);
+    }
+    for (size_t i = 0; i < count; ++i) {
+      mat->values[i] = sinf((float)i * 0.011f);
+      target->values[i] = (float)((i * 13u) % 19u) / 20.0f;
+    }
+
+    TEST_ASSERT_TRUE(sm_add_rowwise(mat, bias));
+    for (size_t row = 0; row < rows; ++row) {
+      for (size_t col = 0; col < cols; ++col) {
+        const float original = sinf((float)(row * cols + col) * 0.011f);
+        TEST_ASSERT_TRUE(near_value(mat->values[row * cols + col],
+                                    original + bias->values[col]));
+      }
+    }
+
+    FloatMatrix *sum = sm_sum_rows(mat);
+    FloatMatrix *argmax = sm_argmax_rows(mat);
+    TEST_ASSERT_NOT_NULL(sum);
+    TEST_ASSERT_NOT_NULL(argmax);
+    for (size_t col = 0; col < cols; ++col) {
+      float expected_sum = 0.0f;
+      for (size_t row = 0; row < rows; ++row) {
+        expected_sum += mat->values[row * cols + col];
+      }
+      TEST_ASSERT_EQUAL_FLOAT(expected_sum, sum->values[col]);
+    }
+    for (size_t row = 0; row < rows; ++row) {
+      size_t best = 0;
+      for (size_t col = 1; col < cols; ++col) {
+        if (mat->values[row * cols + col] > mat->values[row * cols + best]) {
+          best = col;
+        }
+      }
+      TEST_ASSERT_EQUAL_FLOAT((float)best, argmax->values[row]);
+    }
+
+    float expected_mse = 0.0f;
+    float expected_ce = 0.0f;
+    for (size_t i = 0; i < count; ++i) {
+      const float difference = mat->values[i] - target->values[i];
+      expected_mse += difference * difference;
+      const float probability = fmaxf(mat->values[i], 1.0e-7f);
+      expected_ce += -target->values[i] * logf(probability);
+    }
+    expected_mse /= (float)count;
+    expected_ce /= (float)rows;
+    TEST_ASSERT_EQUAL_FLOAT(expected_mse, sm_loss_mse(mat, target));
+    TEST_ASSERT_EQUAL_FLOAT(expected_ce, sm_loss_cross_entropy(mat, target));
+
+    sm_destroy(argmax);
+    sm_destroy(sum);
+    sm_destroy(target);
+    sm_destroy(bias);
+    sm_destroy(mat);
+  }
+
+  FloatMatrix empty = {0};
+  TEST_ASSERT_FALSE(sm_add_rowwise(&empty, &empty));
+  TEST_ASSERT_NULL(sm_sum_rows(&empty));
+  TEST_ASSERT_NULL(sm_argmax_rows(&empty));
+  TEST_ASSERT_EQUAL_FLOAT(-1.0f, sm_loss_mse(&empty, &empty));
+  TEST_ASSERT_EQUAL_FLOAT(-1.0f, sm_loss_cross_entropy(&empty, &empty));
+}

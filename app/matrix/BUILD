@@ -369,6 +369,12 @@ cc_binary(
     deps = [":sm"],
 )
 
+cc_binary(
+    name = "bench_sm_rowwise",
+    srcs = ["tests/bench_sm_rowwise.c"],
+    deps = [":sm"],
+)
+
 unity_test(
     name = "test_dms",
     srcs = ["tests/test_dms.c"],
