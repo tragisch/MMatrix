@@ -527,6 +527,24 @@ Parameters:
 
 Returns: true on success, false on shape mismatch or allocation failure.
 
+### `sm_gemm_bias_act`
+
+`bool sm_gemm_bias_act(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b, const FloatMatrix *bias, SmActivation activation)`
+
+Fused GEMM + optional bias + ReLU, sigmoid, or tanh activation.
+
+Parameters:
+
+- `C` (`FloatMatrix *`): Output matrix with shape `M x N`.
+- `A` (`const FloatMatrix *`): Left input matrix.
+- `trans_a` (`SmTranspose`): Transpose mode for A.
+- `B` (`const FloatMatrix *`): Right input matrix.
+- `trans_b` (`SmTranspose`): Transpose mode for B.
+- `bias` (`const FloatMatrix *`): Bias with shape `1 x N`, `M x N`, or NULL.
+- `activation` (`SmActivation`): Activation applied after GEMM and bias.
+
+Returns: true on success, false on invalid input or incompatible shapes.
+
 ### `sm_gemm_bias_relu`
 
 `bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b, const FloatMatrix *bias)`

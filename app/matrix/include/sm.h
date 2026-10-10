@@ -401,6 +401,22 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
              float beta);
 
 /**
+ * @brief Fused GEMM + optional row bias + activation.
+ * @param C Output matrix, shape `M x N`.
+ * @param A Left input matrix.
+ * @param trans_a Transpose mode for A.
+ * @param B Right input matrix.
+ * @param trans_b Transpose mode for B.
+ * @param bias Bias row (`1 x N`), per-element bias (`M x N`), or NULL.
+ * @param activation Activation to apply after bias.
+ * @return true on success, false on invalid input or incompatible shapes.
+ */
+bool sm_gemm_bias_act(FloatMatrix *C, const FloatMatrix *A,
+                      SmTranspose trans_a, const FloatMatrix *B,
+                      SmTranspose trans_b, const FloatMatrix *bias,
+                      SmActivation activation);
+
+/**
  * @brief Fused kernel: GEMM + optional bias + ReLU activation.
  * @param C Output matrix to accumulate result into.
  * @param A Left input matrix.

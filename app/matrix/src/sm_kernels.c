@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #if defined(__clang__)
 #pragma clang diagnostic push
@@ -41,6 +42,18 @@ static void sm_kernel_vvtanhf(float *values, size_t length) {
 
 static bool sm_kernel_valid_buffer(const float *values, size_t length) {
   return values != NULL && length > 0;
+}
+
+#if defined(__clang__)
+__attribute__((noinline, optnone))
+#elif defined(__GNUC__)
+__attribute__((noinline, optimize("no-fast-math")))
+#endif
+static bool sm_kernel_is_nan_bits(const float *value) {
+  uint32_t bits = 0;
+  memcpy(&bits, value, sizeof(bits));
+  return (bits & 0x7f800000u) == 0x7f800000u &&
+         (bits & 0x007fffffu) != 0;
 }
 
 bool sm_kernel_apply_sigmoid(float *values, size_t length) {
@@ -210,6 +223,87 @@ bool sm_kernel_apply_softmax(float *values, size_t rows, size_t cols) {
     for (size_t col = 0; col < cols; ++col) {
       current[col] /= sum;
     }
+  }
+#endif
+  return true;
+}
+
+bool sm_kernel_add_bias_activation(float *values, const float *bias,
+                                   size_t rows, size_t cols, size_t bias_rows,
+                                   SmActivation activation) {
+  if (values == NULL || bias == NULL || rows == 0 || cols == 0 ||
+      rows > SIZE_MAX / cols || (bias_rows != 1 && bias_rows != rows) ||
+      (activation != SM_ACT_NONE && activation != SM_ACT_RELU &&
+       activation != SM_ACT_SIGMOID && activation != SM_ACT_TANH)) {
+    return false;
+  }
+
+  const size_t count = rows * cols;
+#if defined(USE_ACCELERATE)
+  if (activation == SM_ACT_NONE) {
+    for (size_t row = 0; row < rows; ++row) {
+      const float *bias_row = bias + (bias_rows == 1 ? 0 : row * cols);
+      vDSP_vadd(values + row * cols, 1, bias_row, 1, values + row * cols, 1,
+                (vDSP_Length)cols);
+    }
+    return true;
+  }
+  if (activation == SM_ACT_RELU) {
+    for (size_t row = 0; row < rows; ++row) {
+      const float *bias_row = bias + (bias_rows == 1 ? 0 : row * cols);
+      vDSP_vadd(values + row * cols, 1, bias_row, 1, values + row * cols, 1,
+                (vDSP_Length)cols);
+    }
+    const float zero = 0.0f;
+    vDSP_vthr(values, 1, &zero, values, 1, (vDSP_Length)count);
+    return true;
+  }
+
+  enum { BLOCK = 256 };
+  const size_t blocks_per_row = (cols + BLOCK - 1) / BLOCK;
+  const size_t blocks = rows * blocks_per_row;
+#pragma omp parallel for schedule(static) if (count > 65536)
+  for (size_t block = 0; block < blocks; ++block) {
+    float work[BLOCK];
+    const size_t row = block / blocks_per_row;
+    const size_t col_offset = (block % blocks_per_row) * BLOCK;
+    const size_t length = cols - col_offset < BLOCK ? cols - col_offset : BLOCK;
+    const float *bias_row = bias + (bias_rows == 1 ? 0 : row * cols);
+    float *output = values + row * cols + col_offset;
+    for (size_t j = 0; j < length; ++j) {
+      work[j] = output[j] + bias_row[col_offset + j];
+    }
+    (void)sm_kernel_apply_activation(work, length, activation);
+    memcpy(output, work, length * sizeof(float));
+  }
+#else
+#pragma omp parallel for schedule(static) if (count > 65536)
+  for (size_t i = 0; i < count; ++i) {
+    const float bias_value = bias_rows == 1 ? bias[i % cols] : bias[i];
+    if (activation == SM_ACT_RELU && sm_kernel_is_nan_bits(values + i)) {
+      continue;
+    }
+    if (activation == SM_ACT_RELU && sm_kernel_is_nan_bits(&bias_value)) {
+      values[i] = bias_value;
+      continue;
+    }
+    float value = values[i] + bias_value;
+    switch (activation) {
+      case SM_ACT_NONE:
+        break;
+      case SM_ACT_RELU:
+        if (value < 0.0f) {
+          value = 0.0f;
+        }
+        break;
+      case SM_ACT_SIGMOID:
+        value = 1.0f / (1.0f + expf(-value));
+        break;
+      case SM_ACT_TANH:
+        value = tanhf(value);
+        break;
+    }
+    values[i] = value;
   }
 #endif
   return true;

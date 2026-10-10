@@ -25,6 +25,16 @@ static float reference_gelu_erf(float x) {
   return 0.5f * x * (1.0f + erff(x * 0.7071067812f));
 }
 
+static float reference_activation(SmActivation activation, float x) {
+  switch (activation) {
+    case SM_ACT_NONE: return x;
+    case SM_ACT_RELU: return x > 0.0f ? x : 0.0f;
+    case SM_ACT_SIGMOID: return 1.0f / (1.0f + expf(-x));
+    case SM_ACT_TANH: return tanhf(x);
+  }
+  return NAN;
+}
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -93,6 +103,19 @@ void test_sm_activation_kernels_reject_empty_buffers_and_propagate_nan(void) {
   TEST_ASSERT_TRUE(sm_apply_gelu_erf(mat));
   TEST_ASSERT_TRUE(isnan(mat->values[0]));
   sm_destroy(mat);
+
+  float nan_value = NAN;
+  const float zero_bias = 0.0f;
+  uint32_t initial_nan_bits = 0;
+  memcpy(&initial_nan_bits, &nan_value, sizeof(initial_nan_bits));
+  TEST_ASSERT_EQUAL_UINT32(0x7f800000u,
+                           initial_nan_bits & 0x7f800000u);
+  TEST_ASSERT_TRUE(sm_kernel_add_bias_activation(
+      &nan_value, &zero_bias, 1, 1, 1, SM_ACT_RELU));
+  uint32_t nan_bits = 0;
+  memcpy(&nan_bits, &nan_value, sizeof(nan_bits));
+  TEST_ASSERT_EQUAL_UINT32(0x7f800000u, nan_bits & 0x7f800000u);
+  TEST_ASSERT_TRUE((nan_bits & 0x007fffffu) != 0);
 }
 
 void test_sm_softmax_is_stable_for_large_values_and_propagates_nan(void) {
@@ -207,4 +230,75 @@ void test_sm_elementwise_activation_results_are_thread_count_independent(void) {
   sm_destroy(input);
   sm_destroy(one_thread);
   sm_destroy(many_threads);
+}
+
+void test_sm_gemm_bias_act_matches_reference_with_transposes_and_bias_shapes(void) {
+  FloatMatrix *a = sm_create_with_values(
+      3, 2, (float[]){1.0f, -2.0f, 0.5f, 3.0f, -1.0f, 2.0f});
+  FloatMatrix *b = sm_create_with_values(
+      4, 3, (float[]){1.0f, 2.0f, -1.0f, -2.0f, 0.5f, 1.0f,
+                      3.0f, -1.0f, 2.0f, 0.25f, 1.5f, -0.5f});
+  FloatMatrix *bias = sm_create_with_values(
+      1, 4, (float[]){0.25f, -0.5f, 1.0f, -1.0f});
+  FloatMatrix *full_bias = sm_create_with_values(
+      2, 4, (float[]){0.25f, -0.5f, 1.0f, -1.0f,
+                      -0.25f, 0.5f, -1.0f, 1.0f});
+  FloatMatrix *out = sm_create(2, 4);
+  TEST_ASSERT_NOT_NULL(a);
+  TEST_ASSERT_NOT_NULL(b);
+  TEST_ASSERT_NOT_NULL(bias);
+  TEST_ASSERT_NOT_NULL(full_bias);
+  TEST_ASSERT_NOT_NULL(out);
+
+  for (int act = SM_ACT_NONE; act <= SM_ACT_TANH; ++act) {
+    const SmActivation activation = (SmActivation)act;
+    TEST_ASSERT_TRUE(sm_gemm_bias_act(out, a, SM_TRANSPOSE, b, SM_TRANSPOSE,
+                                      bias, activation));
+    for (size_t row = 0; row < out->rows; ++row) {
+      for (size_t col = 0; col < out->cols; ++col) {
+        float sum = 0.0f;
+        for (size_t k = 0; k < 3; ++k) {
+          sum += a->values[k * a->cols + row] *
+                 b->values[col * b->cols + k];
+        }
+        const float expected = reference_activation(
+            activation, sum + bias->values[col]);
+        TEST_ASSERT_TRUE(near_value(out->values[row * out->cols + col],
+                                    expected));
+      }
+    }
+  }
+
+  TEST_ASSERT_TRUE(sm_gemm_bias_act(out, a, SM_TRANSPOSE, b, SM_TRANSPOSE,
+                                    full_bias, SM_ACT_RELU));
+  float expected_relu[8];
+  memcpy(expected_relu, out->values, sizeof(expected_relu));
+  TEST_ASSERT_TRUE(sm_gemm_bias_relu(out, a, SM_TRANSPOSE, b, SM_TRANSPOSE,
+                                     full_bias));
+  for (size_t i = 0; i < out->rows * out->cols; ++i) {
+    TEST_ASSERT_TRUE(out->values[i] >= 0.0f);
+    TEST_ASSERT_TRUE(near_value(out->values[i], expected_relu[i]));
+  }
+  TEST_ASSERT_TRUE(sm_gemm_bias_act(out, a, SM_TRANSPOSE, b, SM_TRANSPOSE,
+                                    NULL, SM_ACT_TANH));
+  for (size_t row = 0; row < out->rows; ++row) {
+    for (size_t col = 0; col < out->cols; ++col) {
+      float sum = 0.0f;
+      for (size_t k = 0; k < 3; ++k) {
+        sum += a->values[k * a->cols + row] * b->values[col * b->cols + k];
+      }
+      TEST_ASSERT_TRUE(near_value(out->values[row * out->cols + col],
+                                  tanhf(sum)));
+    }
+  }
+  TEST_ASSERT_FALSE(sm_gemm_bias_act(out, a, SM_TRANSPOSE, b, SM_TRANSPOSE,
+                                     a, SM_ACT_RELU));
+  TEST_ASSERT_FALSE(sm_gemm_bias_act(out, a, SM_TRANSPOSE, b, SM_TRANSPOSE,
+                                     NULL, (SmActivation)99));
+
+  sm_destroy(out);
+  sm_destroy(full_bias);
+  sm_destroy(bias);
+  sm_destroy(b);
+  sm_destroy(a);
 }

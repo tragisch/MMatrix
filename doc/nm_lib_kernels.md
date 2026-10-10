@@ -7,6 +7,7 @@ operators remain a separate phase.
 | nm_lib function / operation | mMatrix function |
 | --- | --- |
 | `nm_relu` | `sm_apply_relu`, existing `st_apply_relu` |
+| Dense GEMM + bias + activation | `sm_gemm_bias_act` |
 | `nm_sigmoid` | `sm_apply_sigmoid`, `st_apply_sigmoid` |
 | `nm_tanh` | `sm_apply_tanh`, `st_apply_tanh` |
 | `nm_softmax` | `sm_apply_softmax`, `st_apply_softmax` |
@@ -53,3 +54,20 @@ default OpenMP thread count was 4).
 The benchmark executable also reports sigmoid, both GELU variants, and softmax.
 Small sub-microsecond results are averaged over repeated calls within each
 sample; the displayed values are medians of nine samples.
+
+## Fused GEMM benchmark
+
+The fused kernel was compared against GEMM, a row-bias loop, and activation
+separately. Entries are median µs/call for ReLU on the same Apple Silicon
+Accelerate build.
+
+| Shape | Threads | Split before | `sm_gemm_bias_act` | Speedup |
+| ---: | ---: | ---: | ---: | ---: |
+| 32×32 | 1 | 5.910 | 1.220 | 4.84× |
+| 64×64 | 1 | 25.500 | 3.708 | 6.88× |
+| 128×128 | 1 | 111.500 | 16.167 | 6.90× |
+| 256×256 | 1 | 505.000 | 153.000 | 3.30× |
+| 32×32 | 4 | 6.950 | 1.220 | 5.70× |
+| 64×64 | 4 | 21.917 | 3.750 | 5.84× |
+| 128×128 | 4 | 107.167 | 16.500 | 6.49× |
+| 256×256 | 4 | 493.000 | 87.000 | 5.67× |

@@ -1,3 +1,4 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//tools:unity_test.bzl", "unity_test")
@@ -359,6 +360,12 @@ unity_test(
     srcs = ["tests/test_sm_nn.c"],
     my_config = ["tests/my_config.yml"],
     tags = ["smoke"],
+    deps = [":sm"],
+)
+
+cc_binary(
+    name = "bench_sm_gemm_bias_act",
+    srcs = ["tests/bench_sm_gemm_bias_act.c"],
     deps = [":sm"],
 )
 

@@ -763,55 +763,44 @@ bool sm_gemm(FloatMatrix *C, float alpha, const FloatMatrix *A,
   return true;
 }
 
-bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a,
-                       const FloatMatrix *B, SmTranspose trans_b,
-                       const FloatMatrix *bias) {
+bool sm_gemm_bias_act(FloatMatrix *C, const FloatMatrix *A,
+                      SmTranspose trans_a, const FloatMatrix *B,
+                      SmTranspose trans_b, const FloatMatrix *bias,
+                      SmActivation activation) {
+  if (!sm_kernel_matrix_valid(C) || !sm_kernel_matrix_valid(A) ||
+      !sm_kernel_matrix_valid(B)) {
+    return false;
+  }
+  if (activation < SM_ACT_NONE || activation > SM_ACT_TANH) {
+    return false;
+  }
+
+  const size_t rows = trans_a == SM_TRANSPOSE ? A->cols : A->rows;
+  const size_t inner_a = trans_a == SM_TRANSPOSE ? A->rows : A->cols;
+  const size_t inner_b = trans_b == SM_TRANSPOSE ? B->cols : B->rows;
+  const size_t cols = trans_b == SM_TRANSPOSE ? B->rows : B->cols;
+  if (inner_a != inner_b || C->rows != rows || C->cols != cols) {
+    return false;
+  }
+  if (bias && (!sm_kernel_matrix_valid(bias) || bias->cols != cols ||
+               (bias->rows != 1 && bias->rows != rows))) {
+    return false;
+  }
+
   if (!sm_gemm(C, 1.0f, A, trans_a, B, trans_b, 0.0f)) {
     return false;
   }
-
-  if (!C || !C->values) {
-    log_error("Error: sm_gemm_bias_relu received NULL output.");
-    return false;
-  }
-
-  const size_t rows = C->rows;
-  const size_t cols = C->cols;
-  float *c = C->values;
-
   if (bias) {
-    if (!bias->values || bias->cols != cols ||
-        !(bias->rows == 1 || bias->rows == rows)) {
-      log_error("Error: sm_gemm_bias_relu bias shape mismatch.");
-      return false;
-    }
-
-    const float *b = bias->values;
-    if (bias->rows == 1) {
-      for (size_t i = 0; i < rows; ++i) {
-        size_t row_offset = i * cols;
-        for (size_t j = 0; j < cols; ++j) {
-          float v = c[row_offset + j] + b[j];
-          c[row_offset + j] = (v > 0.0f) ? v : 0.0f;
-        }
-      }
-    } else {
-      for (size_t i = 0; i < rows; ++i) {
-        size_t row_offset = i * cols;
-        size_t bias_offset = i * cols;
-        for (size_t j = 0; j < cols; ++j) {
-          float v = c[row_offset + j] + b[bias_offset + j];
-          c[row_offset + j] = (v > 0.0f) ? v : 0.0f;
-        }
-      }
-    }
-  } else {
-    for (size_t i = 0; i < rows * cols; ++i) {
-      if (c[i] < 0.0f) c[i] = 0.0f;
-    }
+    return sm_kernel_add_bias_activation(C->values, bias->values, rows, cols,
+                                         bias->rows, activation);
   }
+  return sm_kernel_apply_activation(C->values, rows * cols, activation);
+}
 
-  return true;
+bool sm_gemm_bias_relu(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a,
+                       const FloatMatrix *B, SmTranspose trans_b,
+                       const FloatMatrix *bias) {
+  return sm_gemm_bias_act(C, A, trans_a, B, trans_b, bias, SM_ACT_RELU);
 }
 
 FloatMatrix *sm_multiply(const FloatMatrix *mat1, const FloatMatrix *mat2) {
