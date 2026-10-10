@@ -901,3 +901,253 @@ void test_st_reduce_max_promotes_bf16(void) {
   st_destroy(x);
   st_destroy(x_f32);
 }
+
+/* ---- Batched matmul ------------------------------------------------------ */
+
+/* Naive batched matmul reference. */
+static void ref_matmul(const FloatTensor *a, const FloatTensor *b,
+                       FloatTensor *c) {
+  const size_t m = a->shape[a->ndim - 2];
+  const size_t k = a->shape[a->ndim - 1];
+  const size_t n = b->shape[b->ndim - 1];
+  const size_t batch_a = a->ndim - 2;
+  const size_t batch_b = b->ndim - 2;
+  const size_t batch_rank = batch_a > batch_b ? batch_a : batch_b;
+  size_t d[ST_MAX_DIMS];
+  size_t da[ST_MAX_DIMS];
+  size_t db[ST_MAX_DIMS];
+  for (size_t i = 0; i < batch_rank; ++i) {
+    da[i] = i < batch_rank - batch_a ? 1 : a->shape[i - (batch_rank - batch_a)];
+    db[i] = i < batch_rank - batch_b ? 1 : b->shape[i - (batch_rank - batch_b)];
+    d[i] = da[i] == 1 ? db[i] : da[i];
+  }
+  size_t batches = 1;
+  for (size_t i = 0; i < batch_rank; ++i) {
+    batches *= d[i];
+  }
+  const bool single_b = b->numel == k * n;
+  for (size_t index = 0; index < batches; ++index) {
+    size_t rest = index;
+    size_t offset_a = 0;
+    size_t offset_b = 0;
+    size_t scale_a = 1;
+    size_t scale_b = 1;
+    for (size_t i = batch_rank; i-- > 0;) {
+      const size_t coordinate = rest % d[i];
+      rest /= d[i];
+      offset_a += (da[i] == 1 ? 0 : coordinate) * scale_a;
+      offset_b += (db[i] == 1 ? 0 : coordinate) * scale_b;
+      scale_a *= da[i];
+      scale_b *= db[i];
+    }
+    const float *pa = a->values + offset_a * m * k;
+    const float *pb = b->values + (single_b ? 0 : offset_b * k * n);
+    float *pc = c->values + index * m * n;
+    for (size_t i = 0; i < m; ++i) {
+      for (size_t j = 0; j < n; ++j) {
+        float sum = 0.0f;
+        for (size_t p = 0; p < k; ++p) {
+          sum += pa[i * k + p] * pb[p * n + j];
+        }
+        pc[i * n + j] = sum;
+      }
+    }
+  }
+}
+
+static bool near_matmul(float actual, float expected) {
+  /* BLAS accumulation order differs from the naive reference. */
+  return fabsf(actual - expected) <= 1.0e-4f * (1.0f + fabsf(expected));
+}
+
+static void check_matmul_case(const FloatTensor *a, const FloatTensor *b) {
+  const size_t m = a->shape[a->ndim - 2];
+  const size_t k = a->shape[a->ndim - 1];
+  const size_t n = b->shape[b->ndim - 1];
+  const size_t batch_a = a->ndim - 2;
+  const size_t batch_b = b->ndim - 2;
+  const size_t batch_rank = batch_a > batch_b ? batch_a : batch_b;
+  size_t out_dims[ST_MAX_DIMS];
+  size_t out_ndim = 0;
+  for (size_t i = 0; i < batch_rank; ++i) {
+    const size_t da =
+        i < batch_rank - batch_a ? 1 : a->shape[i - (batch_rank - batch_a)];
+    const size_t db =
+        i < batch_rank - batch_b ? 1 : b->shape[i - (batch_rank - batch_b)];
+    out_dims[out_ndim++] = da == 1 ? db : da;
+  }
+  out_dims[out_ndim++] = m;
+  out_dims[out_ndim++] = n;
+
+  FloatTensor *c = st_create(out_ndim, out_dims);
+  TEST_ASSERT_NOT_NULL(c);
+  FloatTensor *expected = st_create(out_ndim, out_dims);
+  TEST_ASSERT_NOT_NULL(expected);
+  ref_matmul(a, b, expected);
+
+  TEST_ASSERT_TRUE(st_matmul_batched(a, b, c));
+  for (size_t i = 0; i < c->numel; ++i) {
+    TEST_ASSERT_TRUE(near_matmul(c->values[i], expected->values[i]));
+  }
+
+  st_destroy(expected);
+  st_destroy(c);
+}
+
+void test_st_matmul_batched_matches_reference(void) {
+  static const struct {
+    size_t ndim_a;
+    size_t a[ST_MAX_DIMS];
+    size_t ndim_b;
+    size_t b[ST_MAX_DIMS];
+  } cases[] = {
+      {.ndim_a = 2, .a = {7, 5}, .ndim_b = 2, .b = {5, 3}},
+      {.ndim_a = 2, .a = {1, 1}, .ndim_b = 2, .b = {1, 1}},
+      {.ndim_a = 2, .a = {16, 65}, .ndim_b = 2, .b = {65, 32}},
+      {.ndim_a = 3, .a = {3, 4, 5}, .ndim_b = 2, .b = {5, 7}},
+      {.ndim_a = 3, .a = {2, 3, 7}, .ndim_b = 3, .b = {2, 7, 5}},
+      {.ndim_a = 3, .a = {2, 3, 7}, .ndim_b = 2, .b = {7, 5}},
+      {.ndim_a = 4, .a = {2, 3, 4, 5}, .ndim_b = 4, .b = {2, 3, 5, 7}},
+      {.ndim_a = 4, .a = {2, 3, 4, 5}, .ndim_b = 4, .b = {2, 1, 5, 7}},
+      {.ndim_a = 4, .a = {2, 1, 4, 5}, .ndim_b = 4, .b = {2, 3, 5, 7}},
+      {.ndim_a = 4, .a = {2, 1, 4, 5}, .ndim_b = 3, .b = {2, 5, 7}},
+      {.ndim_a = 3, .a = {1, 16, 64}, .ndim_b = 2, .b = {64, 64}},
+      {.ndim_a = 3, .a = {4, 128, 256}, .ndim_b = 2, .b = {256, 64}},
+      {.ndim_a = 4, .a = {2, 4, 128, 64}, .ndim_b = 4, .b = {2, 4, 64, 128}},
+      {.ndim_a = 4, .a = {1, 4, 16, 64}, .ndim_b = 4, .b = {1, 4, 64, 16}},
+      {.ndim_a = 2, .a = {97, 3}, .ndim_b = 2, .b = {3, 101}},
+  };
+  for (size_t c = 0; c < sizeof(cases) / sizeof(cases[0]); ++c) {
+    FloatTensor *a = make_tensor(cases[c].ndim_a, cases[c].a);
+    FloatTensor *b = make_tensor(cases[c].ndim_b, cases[c].b);
+    check_matmul_case(a, b);
+    st_destroy(b);
+    st_destroy(a);
+  }
+}
+
+void test_st_matmul_batched_rejects_bad_input(void) {
+  FloatTensor *a = make_tensor(2, (size_t[2]){3, 5});
+  FloatTensor *bad_k = make_tensor(2, (size_t[2]){4, 7});
+  FloatTensor *rank1 = make_tensor(1, (size_t[1]){5});
+  FloatTensor *c = make_tensor(2, (size_t[2]){3, 7});
+  FloatTensor *wrong_c = make_tensor(2, (size_t[2]){7, 3});
+  const size_t b_shape[2] = {5, 7};
+
+  TEST_ASSERT_FALSE(st_matmul_batched(a, bad_k, c));
+  TEST_ASSERT_FALSE(st_matmul_batched(rank1, rank1, c));
+  TEST_ASSERT_FALSE(st_matmul_batched(a, rank1, c));
+  TEST_ASSERT_FALSE(st_matmul_batched(a, a, wrong_c));
+  TEST_ASSERT_FALSE(st_matmul_batched(NULL, a, c));
+  TEST_ASSERT_FALSE(st_matmul_batched(a, NULL, c));
+  TEST_ASSERT_FALSE(st_matmul_batched(a, a, NULL));
+
+  /* Nothing written on failure. */
+  for (size_t i = 0; i < wrong_c->numel; ++i) {
+    wrong_c->values[i] = 42.0f;
+  }
+  TEST_ASSERT_FALSE(st_matmul_batched(a, bad_k, c) == false && false);
+  TEST_ASSERT_FALSE(st_matmul_batched(a, bad_k, wrong_c));
+  for (size_t i = 0; i < wrong_c->numel; ++i) {
+    TEST_ASSERT_EQUAL_FLOAT(42.0f, wrong_c->values[i]);
+  }
+
+  /* Non-contiguous operands are rejected. */
+  FloatTensor *base = make_tensor(2, (size_t[2]){2, 3});
+  const size_t view_shape[2] = {2, 2};
+  const ptrdiff_t view_strides[2] = {3, 1};
+  FloatTensor *view = st_view(base, 2, view_shape, view_strides, 0);
+  TEST_ASSERT_NOT_NULL(view);
+  TEST_ASSERT_FALSE(st_matmul_batched(view, view, c));
+  st_destroy(view);
+  st_destroy(base);
+
+  st_destroy(wrong_c);
+  st_destroy(c);
+  st_destroy(bad_k);
+  st_destroy(a);
+  (void)b_shape;
+}
+
+void test_st_matmul_batched_thread_count_within_tolerance(void) {
+  /* MatMul is the one interpreter kernel that is NOT bit-identical across
+   * thread counts: the BLAS backend's accumulation order may differ, so
+   * the comparison uses the documented 1e-4 relative tolerance instead. */
+  const size_t a_shape[4] = {2, 4, 65, 32};
+  const size_t b_shape[4] = {2, 4, 32, 129};
+  FloatTensor *a = make_tensor(4, a_shape);
+  FloatTensor *b = make_tensor(4, b_shape);
+  const size_t c_shape[4] = {2, 4, 65, 129};
+  FloatTensor *one = st_create(4, c_shape);
+  FloatTensor *eight = st_create(4, c_shape);
+  TEST_ASSERT_NOT_NULL(one);
+  TEST_ASSERT_NOT_NULL(eight);
+
+  omp_set_num_threads(1);
+  TEST_ASSERT_TRUE(st_matmul_batched(a, b, one));
+  omp_set_num_threads(8);
+  TEST_ASSERT_TRUE(st_matmul_batched(a, b, eight));
+  for (size_t i = 0; i < one->numel; ++i) {
+    TEST_ASSERT_TRUE(near_matmul(one->values[i], eight->values[i]));
+  }
+
+  st_destroy(eight);
+  st_destroy(one);
+  st_destroy(b);
+  st_destroy(a);
+}
+
+void test_st_matmul_batched_promotes_bf16(void) {
+  const size_t a_shape[3] = {2, 3, 5};
+  const size_t b_shape[2] = {5, 7};
+  FloatTensor *a_f32 = make_tensor(3, a_shape);
+  FloatTensor *b_f32 = make_tensor(2, b_shape);
+  FloatTensor *a = st_to_bf16(a_f32);
+  FloatTensor *b = st_to_bf16(b_f32);
+  TEST_ASSERT_NOT_NULL(a);
+  TEST_ASSERT_NOT_NULL(b);
+  FloatTensor *a_promoted = st_to_f32(a);
+  FloatTensor *b_promoted = st_to_f32(b);
+  TEST_ASSERT_NOT_NULL(a_promoted);
+  TEST_ASSERT_NOT_NULL(b_promoted);
+
+  /* Reference on the promoted inputs. */
+  const size_t c_shape[3] = {2, 3, 7};
+  FloatTensor *expected = st_create(3, c_shape);
+  TEST_ASSERT_NOT_NULL(expected);
+  ref_matmul(a_promoted, b_promoted, expected);
+
+  /* f32 output from bf16 operands. */
+  FloatTensor *c = st_create(3, c_shape);
+  TEST_ASSERT_NOT_NULL(c);
+  TEST_ASSERT_TRUE(st_matmul_batched(a, b, c));
+  for (size_t i = 0; i < c->numel; ++i) {
+    TEST_ASSERT_TRUE(near_matmul(c->values[i], expected->values[i]));
+  }
+
+  /* bf16 output is rounded back. */
+  FloatTensor *c_bf16 = st_create_bf16(3, c_shape);
+  TEST_ASSERT_NOT_NULL(c_bf16);
+  TEST_ASSERT_TRUE(st_matmul_batched(a_promoted, b_promoted, c_bf16));
+  for (size_t i = 0; i < c->numel; ++i) {
+    const uint16_t expected_bf16 = st_f32_to_bf16(expected->values[i]);
+    const uint16_t actual_bf16 = ((const uint16_t *)c_bf16->values)[i];
+    /* bf16 rounds to 8 mantissa bits; equal bits or equal promoted values
+     * within the matmul tolerance both pass. */
+    if (expected_bf16 != actual_bf16) {
+      const float e = st_bf16_to_f32(expected_bf16);
+      const float g = st_bf16_to_f32(actual_bf16);
+      TEST_ASSERT_TRUE(fabsf(e - g) <= 1.0e-2f * (1.0f + fabsf(e)));
+    }
+  }
+
+  st_destroy(c_bf16);
+  st_destroy(c);
+  st_destroy(expected);
+  st_destroy(b_promoted);
+  st_destroy(a_promoted);
+  st_destroy(b);
+  st_destroy(a);
+  st_destroy(b_f32);
+  st_destroy(a_f32);
+}

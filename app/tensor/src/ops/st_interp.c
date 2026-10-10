@@ -34,6 +34,7 @@
 #include <Accelerate/Accelerate.h>
 #endif
 
+#include "sm.h"
 #include "st_bf16_utils.h"
 #include "st_gpu_guard.h"
 
@@ -1139,4 +1140,198 @@ FloatTensor *st_reduce_max(const FloatTensor *x, uint32_t axes_mask,
     return NULL;
   }
   return out;
+}
+
+/* ---- Batched matmul ------------------------------------------------------ */
+
+/* OpenMP distributes batch GEMMs only when there are many batches and each
+ * product is small enough that the BLAS backend stays single-threaded;
+ * bench_st_matmul measured the cutover (oversubscribing the BLAS threads
+ * regresses up to 2x). */
+#define ST_MATMUL_OMP_MIN_BATCHES 8u
+#define ST_MATMUL_OMP_MAX_GEMM 262144u
+
+/* One GEMM on raw buffers through the sm_gemm backend (like nm_lib's gemm). */
+static bool st_matmul_gemm(const float *a, const float *b, float *c, size_t m,
+                           size_t k, size_t n) {
+  FloatMatrix ma = {.rows = m, .cols = k, .capacity = m * k,
+                    .values = (float *)a};
+  FloatMatrix mb = {.rows = k, .cols = n, .capacity = k * n,
+                    .values = (float *)b};
+  FloatMatrix mc = {.rows = m, .cols = n, .capacity = m * n, .values = c};
+  return sm_gemm(&mc, 1.0f, &ma, SM_NO_TRANSPOSE, &mb, SM_NO_TRANSPOSE, 0.0f);
+}
+
+static bool st_matmul_batched_f32(const float *a, size_t a_ndim,
+                                  const size_t *a_dims, const float *b,
+                                  size_t b_ndim, const size_t *b_dims,
+                                  float *c, size_t c_ndim,
+                                  const size_t *c_dims) {
+  const size_t m = a_dims[a_ndim - 2];
+  const size_t k = a_dims[a_ndim - 1];
+  const size_t n = b_dims[b_ndim - 1];
+
+  size_t b_numel = 1;
+  for (size_t i = 0; i < b_ndim; ++i) {
+    b_numel *= b_dims[i];
+  }
+  if (b_numel == k * n) {
+    /* b is one matrix shared by every batch: a's batches stack into the
+     * rows of one product (nm_lib's projection fast path). */
+    size_t a_numel = 1;
+    for (size_t i = 0; i < a_ndim; ++i) {
+      a_numel *= a_dims[i];
+    }
+    return st_matmul_gemm(a, b, c, a_numel / k, k, n);
+  }
+
+  /* Batch broadcast over the leading axes (nm_lib's padded decomposition). */
+  const size_t batch_a = a_ndim - 2;
+  const size_t batch_b = b_ndim - 2;
+  const size_t batch_rank = batch_a > batch_b ? batch_a : batch_b;
+  size_t da[ST_MAX_DIMS] = {0};
+  size_t db[ST_MAX_DIMS] = {0};
+  size_t d[ST_MAX_DIMS] = {0};
+  for (size_t i = 0; i < batch_rank; ++i) {
+    da[i] = i < batch_rank - batch_a ? 1 : a_dims[i - (batch_rank - batch_a)];
+    db[i] = i < batch_rank - batch_b ? 1 : b_dims[i - (batch_rank - batch_b)];
+    if (da[i] != db[i] && da[i] != 1 && db[i] != 1) {
+      return false;
+    }
+    d[i] = da[i] == 1 ? db[i] : da[i];
+  }
+  size_t batches = 1;
+  for (size_t i = 0; i < batch_rank; ++i) {
+    batches *= d[i];
+  }
+
+  const size_t gemm_work = m * k * n;
+  const bool use_omp =
+      batches >= ST_MATMUL_OMP_MIN_BATCHES && gemm_work <= ST_MATMUL_OMP_MAX_GEMM &&
+      omp_get_max_threads() > 1;
+  if (use_omp) {
+#pragma omp parallel for schedule(static)
+    for (size_t index = 0; index < batches; ++index) {
+      size_t rest = index;
+      size_t offset_a = 0;
+      size_t offset_b = 0;
+      size_t scale_a = 1;
+      size_t scale_b = 1;
+      for (size_t i = batch_rank; i-- > 0;) {
+        const size_t coordinate = rest % d[i];
+        rest /= d[i];
+        offset_a += (da[i] == 1 ? 0 : coordinate) * scale_a;
+        offset_b += (db[i] == 1 ? 0 : coordinate) * scale_b;
+        scale_a *= da[i];
+        scale_b *= db[i];
+      }
+      st_matmul_gemm(a + offset_a * m * k, b + offset_b * k * n,
+                     c + index * m * n, m, k, n);
+    }
+    return true;
+  }
+  for (size_t index = 0; index < batches; ++index) {
+    size_t rest = index;
+    size_t offset_a = 0;
+    size_t offset_b = 0;
+    size_t scale_a = 1;
+    size_t scale_b = 1;
+    for (size_t i = batch_rank; i-- > 0;) {
+      const size_t coordinate = rest % d[i];
+      rest /= d[i];
+      offset_a += (da[i] == 1 ? 0 : coordinate) * scale_a;
+      offset_b += (db[i] == 1 ? 0 : coordinate) * scale_b;
+      scale_a *= da[i];
+      scale_b *= db[i];
+    }
+    if (!st_matmul_gemm(a + offset_a * m * k, b + offset_b * k * n,
+                        c + index * m * n, m, k, n)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool st_matmul_batched(const FloatTensor *a, const FloatTensor *b,
+                       FloatTensor *c) {
+  if (!st_interp_tensor_valid(a) || !st_interp_tensor_valid(b) ||
+      !st_interp_tensor_valid(c)) {
+    ST_LOG_ERROR("st_matmul_batched: invalid tensor input.");
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(a);
+  ST_ASSERT_NOT_PENDING(b);
+  ST_ASSERT_NOT_PENDING(c);
+  if (a->ndim < 2 || b->ndim < 2) {
+    ST_LOG_ERROR("st_matmul_batched: operands need rank >= 2.");
+    return false;
+  }
+  const size_t m = a->shape[a->ndim - 2];
+  const size_t k = a->shape[a->ndim - 1];
+  const size_t n = b->shape[b->ndim - 1];
+  if (b->shape[b->ndim - 2] != k) {
+    ST_LOG_ERROR("st_matmul_batched: inner dimensions mismatch.");
+    return false;
+  }
+
+  /* Expected output shape: broadcast batch shape plus [M, N]. */
+  size_t out_dims[ST_MAX_DIMS];
+  const size_t batch_a = a->ndim - 2;
+  const size_t batch_b = b->ndim - 2;
+  const size_t batch_rank = batch_a > batch_b ? batch_a : batch_b;
+  if (batch_rank + 2 > ST_MAX_DIMS) {
+    return false;
+  }
+  for (size_t i = 0; i < batch_rank; ++i) {
+    const size_t da = i < batch_rank - batch_a ? 1 : a->shape[i - (batch_rank - batch_a)];
+    const size_t db = i < batch_rank - batch_b ? 1 : b->shape[i - (batch_rank - batch_b)];
+    if (da != db && da != 1 && db != 1) {
+      ST_LOG_ERROR("st_matmul_batched: batch shapes do not broadcast.");
+      return false;
+    }
+    out_dims[i] = da == 1 ? db : da;
+  }
+  out_dims[batch_rank] = m;
+  out_dims[batch_rank + 1] = n;
+  const size_t out_ndim = batch_rank + 2;
+  if (c->ndim != out_ndim ||
+      memcmp(c->shape, out_dims, out_ndim * sizeof(size_t)) != 0) {
+    ST_LOG_ERROR("st_matmul_batched: output shape mismatch.");
+    return false;
+  }
+
+  /* bf16 promotes to f32; a bf16 output is rounded back at the end. */
+  FloatTensor *a_f32 = a->dtype == ST_DTYPE_BF16 ? st_to_f32(a) : NULL;
+  FloatTensor *b_f32 = b->dtype == ST_DTYPE_BF16 ? st_to_f32(b) : NULL;
+  if ((a->dtype == ST_DTYPE_BF16 && a_f32 == NULL) ||
+      (b->dtype == ST_DTYPE_BF16 && b_f32 == NULL)) {
+    st_destroy(b_f32);
+    st_destroy(a_f32);
+    return false;
+  }
+  const float *a_values = a_f32 ? a_f32->values : a->values;
+  const float *b_values = b_f32 ? b_f32->values : b->values;
+
+  FloatTensor *c_f32 = NULL;
+  float *c_values = c->values;
+  if (c->dtype == ST_DTYPE_BF16) {
+    c_f32 = st_create(c->ndim, c->shape);
+    if (c_f32 == NULL) {
+      st_destroy(b_f32);
+      st_destroy(a_f32);
+      return false;
+    }
+    c_values = c_f32->values;
+  }
+
+  const bool ok = st_matmul_batched_f32(a_values, a->ndim, a->shape, b_values,
+                                        b->ndim, b->shape, c_values, c->ndim,
+                                        c->shape);
+  if (ok && c_f32 != NULL) {
+    st_f32_to_bf16_bulk(c_f32->values, (uint16_t *)c->values, c->numel);
+  }
+  st_destroy(c_f32);
+  st_destroy(b_f32);
+  st_destroy(a_f32);
+  return ok;
 }

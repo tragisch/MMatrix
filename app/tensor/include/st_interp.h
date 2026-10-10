@@ -121,4 +121,29 @@ FloatTensor *st_reduce_max(const FloatTensor *x, uint32_t axes_mask,
 bool st_reduce_max_into(const FloatTensor *x, uint32_t axes_mask,
                         bool keepdims, FloatTensor *out);
 
+/**
+ * @brief Batched matrix product with broadcast over the leading axes.
+ * @param a Left tensor, rank 2 to 4, contiguous, f32 or bf16; the last two
+ *        axes are `[M, K]`.
+ * @param b Right tensor, rank 2 to 4, contiguous, f32 or bf16; the last two
+ *        axes are `[K, N]`.
+ * @param c Output tensor with the broadcast batch shape plus `[M, N]`,
+ *        contiguous, f32 or bf16. Must not alias @p a or @p b.
+ * @retval true Success.
+ * @retval false Invalid input or shape mismatch; nothing is written.
+ *
+ * @details Matches nm_lib's run_matmul: when @p b is a single `[K, N]`
+ *          matrix, the batches of @p a stack into the rows of one GEMM;
+ *          otherwise every batch index maps onto @p a and @p b via NumPy
+ *          broadcasting of the leading axes and each batch runs through
+ *          the same GEMM backend as @ref sm_gemm (Accelerate/OpenBLAS,
+ *          MPS through the runtime backend). Small per-batch GEMMs are
+ *          distributed over OpenMP only above a measured threshold so the
+ *          BLAS threads are not oversubscribed. Accumulation order follows
+ *          the backend, so results are compared with a relative tolerance,
+ *          not bit-exactly.
+ */
+bool st_matmul_batched(const FloatTensor *a, const FloatTensor *b,
+                       FloatTensor *c);
+
 #endif  // ST_INTERP_H

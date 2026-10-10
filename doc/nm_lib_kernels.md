@@ -31,6 +31,7 @@ graph-interpreter tensor operators.
 | Interpreter `run_binary` (add/sub/mul/div) | `st_binary_broadcast`, `st_binary_broadcast_into` |
 | Interpreter `run_layernorm` | `st_layernorm` |
 | Interpreter `run_reducemax` | `st_reduce_max`, `st_reduce_max_into` |
+| Interpreter `run_matmul` | `st_matmul_batched` |
 
 ## Accuracy and determinism
 
@@ -121,6 +122,31 @@ across thread counts; against a naive scalar loop the tolerance is 1e-5
 relative plus 1e-6 absolute (and for groups of eight or fewer elements the
 sum8 order is bit-identical to the naive order).
 
+### Batched matmul
+
+`st_matmul_batched` routes every product through the same backend as
+`sm_gemm`, so compared with nm_lib's `run_matmul` loop (which also calls
+`sm_gemm` per batch) the wall time is equivalent by construction;
+`//app/tensor:bench_st_matmul` confirms this (medians, µs/call, default
+thread count 4):
+
+| Case | Threads | nm_lib before | `st_matmul_batched` | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| proj stacked [4,128,256]x[256,512] | 1 | 192.200 | 199.825 | 0.96× |
+| proj stacked [8,256,512]x[512,512] | 1 | 1,923.750 | 1,914.575 | 1.00× |
+| attn scores [2,4,128,64]x[2,4,64,128] | default | 45.000 | 45.175 | 1.00× |
+| batched [4,12,64,64]x[4,12,64,64] | default | 81.925 | 80.400 | 1.02× |
+
+The kernel's value is the unified API: NumPy batch broadcast, the
+single-matrix stacking fast path, bf16 promote, and shape validation with
+no partial writes. Batches are distributed over OpenMP only when there
+are at least 8 of them and each GEMM is at most 262,144 elements
+(`ST_MATMUL_OMP_MIN_BATCHES`/`ST_MATMUL_OMP_MAX_GEMM`), so BLAS-internal
+threads are never oversubscribed. On this machine Accelerate serializes
+small GEMMs, so the team measured neutral there; the path exists for
+backends that benefit (for example OpenBLAS on Linux) and should be
+re-measured on the deployment machine.
+
 `st_reduce_max` deviates deliberately from the nm_lib reference for NaNs:
 the reference's `x > max` fold silently drops NaNs, while `st_reduce_max`
 propagates the bit pattern of the first NaN in scan order to the output
@@ -131,6 +157,10 @@ reference. Under `-ffast-math` the fold therefore cannot use the OpenMP
 -INFINITY) nor a horizontal vector max with compiler-inserted padding
 lanes; the eight-lane fold combines through a noinline helper so all eight
 lanes come from memory.
+
+MatMul is the one interpreter kernel that is not bit-exact: the BLAS
+accumulation order defines the result, so tests compare against a naive
+reference (and across thread counts) with 1e-4 relative tolerance.
 
 ### Binary OpenMP threshold
 
