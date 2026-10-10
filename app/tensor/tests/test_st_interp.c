@@ -1375,6 +1375,18 @@ void test_st_permute_copy_into_rejects_bad_input(void) {
 
   TEST_ASSERT_TRUE(st_permute_copy_into(src, (size_t[3]){1, 0, 2}, out));
 
+  /* Non-contiguous tensors are rejected (views must be materialized
+   * first, e.g. via st_to_f32 or the copy kernels themselves). */
+  FloatTensor *view_base = make_tensor(2, (size_t[2]){2, 3});
+  const size_t view_shape[2] = {2, 2};
+  const ptrdiff_t view_strides[2] = {3, 1};
+  FloatTensor *view = st_view(view_base, 2, view_shape, view_strides, 0);
+  TEST_ASSERT_NOT_NULL(view);
+  TEST_ASSERT_FALSE(st_permute_copy_into(view, (size_t[2]){1, 0}, out));
+  TEST_ASSERT_FALSE(st_permute_copy_into(src, (size_t[3]){1, 0, 2}, view));
+  st_destroy(view);
+  st_destroy(view_base);
+
   st_destroy(wrong);
   st_destroy(out);
   st_destroy(src);
