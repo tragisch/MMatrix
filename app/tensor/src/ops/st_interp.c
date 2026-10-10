@@ -619,3 +619,524 @@ FloatTensor *st_binary_broadcast(StBinOp op, const FloatTensor *a,
   }
   return out;
 }
+
+/* ---- LayerNorm ---------------------------------------------------------- */
+
+/* OpenMP over groups only above this many input elements; see
+ * bench_st_norm_reduce for the measured threshold. */
+#define ST_LAYERNORM_OMP_THRESHOLD 262144u
+
+/* Bit-level finiteness check (-ffast-math breaks isnan/isfinite), same
+ * pattern as sv_optim.c. */
+static bool st_interp_float_finite(float value) {
+  uint32_t bits = 0;
+  memcpy(&bits, &value, sizeof(bits));
+  return (bits & 0x7f800000u) != 0x7f800000u;
+}
+
+/* Sum of `n` floats with eight partial sums, so the loop vectorizes and the
+ * result is independent of the OpenMP thread count (nm_lib's sum8). */
+static float st_interp_sum8(const float *x, size_t n) {
+  float lanes[8] = {0.0f};
+  size_t j = 0;
+  for (; j + 8 <= n; j += 8) {
+    for (size_t l = 0; l < 8; ++l) {
+      lanes[l] += x[j + l];
+    }
+  }
+  float sum = 0.0f;
+  for (; j < n; ++j) {
+    sum += x[j];
+  }
+  for (size_t l = 0; l < 8; ++l) {
+    sum += lanes[l];
+  }
+  return sum;
+}
+
+/* One normalization group, verbatim run_layernorm from nm_lib: mean via
+ * sum8, centered values into y, variance via eight partial sums, then
+ * scale and bias. Safe in-place when in == out. */
+static void st_layernorm_group(const float *in, const float *scale,
+                               const float *bias, size_t group, float eps,
+                               float *out) {
+  const float mean = st_interp_sum8(in, group) / (float)group;
+  for (size_t j = 0; j < group; ++j) {
+    out[j] = in[j] - mean;
+  }
+  float lanes[8] = {0.0f};
+  size_t j = 0;
+  for (; j + 8 <= group; j += 8) {
+    for (size_t l = 0; l < 8; ++l) {
+      lanes[l] += out[j + l] * out[j + l];
+    }
+  }
+  float variance = 0.0f;
+  for (; j < group; ++j) {
+    variance += out[j] * out[j];
+  }
+  for (size_t l = 0; l < 8; ++l) {
+    variance += lanes[l];
+  }
+  variance /= (float)group;
+  const float inverse = 1.0f / sqrtf(variance + eps);
+  if (scale != NULL && bias != NULL) {
+#pragma omp simd
+    for (size_t i = 0; i < group; ++i) {
+      out[i] = out[i] * inverse * scale[i] + bias[i];
+    }
+  } else {
+    for (size_t i = 0; i < group; ++i) {
+      float value = out[i] * inverse;
+      if (scale != NULL) {
+        value *= scale[i];
+      }
+      if (bias != NULL) {
+        value += bias[i];
+      }
+      out[i] = value;
+    }
+  }
+}
+
+static bool st_layernorm_f32(const float *in, const float *scale,
+                             const float *bias, size_t group, size_t groups,
+                             float eps, float *out) {
+  const size_t total = groups * group;
+  if (total > ST_LAYERNORM_OMP_THRESHOLD && omp_get_max_threads() > 1) {
+#pragma omp parallel for schedule(static)
+    for (size_t g = 0; g < groups; ++g) {
+      st_layernorm_group(in + g * group, scale, bias, group, eps,
+                         out + g * group);
+    }
+  } else {
+    for (size_t g = 0; g < groups; ++g) {
+      st_layernorm_group(in + g * group, scale, bias, group, eps,
+                         out + g * group);
+    }
+  }
+  return true;
+}
+
+bool st_layernorm(const FloatTensor *x, const FloatTensor *gamma,
+                  const FloatTensor *beta, size_t norm_rank, float eps,
+                  FloatTensor *out) {
+  if (!st_interp_tensor_valid(x) || !st_interp_tensor_valid(out)) {
+    ST_LOG_ERROR("st_layernorm: invalid tensor input.");
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(x);
+  ST_ASSERT_NOT_PENDING(out);
+  if (out->dtype != ST_DTYPE_F32 && out->dtype != ST_DTYPE_BF16) {
+    return false;
+  }
+  if (out->ndim != x->ndim ||
+      memcmp(out->shape, x->shape, x->ndim * sizeof(size_t)) != 0) {
+    ST_LOG_ERROR("st_layernorm: output shape mismatch.");
+    return false;
+  }
+  if (norm_rank == 0 || norm_rank > x->ndim) {
+    ST_LOG_ERROR("st_layernorm: norm_rank out of range.");
+    return false;
+  }
+  if (!st_interp_float_finite(eps) || eps < 0.0f) {
+    ST_LOG_ERROR("st_layernorm: eps must be finite and non-negative.");
+    return false;
+  }
+
+  size_t group = 1;
+  for (size_t i = x->ndim - norm_rank; i < x->ndim; ++i) {
+    group *= x->shape[i];
+  }
+  const size_t groups = x->numel / group;
+
+  /* gamma/beta are optional; when present they must cover one group. */
+  const FloatTensor *scale = gamma;
+  const FloatTensor *shift = beta;
+  if (scale != NULL && !st_interp_tensor_valid(scale)) {
+    ST_LOG_ERROR("st_layernorm: invalid gamma tensor.");
+    return false;
+  }
+  if (shift != NULL && !st_interp_tensor_valid(shift)) {
+    ST_LOG_ERROR("st_layernorm: invalid beta tensor.");
+    return false;
+  }
+  if (scale != NULL && scale->numel != group) {
+    ST_LOG_ERROR("st_layernorm: gamma must have one element per group.");
+    return false;
+  }
+  if (shift != NULL && shift->numel != group) {
+    ST_LOG_ERROR("st_layernorm: beta must have one element per group.");
+    return false;
+  }
+  if (scale != NULL) {
+    ST_ASSERT_NOT_PENDING(scale);
+  }
+  if (shift != NULL) {
+    ST_ASSERT_NOT_PENDING(shift);
+  }
+
+  /* bf16 promotes to f32; a bf16 output is rounded back at the end. */
+  FloatTensor *x_f32 = x->dtype == ST_DTYPE_BF16 ? st_to_f32(x) : NULL;
+  FloatTensor *gamma_f32 =
+      scale != NULL && scale->dtype == ST_DTYPE_BF16 ? st_to_f32(scale) : NULL;
+  FloatTensor *beta_f32 =
+      shift != NULL && shift->dtype == ST_DTYPE_BF16 ? st_to_f32(shift) : NULL;
+  if ((x->dtype == ST_DTYPE_BF16 && x_f32 == NULL) ||
+      (scale != NULL && scale->dtype == ST_DTYPE_BF16 && gamma_f32 == NULL) ||
+      (shift != NULL && shift->dtype == ST_DTYPE_BF16 && beta_f32 == NULL)) {
+    st_destroy(beta_f32);
+    st_destroy(gamma_f32);
+    st_destroy(x_f32);
+    return false;
+  }
+  const float *in_values = x_f32 ? x_f32->values : x->values;
+  const float *scale_values =
+      scale == NULL ? NULL : (gamma_f32 ? gamma_f32->values : scale->values);
+  const float *shift_values =
+      shift == NULL ? NULL : (beta_f32 ? beta_f32->values : shift->values);
+
+  FloatTensor *out_f32 = NULL;
+  float *out_values = out->values;
+  if (out->dtype == ST_DTYPE_BF16) {
+    out_f32 = st_create(out->ndim, out->shape);
+    if (out_f32 == NULL) {
+      st_destroy(beta_f32);
+      st_destroy(gamma_f32);
+      st_destroy(x_f32);
+      return false;
+    }
+    out_values = out_f32->values;
+  }
+
+  const bool ok = st_layernorm_f32(in_values, scale_values, shift_values,
+                                   group, groups, eps, out_values);
+  if (ok && out_f32 != NULL) {
+    st_f32_to_bf16_bulk(out_f32->values, (uint16_t *)out->values,
+                        out->numel);
+  }
+  st_destroy(out_f32);
+  st_destroy(beta_f32);
+  st_destroy(gamma_f32);
+  st_destroy(x_f32);
+  return ok;
+}
+
+/* ---- Reduce max ---------------------------------------------------------- */
+
+/* Parallel over output slots only above this many input elements.
+ * bench_st_norm_reduce measured no gain at 131k elements on this
+ * 4-performance-core machine (fork/join cost of a one-op-per-element fold),
+ * so realistic sizes stay sequential, like the Phase 1 optimizer kernels. */
+#define ST_REDUCE_OMP_THRESHOLD 1048576u
+
+/* Horizontal max over the eight fold lanes. noinline forces the vectorizer
+ * to load all eight lanes from memory: when some lanes stay in registers,
+ * clang pads the horizontal fmaxnm with -FLT_MAX (under -ffinite-math-only
+ * it assumes nothing can be smaller), which would beat real -INFINITY
+ * inputs. */
+__attribute__((noinline)) static float st_max8_lanes(const float *lanes) {
+  float best = lanes[0];
+  for (size_t l = 1; l < 8; ++l) {
+    best = best > lanes[l] ? best : lanes[l];
+  }
+  return best;
+}
+
+/* Fold one contiguous run: eight independent lanes track the maximum (the
+ * OpenMP max reduction is not usable here because its private lanes start
+ * at -FLT_MAX, which would swallow all -INFINITY inputs), and an integer
+ * side channel records whether NaN bits appeared; a NaN rescan then
+ * returns the first NaN in scan order. Bit checks on the integer pattern
+ * stay meaningful under -ffast-math (no float comparisons on NaN). */
+static float st_reduce_max_run(const float *x, size_t n) {
+  float lanes[8];
+  for (size_t l = 0; l < 8; ++l) {
+    lanes[l] = -INFINITY;
+  }
+  uint32_t any_nan = 0;
+  size_t i = 0;
+  for (; i + 8 <= n; i += 8) {
+    for (size_t l = 0; l < 8; ++l) {
+      uint32_t bits = 0;
+      memcpy(&bits, &x[i + l], sizeof(bits));
+      any_nan |= (((bits & 0x7f800000u) == 0x7f800000u) &
+                  ((bits & 0x007fffffu) != 0u))
+                     ? 1u
+                     : 0u;
+      lanes[l] = lanes[l] > x[i + l] ? lanes[l] : x[i + l];
+    }
+  }
+  for (; i < n; ++i) {
+    uint32_t bits = 0;
+    memcpy(&bits, &x[i], sizeof(bits));
+    any_nan |= (((bits & 0x7f800000u) == 0x7f800000u) &
+                ((bits & 0x007fffffu) != 0u))
+                   ? 1u
+                   : 0u;
+    lanes[0] = lanes[0] > x[i] ? lanes[0] : x[i];
+  }
+  const float best = st_max8_lanes(lanes);
+  if (any_nan != 0u) {
+    for (size_t j = 0; j < n; ++j) {
+      uint32_t bits = 0;
+      memcpy(&bits, &x[j], sizeof(bits));
+      if (((bits & 0x7f800000u) == 0x7f800000u) &&
+          ((bits & 0x007fffffu) != 0u)) {
+        return x[j];
+      }
+    }
+  }
+  return best;
+}
+
+/* Vectorizable NaN detection over a contiguous buffer: the fold kernels
+ * then only need the careful path when a NaN is actually present. */
+static bool st_interp_any_nan(const float *in, size_t n) {
+  uint32_t any_nan = 0;
+#pragma omp simd reduction(| : any_nan)
+  for (size_t i = 0; i < n; ++i) {
+    uint32_t bits = 0;
+    memcpy(&bits, &in[i], sizeof(bits));
+    any_nan |= (((bits & 0x7f800000u) == 0x7f800000u) &
+                ((bits & 0x007fffffu) != 0u))
+                   ? 1u
+                   : 0u;
+  }
+  return any_nan != 0u;
+}
+
+/* One careful walk row for the NaN path: the first NaN per slot in scan
+ * order sticks, later elements leave it in place. */
+static void st_reduce_max_walk_row_careful(const float *x, float *y,
+                                           ptrdiff_t to, size_t inner) {
+  if (to == 0) {
+    for (size_t i = 0; i < inner; ++i) {
+      uint32_t bits = 0;
+      memcpy(&bits, &x[i], sizeof(bits));
+      if (((bits & 0x7f800000u) == 0x7f800000u) &&
+          ((bits & 0x007fffffu) != 0u)) {
+        *y = x[i];
+        return;
+      }
+      if (x[i] > *y) {
+        *y = x[i];
+      }
+    }
+    return;
+  }
+  for (size_t i = 0; i < inner; ++i) {
+    float *slot = y + (ptrdiff_t)i * to;
+    uint32_t slot_bits = 0;
+    memcpy(&slot_bits, slot, sizeof(slot_bits));
+    if (((slot_bits & 0x7f800000u) == 0x7f800000u) &&
+        ((slot_bits & 0x007fffffu) != 0u)) {
+      continue;  /* the first NaN already won */
+    }
+    uint32_t bits = 0;
+    memcpy(&bits, &x[i], sizeof(bits));
+    if (((bits & 0x7f800000u) == 0x7f800000u) &&
+        ((bits & 0x007fffffu) != 0u)) {
+      *slot = x[i];
+    } else if (x[i] > *slot) {
+      *slot = x[i];
+    }
+  }
+}
+
+/* Sequential nm_lib-style walk for masks that reduce non-trailing axes: the
+ * input is visited in memory order and folds into output slots that stand
+ * still along reduced axes. Without NaNs this is the plain reference fold;
+ * a single vectorized pre-scan decides, and the careful walk runs only
+ * when a NaN is present. */
+static void st_reduce_max_walk(const float *in, size_t ndim,
+                               const size_t *dims, uint32_t mask,
+                               size_t in_numel, float *out,
+                               size_t out_numel) {
+  size_t kept_dims[ST_MAX_DIMS];
+  for (size_t a = 0; a < ndim; ++a) {
+    kept_dims[a] = ((mask >> a) & 1u) != 0u ? 1 : dims[a];
+  }
+  StWalk w;
+  st_walk_init(&w, ndim, dims, 2);
+  st_walk_broadcast_strides(ndim, kept_dims, w.d, w.stride[0]);
+  st_walk_broadcast_strides(ndim, dims, w.d, w.stride[1]);
+  st_walk_finish(&w);
+  const size_t inner = st_walk_inner(&w);
+  const size_t rows = st_walk_rows(&w);
+  const ptrdiff_t to = w.stride[0][w.rank - 1];
+
+  if (st_interp_any_nan(in, in_numel)) {
+    for (size_t i = 0; i < out_numel; ++i) {
+      out[i] = -INFINITY;
+    }
+    for (size_t r = 0; r < rows; ++r, st_walk_next_row(&w)) {
+      st_reduce_max_walk_row_careful(in + w.offset[1], out + w.offset[0], to,
+                                     inner);
+    }
+    return;
+  }
+
+  for (size_t i = 0; i < out_numel; ++i) {
+    out[i] = -INFINITY;
+  }
+  for (size_t r = 0; r < rows; ++r, st_walk_next_row(&w)) {
+    const float *x = in + w.offset[1];
+    float *y = out + w.offset[0];
+    if (to == 0) {
+      float max = *y;
+      for (size_t i = 0; i < inner; ++i) {
+        max = x[i] > max ? x[i] : max;
+      }
+      *y = max;
+    } else {
+      for (size_t i = 0; i < inner; ++i) {
+        float *slot = y + (ptrdiff_t)i * to;
+        *slot = x[i] > *slot ? x[i] : *slot;
+      }
+    }
+  }
+}
+
+static void st_reduce_max_f32(const float *in, size_t ndim,
+                              const size_t *dims, uint32_t mask, float *out,
+                              size_t out_numel) {
+  if (mask == 0u) {
+    memcpy(out, in, out_numel * sizeof(float));
+    return;
+  }
+
+  size_t reduced = 0;
+  size_t in_numel = 1;
+  for (size_t a = 0; a < ndim; ++a) {
+    reduced += (mask >> a) & 1u;
+    in_numel *= dims[a];
+  }
+  const uint32_t suffix_mask =
+      (uint32_t)(((1u << reduced) - 1u) << (ndim - reduced));
+  if (mask != suffix_mask) {
+    /* Non-trailing reduced axes: strided access pattern, sequential walk. */
+    st_reduce_max_walk(in, ndim, dims, mask, in_numel, out, out_numel);
+    return;
+  }
+
+  /* Trailing reduced axes: every output slot is one contiguous run, and the
+   * slot base is simply the slot index times the run length. */
+  size_t chunk = 1;
+  for (size_t a = ndim - reduced; a < ndim; ++a) {
+    chunk *= dims[a];
+  }
+  const size_t slots = out_numel;
+  const bool use_omp = slots > 1 && slots * chunk > ST_REDUCE_OMP_THRESHOLD &&
+                       omp_get_max_threads() > 1;
+  if (use_omp) {
+#pragma omp parallel for schedule(static)
+    for (size_t slot = 0; slot < slots; ++slot) {
+      out[slot] = st_reduce_max_run(in + slot * chunk, chunk);
+    }
+    return;
+  }
+  for (size_t slot = 0; slot < slots; ++slot) {
+    out[slot] = st_reduce_max_run(in + slot * chunk, chunk);
+  }
+}
+
+bool st_reduce_max_into(const FloatTensor *x, uint32_t axes_mask,
+                        bool keepdims, FloatTensor *out) {
+  if (!st_interp_tensor_valid(x) || !st_interp_tensor_valid(out)) {
+    ST_LOG_ERROR("st_reduce_max_into: invalid tensor input.");
+    return false;
+  }
+  ST_ASSERT_NOT_PENDING(x);
+  ST_ASSERT_NOT_PENDING(out);
+  if (x->ndim > 32 || (axes_mask >> x->ndim) != 0u) {
+    ST_LOG_ERROR("st_reduce_max_into: axes_mask out of range.");
+    return false;
+  }
+
+  size_t expected[ST_MAX_DIMS];
+  size_t expected_ndim = 0;
+  const uint32_t reduced =
+      axes_mask & ((x->ndim >= 32) ? 0xffffffffu : ((1u << x->ndim) - 1u));
+  for (size_t a = 0; a < x->ndim; ++a) {
+    const bool is_reduced = ((reduced >> a) & 1u) != 0u;
+    if (is_reduced && keepdims) {
+      expected[expected_ndim++] = 1;
+    } else if (!is_reduced) {
+      expected[expected_ndim++] = x->shape[a];
+    }
+  }
+  const bool shape_ok =
+      (expected_ndim == out->ndim &&
+       memcmp(expected, out->shape, expected_ndim * sizeof(size_t)) == 0) ||
+      /* Reducing every axis yields a scalar; tensors keep it as [1]. */
+      (expected_ndim == 0 && out->ndim == 1 && out->shape[0] == 1);
+  if (!shape_ok) {
+    ST_LOG_ERROR("st_reduce_max_into: output shape mismatch.");
+    return false;
+  }
+
+  /* bf16 promotes to f32; a bf16 output is rounded back at the end. */
+  FloatTensor *x_f32 = x->dtype == ST_DTYPE_BF16 ? st_to_f32(x) : NULL;
+  if (x->dtype == ST_DTYPE_BF16 && x_f32 == NULL) {
+    return false;
+  }
+  const float *in_values = x_f32 ? x_f32->values : x->values;
+
+  FloatTensor *out_f32 = NULL;
+  float *out_values = out->values;
+  if (out->dtype == ST_DTYPE_BF16) {
+    out_f32 = st_create(out->ndim, out->shape);
+    if (out_f32 == NULL) {
+      st_destroy(x_f32);
+      return false;
+    }
+    out_values = out_f32->values;
+  }
+
+  st_reduce_max_f32(in_values, x->ndim, x->shape, axes_mask, out_values,
+                    out->numel);
+  if (out_f32 != NULL) {
+    st_f32_to_bf16_bulk(out_f32->values, (uint16_t *)out->values,
+                        out->numel);
+  }
+  st_destroy(out_f32);
+  st_destroy(x_f32);
+  return true;
+}
+
+FloatTensor *st_reduce_max(const FloatTensor *x, uint32_t axes_mask,
+                           bool keepdims) {
+  if (!st_interp_tensor_valid(x)) {
+    ST_LOG_ERROR("st_reduce_max: invalid tensor input.");
+    return NULL;
+  }
+  ST_ASSERT_NOT_PENDING(x);
+  if (x->ndim > 32 || (axes_mask >> x->ndim) != 0u) {
+    return NULL;
+  }
+
+  size_t out_dims[ST_MAX_DIMS];
+  size_t out_ndim = 0;
+  for (size_t a = 0; a < x->ndim; ++a) {
+    const bool is_reduced = ((axes_mask >> a) & 1u) != 0u;
+    if (is_reduced && keepdims) {
+      out_dims[out_ndim++] = 1;
+    } else if (!is_reduced) {
+      out_dims[out_ndim++] = x->shape[a];
+    }
+  }
+  if (out_ndim == 0) {
+    /* All axes reduced: a scalar stays a [1] tensor. */
+    out_dims[out_ndim++] = 1;
+  }
+  FloatTensor *out = st_create(out_ndim, out_dims);
+  if (out == NULL) {
+    return NULL;
+  }
+  if (!st_reduce_max_into(x, axes_mask, keepdims, out)) {
+    st_destroy(out);
+    return NULL;
+  }
+  return out;
+}

@@ -29,6 +29,8 @@ graph-interpreter tensor operators.
 | `optimizer_apply_array` (Adam) | `sv_optim_adam` |
 | Gradient L2 clipping | `sv_clip_norm` |
 | Interpreter `run_binary` (add/sub/mul/div) | `st_binary_broadcast`, `st_binary_broadcast_into` |
+| Interpreter `run_layernorm` | `st_layernorm` |
+| Interpreter `run_reducemax` | `st_reduce_max`, `st_reduce_max_into` |
 
 ## Accuracy and determinism
 
@@ -77,6 +79,58 @@ runs take the same sequential path):
 
 The 1,024-element walk case is the fixed API overhead (validation and shape
 checks) on a sub-microsecond kernel; larger walk inputs are 1.5× or better.
+
+## LayerNorm and ReduceMax
+
+`//app/tensor:bench_st_norm_reduce` replicates nm_lib's `run_layernorm` and
+`run_reducemax` as the `before` baseline (medians on the same machine;
+default OpenMP thread count 4). `st_layernorm` is the same algorithm as the
+reference, so single-threaded it matches nm_lib; above the thread threshold
+it parallelizes over groups. `st_reduce_max` folds trailing reductions with
+vectorized run kernels; non-trailing masks walk like the reference plus one
+vectorized NaN pre-scan.
+
+| Case | Threads | Elements | nm_lib before | `st` kernel | Speedup |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| layernorm [4,128,256] | 1 | 131,072 | 83.100 | 81.100 | 1.02× |
+| layernorm [8,256,512] | default | 1,048,576 | 634.700 | 224.275 | 2.83× |
+| layernorm [4,512,768] | default | 1,572,864 | 970.250 | 378.500 | 2.56× |
+| layernorm [16,65,32] rank 2 | default | 33,280 | 20.547 | 21.418 | 0.96× |
+| reduce max [2,4,128,128] axis 3 | 1 | 131,072 | 97.775 | 39.300 | 2.49× |
+| reduce max [1,4,128,128] axis 3 | 1 | 65,536 | 50.562 | 19.738 | 2.56× |
+| reduce max [4,128,256] axis 2 | 1 | 131,072 | 109.825 | 36.850 | 2.98× |
+| reduce max [4,128,256] axis 1 (walk) | 1 | 131,072 | 18.250 | 44.725 | 0.41× |
+| reduce max [2,1000] axis 0 (walk) | default | 2,000 | 0.270 | 0.719 | 0.38× |
+
+### Norm and reduce thresholds
+
+`st_layernorm` parallelizes over groups only above 262,144 input elements
+(`ST_LAYERNORM_OMP_THRESHOLD`): at and below 262k the sequential kernel
+matches the reference, and at 1M+ the parallel gain is 2.5× or better.
+`st_reduce_max` parallelizes over output slots only above 1,048,576 input
+elements (`ST_REDUCE_OMP_THRESHOLD`): measurements at 65k and 131k showed
+no gain from a team on this machine, so realistic sizes stay sequential
+(same rationale as the Phase 1 optimizer threshold). Both should be
+retuned on the deployment machine.
+
+### LayerNorm accuracy and NaN policy in ReduceMax
+
+`st_layernorm` reproduces nm_lib's sum8 semantics exactly: the mean and the
+variance use eight deterministic partial sums, so results are bit-identical
+across thread counts; against a naive scalar loop the tolerance is 1e-5
+relative plus 1e-6 absolute (and for groups of eight or fewer elements the
+sum8 order is bit-identical to the naive order).
+
+`st_reduce_max` deviates deliberately from the nm_lib reference for NaNs:
+the reference's `x > max` fold silently drops NaNs, while `st_reduce_max`
+propagates the bit pattern of the first NaN in scan order to the output
+slot, so errors are not swallowed (documented in the header and covered by
+tests). Finite values, ±INFINITY, and the -INFINITY start value follow the
+reference. Under `-ffast-math` the fold therefore cannot use the OpenMP
+`max` reduction (its private lanes start at -FLT_MAX and would swallow
+-INFINITY) nor a horizontal vector max with compiler-inserted padding
+lanes; the eight-lane fold combines through a noinline helper so all eight
+lanes come from memory.
 
 ### Binary OpenMP threshold
 

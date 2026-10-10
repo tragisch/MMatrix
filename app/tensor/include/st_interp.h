@@ -67,6 +67,58 @@ FloatTensor *st_binary_broadcast(StBinOp op, const FloatTensor *a,
  *          rounded back to bf16 with the st conversion helpers.
  */
 bool st_binary_broadcast_into(StBinOp op, const FloatTensor *a,
-                               const FloatTensor *b, FloatTensor *out);
+                              const FloatTensor *b, FloatTensor *out);
+
+/**
+ * @brief Layer-normalize over the last @p norm_rank axes.
+ * @param x Input tensor (contiguous, f32 or bf16).
+ * @param gamma Optional per-element scale of the normalized group; NULL or a
+ *        contiguous tensor with `group` elements (f32 or bf16).
+ * @param beta Optional per-element shift; NULL or like @p gamma.
+ * @param norm_rank Number of trailing axes to normalize over, `[1, ndim]`.
+ * @param eps Variance epsilon added before the inverse square root.
+ * @param out Output tensor, contiguous with the same shape as @p x; f32 or
+ *        bf16. May alias @p x (in-place normalization per group).
+ * @retval true Success.
+ * @retval false Invalid input; nothing is written.
+ *
+ * @details Matches the nm_lib reference: mean via eight partial sums, then
+ *          the centered values, the variance over the centered values with
+ *          eight partial sums, and `1/sqrtf(var + eps)`, so results are
+ *          bit-identical regardless of the OpenMP thread count. bf16 inputs
+ *          are promoted to f32; a bf16 output is rounded back.
+ */
+bool st_layernorm(const FloatTensor *x, const FloatTensor *gamma,
+                  const FloatTensor *beta, size_t norm_rank, float eps,
+                  FloatTensor *out);
+
+/**
+ * @brief Maximum over the axes selected in @p axes_mask.
+ * @param x Input tensor (contiguous, f32 or bf16).
+ * @param axes_mask Bitmask; axis `i` is reduced when bit `i` is set. Bits
+ *        at or above the tensor rank are rejected.
+ * @param keepdims Keep reduced axes as size-1 axes in the output.
+ * @return New contiguous f32 tensor on success, or NULL on error.
+ *
+ * @details NaN handling deviates deliberately from the nm_lib scalar loop
+ *          (which silently drops NaNs under `x > max`): if any element of a
+ *          reduction group is NaN, the output slot becomes the bit pattern
+ *          of the first NaN in scan order, so errors are not swallowed.
+ *          Finite results and -INFINITY empty regions follow the reference.
+ */
+FloatTensor *st_reduce_max(const FloatTensor *x, uint32_t axes_mask,
+                           bool keepdims);
+
+/**
+ * @brief Maximum over selected axes into a prepared output tensor.
+ * @param x Input tensor (contiguous, f32 or bf16).
+ * @param axes_mask Bitmask of axes to reduce; see @ref st_reduce_max.
+ * @param keepdims Keep reduced axes as size-1 axes in the output.
+ * @param out Output tensor with the reduced shape, f32 or bf16.
+ * @retval true Success.
+ * @retval false Invalid input or shape mismatch; nothing is written.
+ */
+bool st_reduce_max_into(const FloatTensor *x, uint32_t axes_mask,
+                        bool keepdims, FloatTensor *out);
 
 #endif  // ST_INTERP_H
