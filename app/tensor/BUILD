@@ -155,10 +155,10 @@ cc_library(
     target_compatible_with = ["@platforms//os:macos"],
     visibility = ["//app/tensor:__pkg__"],
     deps = default_deps + [
+        ":st_runtime",
         "//app/matrix:sm",
         "//app/vector:sv",
         "//app/vector:vv",
-        ":st_runtime",
     ],
 )
 
@@ -226,8 +226,8 @@ cc_library(
         "include/st.h",
         "include/st_batchnorm.h",
         "include/st_conv.h",
-        "include/st_pool.h",
         "include/st_convert.h",
+        "include/st_pool.h",
         "include/st_shape_ops.h",
         "include/st_vector_bridge.h",
     ],
@@ -287,9 +287,9 @@ objc_library(
         "include/st.h",
         "include/st_conv.h",
         "include/st_pool.h",
-        "src/backend/st_backend.h",
         "src/backend/mps/st_mps.h",
         "src/backend/mps/st_stream_mps.h",
+        "src/backend/st_backend.h",
         "src/core/st_dtype.h",
         "src/runtime/st_buffer.h",
         "src/runtime/st_buffer_metal.h",
@@ -382,8 +382,8 @@ cc_binary(
     srcs = ["tests/bench_nn_activations.c"],
     target_compatible_with = ["@platforms//os:macos"],
     deps = [
-        "//app/matrix:sm",
         ":st",
+        "//app/matrix:sm",
     ],
 )
 

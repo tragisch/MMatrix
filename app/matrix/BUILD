@@ -267,13 +267,13 @@ cc_library(
 
 cc_library(
     name = "sm",
-    hdrs = [
-        "include/sm.h",
-        "src/sm_kernels.h",
-    ],
     srcs = [
         "src/sm.c",
         "src/sm_kernels.c",
+    ],
+    hdrs = [
+        "include/sm.h",
+        "src/sm_kernels.h",
     ],
     copts = default_copts + perf_copts + package_copts + openmp_copts,
     includes = [
