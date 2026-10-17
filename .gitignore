@@ -1,0 +1,147 @@
+#-------------------------------------------------------------------------------
+# Build artifacts
+#-------------------------------------------------------------------------------
+*.d
+*.o
+*.ko
+*.obj
+*.elf
+*.ilk
+*.map
+*.exp
+*.gch
+*.pch
+*.lib
+*.a
+*.la
+*.lo
+*.dll
+*.so
+*.so.*
+*.dylib
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+#-------------------------------------------------------------------------------
+# Debugging and diagnostic files
+#-------------------------------------------------------------------------------
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+#-------------------------------------------------------------------------------
+# Kernel Module Compile Results
+#-------------------------------------------------------------------------------
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+#-------------------------------------------------------------------------------
+# Visual Studio Code
+#-------------------------------------------------------------------------------
+.vscode/
+.history/
+*.vsix
+
+#-------------------------------------------------------------------------------
+# macOS metadata
+#-------------------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+#-------------------------------------------------------------------------------
+# Bazel
+#-------------------------------------------------------------------------------
+/bazel-*
+/bazel.iml
+/output/
+user.bazelrc
+
+#-------------------------------------------------------------------------------
+# Temporary files
+#-------------------------------------------------------------------------------
+/tmp/*
+/.bgai-db*/
+
+#-------------------------------------------------------------------------------
+# Generated documentation
+#-------------------------------------------------------------------------------
+/api/
+/sphinx/*
+
+#-------------------------------------------------------------------------------
+# Project-specific files and folders
+#-------------------------------------------------------------------------------
+/examples/*
+/benchmarks/*
+/data/*
+/share/*
+!/share/mps-performance.md
+!/share/simple_benchmark/
+/share/simple_benchmark/*
+!/share/simple_benchmark/BUILD
+!/share/simple_benchmark/bench_sm_mps.c
+!/share/simple_benchmark/simple_bench.h
+/lib/*
+/_archive/*
+/archive/*
+/.cache
+/.cache/*
+.github/copilot-instructions.md
+
+# legal reason to ignore:
+/third_party/hdf5/*
+
+# not build dependend, unclear License:
+/third_party/csparse
+/third_party/jburkardt
+/third_party/matmul
+/third_party/mesch12b
+/third_party/mm_offloading
+/third_party/spmatrix
+/third_party/spblas
+/third_party/cblas
+
+#-------------------------------------------------------------------------------
+.clang-tidy
+.envrc
+compile_commands.json
+*.png
+StyleGuide.md
+
+profile.gz
+
+/.venv-bench/
+.github/skills/api-return-conventions/SKILL.md
+TENSOR_ARCHITECTURE_ANALYSIS.md
+TENSOR_PATTERNS_QUICK_REF.md
+app/tensor/docs/mps-performance.md
+
+# Generated benchmark and documentation output
+*.profraw
+*.profdata
+/site/

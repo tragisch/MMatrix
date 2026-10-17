@@ -1,0 +1,141 @@
+# This is a Bazel configuration file that sets up various build and test options.
+
+# Enable colored output for better visibility
+common --color=yes
+common --curses=yes
+common --enable_platform_specific_config
+
+###############################
+# Registries                  #
+###############################
+
+common --registry=https://raw.githubusercontent.com/tragisch/bazel-registry/main
+common --registry=https://bcr.bazel.build
+
+###############################
+# Cache                       #
+###############################
+
+# Enable remote caching
+# build --remote_cache=https://your-remote-cache-url
+
+# Enable local caching
+build --disk_cache=.cache/bazel_cache
+build --workspace_status_command=tools/workspace_status.sh
+build --per_file_copt=external/openmp\\+/runtime/src/.*@-Wno-unused-function
+
+###############################
+# Debug & Analyze             #
+###############################
+
+
+# Debug & Analyze
+build:debug --compilation_mode=dbg
+build:debug --strip=never
+build:debug --copt=-O0
+build:debug --copt=-g
+build:debug --copt=-fno-omit-frame-pointer
+build:debug --copt=-Wno-macro-redefined
+build:debug --linkopt=-fno-omit-frame-pointer
+build:debug --define=DEBUG=1
+
+# Optional: ASAN + UBSAN 
+build:debug --copt=-fsanitize=address
+build:debug --copt=-fsanitize=undefined
+build:debug --linkopt=-fsanitize=address
+build:debug --linkopt=-fsanitize=undefined
+
+# Optional: Analyzer via scan-build
+build:debug --run_under='scan-build --status-bugs'
+
+# Profile:
+build:debug --profile=profile.gz 
+build:debug --generate_json_trace_profile
+build:debug --noslim_profile
+
+build:debug --sandbox_debug
+build:debug --features=layering_check
+build:debug --generate_json_trace_profile
+
+# bazel build //... --config=debug
+
+###############################
+# Clang Report                #
+###############################
+
+build:debug_clang_report --compilation_mode=opt
+build:debug_clang_report --strip=never
+build:debug_clang_report --copt=-ftime-report
+build:debug_clang_report --copt=-O2
+
+# bazel build //... --config=debug_clang_report
+
+###############################
+# Report OpenMP              #
+###############################
+
+build:report_omp  --copt=-Rpass-analysis=loop-vectorize
+
+###############################
+# Heap Dump Bazel             #
+###############################
+
+build --heap_dump_on_oom
+
+###############################
+# Benchmark                   #
+###############################
+
+build:benchmark --compilation_mode=opt
+build:benchmark --strip=always
+build:benchmark --define=NDEBUG=1
+build:benchmark --output_filter=
+
+# bazel build //... --config=benchmark
+
+###############################
+# Output                      #
+###############################
+
+# A more useful default output mode for bazel query, which
+# prints "ng_module rule //foo:bar" instead of just "//foo:bar".
+query --output=label_kind
+
+###############################
+# Test                      #
+###############################
+
+test --test_verbose_timeout_warnings 
+test --verbose_failures
+test --keep_going 
+test --test_output=all
+
+###############################
+# Coverage                  #
+###############################
+
+coverage --combined_report=lcov
+coverage --instrumentation_filter="^//app[:/]"
+coverage --experimental_use_llvm_covmap
+coverage --experimental_generate_llvm_lcov
+coverage --copt=-fcoverage-compilation-dir=.
+
+###############################
+# Host platform defaults       #
+###############################
+
+# Backend aliases. Platform-specific configs below select one of these by
+# default, but they can still be overridden explicitly via --config=...
+build:accelerate --define=MATRIX_BACKEND=accelerate
+
+build:openblas --define=MATRIX_BACKEND=openblas
+
+build:openmp_only --define=MATRIX_BACKEND=openmp
+
+# macOS defaults: OpenMP + Accelerate. MPS stays available as an optional
+# runtime backend via sm_set_backend(SM_BACKEND_MPS).
+build:macos --config=accelerate
+
+# Linux defaults: OpenMP + OpenBLAS.
+build:linux --config=openblas
+

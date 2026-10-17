@@ -1,0 +1,631 @@
+/*
+ * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
+ * SPDX-License-Identifier: MIT
+ *
+ * This file is part of a project licensed under the MIT License.
+ * See the LICENSE file in the root directory for details.
+ */
+
+#include "dm.h"
+
+/******************************
+ ** Test preconditions:
+ *******************************/
+#define UNITY_INCLUDE_DOUBLE
+#define UNITY_DOUBLE_PRECISION 10
+
+/* Support for Meta Test Rig */
+#define TEST_CASE(...)
+
+#if __has_include("unity.h")
+#include "unity.h"
+//#include "unity_internals.h"
+#endif
+
+#ifndef TEST_ASSERT_NOT_NULL
+#define TEST_ASSERT_NOT_NULL(value) \
+  do {                             \
+    (void)(value);                 \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NOT_NULL_MESSAGE
+#define TEST_ASSERT_NOT_NULL_MESSAGE(value, message) \
+  do {                                               \
+    (void)(value);                                   \
+    (void)(message);                                 \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL
+#define TEST_ASSERT_EQUAL(expected, actual) \
+  do {                                      \
+    (void)(expected);                       \
+    (void)(actual);                         \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL_INT
+#define TEST_ASSERT_EQUAL_INT(expected, actual) \
+  do {                                          \
+    (void)(expected);                           \
+    (void)(actual);                             \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_EQUAL_DOUBLE
+#define TEST_ASSERT_EQUAL_DOUBLE(expected, actual) \
+  do {                                             \
+    (void)(expected);                              \
+    (void)(actual);                                \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_DOUBLE_WITHIN
+#define TEST_ASSERT_DOUBLE_WITHIN(delta, expected, actual) \
+  do {                                                     \
+    (void)(delta);                                         \
+    (void)(expected);                                      \
+    (void)(actual);                                        \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_TRUE
+#define TEST_ASSERT_TRUE(condition) \
+  do {                              \
+    (void)(condition);              \
+  } while (0)
+#endif
+
+/******************************
+ ** Creation of matrices:
+ *******************************/
+
+#define EPSILON 10e-9
+
+void setUp(void) {
+  // Remove the test file if it exists
+  // remove("test_matrix.mat");
+}
+
+// Teardown function called after each test
+void tearDown(void) {
+  // Remove the test file if it exists
+  // remove("test_matrix.mat");
+}
+
+void test_dm_active_library_should_return_non_null(void) {
+  const char *lib = dm_active_library();
+  printf("Active library: %s\n", lib);
+  TEST_ASSERT_NOT_NULL(lib);
+}
+
+void test_dm_create(void) {
+
+  // Test case 1: Create a matrix with valid dimensions
+  size_t rows = 3;
+  size_t cols = 4;
+  DoubleMatrix *matrix = dm_create(rows, cols);
+
+  TEST_ASSERT_NOT_NULL_MESSAGE(matrix, "Failed to allocate matrix");
+  TEST_ASSERT_EQUAL(rows, matrix->rows);
+  TEST_ASSERT_EQUAL(cols, matrix->cols);
+  TEST_ASSERT_EQUAL(rows * cols, matrix->capacity);
+
+  for (size_t i = 0; i < matrix->rows; i++) {
+    for (size_t j = 0; j < matrix->cols; j++) {
+      TEST_ASSERT_EQUAL_DOUBLE(0, dm_get(matrix, i, j));
+    }
+  }
+  // Free the memory allocated for the matrix.
+  dm_destroy(matrix);
+}
+
+void test_dm_create_with_values_makes_internal_copy(void) {
+  double values[2][2] = {{1.0, 2.0}, {3.0, 4.0}};
+  DoubleMatrix *mat = dm_create_with_values(2, 2, &values[0][0]);
+
+  TEST_ASSERT_NOT_NULL(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+
+  values[0][0] = 99.0;
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+
+  dm_destroy(mat);
+}
+
+void test_dm_convert_array(void) {
+  double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 2, 1));
+  dm_destroy(mat);
+}
+
+void test_dm_set(void) {
+  DoubleMatrix *mat = dm_create(3, 3);
+  dm_set(mat, 0, 0, 1.0);
+  dm_set(mat, 0, 1, 2.0);
+  dm_set(mat, 0, 2, 3.0);
+  dm_set(mat, 1, 0, 4.0);
+  dm_set(mat, 1, 1, 5.0);
+  dm_set(mat, 1, 2, 6.0);
+  dm_set(mat, 2, 0, 7.0);
+  dm_set(mat, 2, 1, 8.0);
+  dm_set(mat, 2, 2, 9.0);
+
+  // test if all values are set correctly
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 1, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(mat, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(mat, 2, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(9.0, dm_get(mat, 2, 2));
+
+  // Free the memory allocated for the matrix.
+  dm_destroy(mat);
+}
+
+void test_dm_get(void) {
+  double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
+  TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(mat, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(3.0, dm_get(mat, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(mat, 1, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(mat, 2, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(mat, 2, 1));
+  dm_destroy(mat);
+}
+
+void test_dm_get_row(void) {
+  // create test matrix
+  double values[3][4] = {
+      {1.0, 2.0, 3.0, 4.0}, {5.0, 6.0, 7.0, 8.0}, {9.9, 10.0, 11.0, 12.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 4, values);
+
+  // get row vector
+  DoubleMatrix *vec = dm_get_row(mat, 1);
+
+  // check vector length
+  TEST_ASSERT_EQUAL_INT(1, vec->rows);
+
+  // check vector values
+  TEST_ASSERT_EQUAL_DOUBLE(5.0, dm_get(vec, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(vec, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(7.0, dm_get(vec, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(8.0, dm_get(vec, 0, 3));
+
+  // free memory
+  dm_destroy(mat);
+  dm_destroy(vec);
+}
+
+void test_dm_get_col(void) {
+  double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
+  DoubleMatrix *vec = dm_get_col(mat, 1);
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(vec, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(vec, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(vec, 2, 0));
+  TEST_ASSERT_EQUAL(3, vec->rows);
+  dm_destroy(mat);
+  dm_destroy(vec);
+}
+
+void test_dm_get_last_row(void) {
+  double values[3][4] = {
+      {1.0, 2.0, 3.0, 4.0}, {5.0, 6.0, 7.0, 8.0}, {9.9, 10.0, 11.0, 12.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 4, values);
+  DoubleMatrix *vec = dm_get_last_row(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(9.9, dm_get(vec, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(10.0, dm_get(vec, 0, 1));
+  TEST_ASSERT_EQUAL_DOUBLE(11.0, dm_get(vec, 0, 2));
+  TEST_ASSERT_EQUAL_DOUBLE(12.0, dm_get(vec, 0, 3));
+  TEST_ASSERT_EQUAL(1, vec->rows);
+  dm_destroy(mat);
+  dm_destroy(vec);
+}
+
+void test_dm_get_last_col(void) {
+  double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
+  DoubleMatrix *vec = dm_get_last_col(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(2.0, dm_get(vec, 0, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(4.0, dm_get(vec, 1, 0));
+  TEST_ASSERT_EQUAL_DOUBLE(6.0, dm_get(vec, 2, 0));
+  TEST_ASSERT_EQUAL(3, vec->rows);
+  dm_destroy(mat);
+  dm_destroy(vec);
+}
+
+void test_dm_clone(void) {
+  double values[3][2] = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 2, values);
+  DoubleMatrix *clone = dm_clone(mat);
+  TEST_ASSERT_TRUE(dm_is_equal(mat, clone));
+  dm_destroy(mat);
+  dm_destroy(clone);
+}
+
+void test_dm_identity(void) {
+  size_t n = 3;
+  DoubleMatrix *mat = dm_create_identity(n);
+  for (size_t i = 0; i < n; i++) {
+    for (size_t j = 0; j < n; j++) {
+      if (i == j) {
+        TEST_ASSERT_EQUAL_DOUBLE(1.0, dm_get(mat, i, j));
+      } else {
+        TEST_ASSERT_EQUAL_DOUBLE(0.0, dm_get(mat, i, j));
+      }
+    }
+  }
+  dm_destroy(mat);
+}
+
+void test_dm_rand(void) {
+  size_t rows = 3;
+  size_t cols = 4;
+  DoubleMatrix *mat = dm_create_random(rows, cols);
+  for (size_t i = 0; i < rows; i++) {
+    for (size_t j = 0; j < cols; j++) {
+      double value = dm_get(mat, i, j);
+      TEST_ASSERT_TRUE(value >= 0.0 && value <= 1.0);
+    }
+  }
+  dm_destroy(mat);
+}
+
+void test_dm_rand_seeded_should_be_deterministic(void) {
+  DoubleMatrix *a = dm_create_random_seeded(4, 5, 123456789ull);
+  DoubleMatrix *b = dm_create_random_seeded(4, 5, 123456789ull);
+
+  TEST_ASSERT_NOT_NULL(a);
+  TEST_ASSERT_NOT_NULL(b);
+  TEST_ASSERT_TRUE(dm_is_equal(a, b));
+
+  dm_destroy(a);
+  dm_destroy(b);
+}
+
+void test_dm_rand_global_seed_should_be_reproducible(void) {
+  dm_set_random_seed(42ull);
+  DoubleMatrix *a = dm_create_random(3, 3);
+  DoubleMatrix *b = dm_create_random(3, 3);
+  TEST_ASSERT_TRUE(dm_is_equal(a, b));
+  TEST_ASSERT_EQUAL((size_t)42, (size_t)dm_get_random_seed());
+
+  dm_destroy(a);
+  dm_destroy(b);
+}
+
+void test_dm_multiply(void) {
+  double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  double values2[3][2] = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}};
+  double expected[2][2] = {{58.0, 64.0}, {139.0, 154.0}};
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(3, 2, values2);
+  DoubleMatrix *result = dm_multiply(mat1, mat2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
+  TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+  dm_destroy(result);
+  dm_destroy(expected_mat);
+}
+
+void test_dm_multiply_by_number(void) {
+  double values[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  double expected[2][3] = {{2.0, 4.0, 6.0}, {8.0, 10.0, 12.0}};
+  DoubleMatrix *mat = dm_from_array_static(2, 3, values);
+  DoubleMatrix *result = dm_multiply_by_number(mat, 2.0);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 3, expected);
+  TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
+  dm_destroy(mat);
+  dm_destroy(result);
+  dm_destroy(expected_mat);
+}
+
+void test_dm_transpose(void) {
+  DoubleMatrix *mat = dm_create(2, 3);
+  dm_set(mat, 0, 0, 1.0);
+  dm_set(mat, 0, 1, 2.0);
+  dm_set(mat, 0, 2, 3.0);
+  dm_set(mat, 1, 0, 4.0);
+  dm_set(mat, 1, 1, 5.0);
+  dm_set(mat, 1, 2, 6.0);
+
+  DoubleMatrix *transposed = dm_transpose(mat);
+
+  TEST_ASSERT_NOT_NULL(transposed);
+  TEST_ASSERT_EQUAL_INT(3, transposed->rows);
+  TEST_ASSERT_EQUAL_INT(2, transposed->cols);
+
+  double expected_data[] = {1, 4, 2, 5, 3, 6};
+  for (int i = 0; i < 6; ++i) {
+    TEST_ASSERT_EQUAL_DOUBLE(expected_data[i], transposed->values[i]);
+  }
+
+  dm_destroy(mat);
+  dm_destroy(transposed);
+}
+
+void test_dm_add(void) {
+  double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  double values2[2][3] = {{7.0, 8.0, 9.0}, {10.0, 11.0, 12.0}};
+  double expected[2][3] = {{8.0, 10.0, 12.0}, {14.0, 16.0, 18.0}};
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 3, values2);
+  DoubleMatrix *result = dm_add(mat1, mat2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 3, expected);
+  TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+  dm_destroy(result);
+  dm_destroy(expected_mat);
+}
+
+void test_dm_diff(void) {
+  double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  double values2[2][3] = {{7.0, 8.0, 9.0}, {10.0, 11.0, 12.0}};
+  double expected[2][3] = {{-6.0, -6.0, -6.0}, {-6.0, -6.0, -6.0}};
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 3, values2);
+  DoubleMatrix *result = dm_diff(mat1, mat2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 3, expected);
+  TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+  dm_destroy(result);
+  dm_destroy(expected_mat);
+}
+
+void test_dm_inverse_4x4(void) {
+  // 4x4 Matrix
+  double values[4][4] = {{4.0, 7.0, 2.0, 3.0},
+                         {3.0, 6.0, 1.0, 2.0},
+                         {2.0, 5.0, 3.0, 1.0},
+                         {1.0, 4.0, 2.0, 2.0}};
+  double expected_inverse[4][4] = {{0.78, -0.61, 0.33, 0.50},
+                                   {-0.56, 0.72, -0.67, -0.50},
+                                   {0.11, 0.06, 0.33, -0.50},
+                                   {-0.67, 0.17, -0.00, 0.50}};
+
+  DoubleMatrix *expected = dm_from_array_static(4, 4, expected_inverse);
+  dm_inplace_transpose(expected);
+
+  DoubleMatrix *mat = dm_from_array_static(4, 4, values);
+  DoubleMatrix *inverse = dm_inverse(mat);
+
+  for (size_t i = 0; i < 4; i++) {
+    for (size_t j = 0; j < 4; j++) {
+      TEST_ASSERT_DOUBLE_WITHIN(10e-2, dm_get(expected, i, j),
+                                dm_get(inverse, i, j));
+    }
+  }
+
+  dm_destroy(mat);
+  dm_destroy(inverse);
+}
+
+void test_dm_determinant(void) {
+  double values[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
+  double det = dm_determinant(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(0.0, det);
+  dm_destroy(mat);
+}
+
+void test_dm_trace(void) {
+  double values[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
+  double trace = dm_trace(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(15.0, trace);
+  dm_destroy(mat);
+}
+
+void test_dm_rank(void) {
+  double values[3][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}, {7.0, 8.0, 9.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
+  size_t rank = dm_rank(mat);
+  TEST_ASSERT_EQUAL(2, rank);
+  dm_destroy(mat);
+}
+
+void test_dm_rank_should_not_modify_input_matrix(void) {
+  double values[3][3] = {{2.0, 1.0, 1.0}, {1.0, 3.0, 2.0}, {1.0, 0.0, 0.0}};
+  DoubleMatrix *mat = dm_from_array_static(3, 3, values);
+  DoubleMatrix *before = dm_clone(mat);
+
+  size_t rank = dm_rank(mat);
+  TEST_ASSERT_TRUE(rank > 0);
+  TEST_ASSERT_TRUE(dm_is_equal(mat, before));
+
+  dm_destroy(before);
+  dm_destroy(mat);
+}
+
+void test_dm_norm(void) {
+  double values[2][2] = {{1.0, 2.0}, {3.0, 4.0}};
+  DoubleMatrix *mat = dm_from_array_static(2, 2, values);
+  double norm = dm_norm(mat);
+  TEST_ASSERT_EQUAL_DOUBLE(5.477225575051661, norm);
+  dm_destroy(mat);
+}
+
+void test_dm_equal(void) {
+  double values1[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  double values2[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  DoubleMatrix *mat1 = dm_from_array_static(2, 3, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 3, values2);
+  TEST_ASSERT_TRUE(dm_is_equal(mat1, mat2));
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+}
+
+// Helper function to create a sample matrix
+DoubleMatrix *create_sample_matrix(size_t rows, size_t cols) {
+  DoubleMatrix *matrix = dm_create(rows, cols);
+  for (size_t i = 0; i < rows; ++i) {
+    for (size_t j = 0; j < cols; ++j) {
+      dm_set(matrix, i, j, (double)(i * cols + j));
+    }
+  }
+  return matrix;
+}
+
+void test_dm_gauss_elimination(void) {
+  double values[4][4] = {
+      {2.0, 1.0, 1.0, 4.0}, {3.0, -1.0, 2.0, 1.0}, {4.0, 7.0, -2.0, 3.0}};
+
+  double expected[4][4] = {
+      {4.0, 7.0, -2.0, 3.0}, {0.0, -6.25, 3.50, -1.25}, {0.0, 0.0, 0.60, 3.0}};
+
+  DoubleMatrix *mat = dm_from_array_static(4, 4, values);
+  dm_inplace_gauss_elimination(mat);
+
+  for (size_t i = 0; i < 4; i++) {
+    for (size_t j = 0; j < 4; j++) {
+      TEST_ASSERT_DOUBLE_WITHIN(EPSILON, expected[i][j], dm_get(mat, i, j));
+    }
+  }
+
+  dm_destroy(mat);
+}
+
+void dm_back_substitution(const DoubleMatrix *mat, double *solution) {
+  size_t rows = mat->rows;
+  size_t cols = mat->cols;
+
+  // Rückwärtseinsetzen
+  for (size_t ii = rows; ii-- > 0;) {
+    size_t i = ii;
+    double sum = 0.0;
+    for (size_t j = i + 1; j < cols - 1; j++) {
+      sum += dm_get(mat, i, j) * solution[j];
+    }
+    solution[i] = (dm_get(mat, i, cols - 1) - sum) / dm_get(mat, i, i);
+  }
+}
+
+void test_dm_gauss_elimination_solve(void) {
+  // Koeffizientenmatrix A
+  // double A[3][3] = {{2.0, 1.0, -1.0}, {-3.0, -1.0, 2.0}, {-2.0, 1.0, 2.0}};
+
+  // Rechte Seite b
+  // double b[3] = {8.0, -11.0, -3.0};
+
+  // Erwartete Lösung x
+  double expected_x[3] = {2.0, 3.0, -1.0};
+
+  // Erweiterte Matrix [A | b]
+  double augmented[3][4] = {
+      {2.0, 1.0, -1.0, 8.0}, {-3.0, -1.0, 2.0, -11.0}, {-2.0, 1.0, 2.0, -3.0}};
+
+  // Matrix erstellen
+  DoubleMatrix *mat = dm_from_array_static(3, 4, augmented);
+
+  // Gaußsche Elimination anwenden
+  dm_inplace_gauss_elimination(mat);
+
+  // Rückwärtseinsetzen durchführen
+  double computed_x[3];
+  dm_back_substitution(mat, computed_x);
+
+  // Überprüfen, ob die berechnete Lösung mit der erwarteten Lösung
+  // übereinstimmt
+  for (size_t i = 0; i < 3; i++) {
+    TEST_ASSERT_DOUBLE_WITHIN(EPSILON, expected_x[i], computed_x[i]);
+  }
+
+  // Speicher freigeben
+  dm_destroy(mat);
+}
+
+void test_dm_to_column_major(void) {
+  double values[2][3] = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+  DoubleMatrix *mat = dm_from_array_static(2, 3, values);
+  double *col_major = dm_to_column_major(mat);
+
+  // Erwartete Anordnung im Spaltenformat: [1, 4, 2, 5, 3, 6]
+  double expected[] = {1.0, 4.0, 2.0, 5.0, 3.0, 6.0};
+  for (size_t i = 0; i < 6; i++) {
+    TEST_ASSERT_DOUBLE_WITHIN(EPSILON, expected[i], col_major[i]);
+  }
+
+  free(col_major);
+  dm_destroy(mat);
+}
+
+void test_dm_elementwise_multiply(void) {
+  double values1[2][2] = {{1.0, 2.0}, {3.0, 4.0}};
+  double values2[2][2] = {{5.0, 6.0}, {7.0, 8.0}};
+  double expected[2][2] = {{5.0, 12.0}, {21.0, 32.0}};
+
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
+  DoubleMatrix *result = dm_elementwise_multiply(mat1, mat2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
+
+  TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
+
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+  dm_destroy(result);
+  dm_destroy(expected_mat);
+}
+
+void test_dm_inplace_elementwise_multiply(void) {
+  double values1[2][2] = {{1.0, 2.0}, {3.0, 4.0}};
+  double values2[2][2] = {{5.0, 6.0}, {7.0, 8.0}};
+  double expected[2][2] = {{5.0, 12.0}, {21.0, 32.0}};
+
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
+
+  dm_inplace_elementwise_multiply(mat1, mat2);
+
+  TEST_ASSERT_TRUE(dm_is_equal(mat1, expected_mat));
+
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+  dm_destroy(expected_mat);
+}
+
+void test_dm_div(void) {
+  double values1[2][2] = {{10.0, 20.0}, {30.0, 40.0}};
+  double values2[2][2] = {{2.0, 4.0}, {5.0, 8.0}};
+  double expected[2][2] = {{5.0, 5.0}, {6.0, 5.0}};
+
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
+  DoubleMatrix *result = dm_div(mat1, mat2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
+
+  TEST_ASSERT_TRUE(dm_is_equal(result, expected_mat));
+
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+  dm_destroy(result);
+  dm_destroy(expected_mat);
+}
+
+void test_dm_inplace_div(void) {
+  double values1[2][2] = {{10.0, 20.0}, {30.0, 40.0}};
+  double values2[2][2] = {{2.0, 4.0}, {5.0, 8.0}};
+  double expected[2][2] = {{5.0, 5.0}, {6.0, 5.0}};
+
+  DoubleMatrix *mat1 = dm_from_array_static(2, 2, values1);
+  DoubleMatrix *mat2 = dm_from_array_static(2, 2, values2);
+  DoubleMatrix *expected_mat = dm_from_array_static(2, 2, expected);
+
+  dm_inplace_div(mat1, mat2);
+
+  TEST_ASSERT_TRUE(dm_is_equal(mat1, expected_mat));
+
+  dm_destroy(mat1);
+  dm_destroy(mat2);
+  dm_destroy(expected_mat);
+}

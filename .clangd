@@ -1,0 +1,5 @@
+CompileFlags:
+  Add:
+    - "-Iapp/matrix/include"
+    - "-Iapp/vector/include"
+    - "-Iapp/tensor/include"

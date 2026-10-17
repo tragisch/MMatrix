@@ -1,0 +1,105 @@
+"""
+This module file is used to manage external dependencies using Bzlmod.
+Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
+For more details, please check https://github.com/bazelbuild/bazel/issues/18958
+"""
+
+###############################################################################
+# Bazel now uses Bzlmod by default to manage external dependencies.
+# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
+#
+# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
+###############################################################################
+
+module(
+    name = "mmatrix",
+    version = "0.4.0",
+)
+
+######################################################################
+# C/C++ external dependencies
+######################################################################
+
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "zlib", version = "1.3.1.bcr.5")
+bazel_dep(name = "apple_support", version = "2.5.2")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "rules_shell", version = "0.6.1")
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_python", version = "1.7.0")
+bazel_dep(name = "rules_docs", version = "0.3.0")
+bazel_dep(name = "matio", version = "1.5.27")
+bazel_dep(name = "openmp", version = "22.1.1")
+bazel_dep(name = "throw_the_switch", version = "2.6.1-bazel.1")
+bazel_dep(name = "pcg", version = "83252d9c23df9c82ecb42210afed61a7b42402d7")
+
+git_override(
+    module_name = "rules_docs",
+    commit = "929ba5f65c64bdcb24bbc8e537c2dfac918c5de7",
+    remote = "https://github.com/jacobshirley/rules_docs.git",
+)
+
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "pypi",
+    python_version = "3.11",
+    requirements_lock = "//:doc/requirements.txt",
+)
+use_repo(pip, "pypi")
+
+docgen = use_extension("@rules_docs//docgen:extensions.bzl", "docgen")
+docgen.mkdocs(
+    plugins = [
+        "mkdocs-material",
+    ],
+    pypi_hub = "@pypi",
+)
+use_repo(docgen, "mkdocs")
+
+# Required for objc_library / Apple-specific C(++) actions (e.g. MPS bridge)
+apple_cc = use_extension("@apple_support//crosstool:setup.bzl", "apple_cc_configure_extension")
+use_repo(apple_cc, "local_config_apple_cc", "local_config_apple_cc_toolchains")
+
+register_toolchains("@local_config_apple_cc_toolchains//:all")
+
+######################################################################
+# LLVM toolchain (C/C++/Rust)
+######################################################################
+
+bazel_dep(name = "toolchains_llvm", version = "1.6.0")
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    llvm_version = "20.1.0",
+)
+use_repo(llvm, "llvm_toolchain")
+use_repo(llvm, "llvm_toolchain_llvm")
+
+register_toolchains("@llvm_toolchain//:all")
+
+#############################
+# Compile Commands Extractor for Bazel (wolfd)
+#############################
+
+# https://github.com/wolfd/bazel-compile-commands
+bazel_dep(name = "wolfd_bazel_compile_commands", version = "0.5.2", dev_dependency = True)
+
+#############################
+# Load external non-Bazel libraries
+#############################
+
+host_local_library = use_repo_rule("//tools:host_local_library.bzl", "host_local_library")
+
+# System OpenBLAS (only fetched when the OpenBLAS backend is selected).
+# openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
+host_local_library(
+    name = "openblas",
+    build_file = "@//:third_party/openblas.BUILD",
+    env_var = "OPENBLAS_ROOT",
+    linux_path = "/home/linuxbrew/.linuxbrew/opt/openblas",
+    macos_path = "/opt/homebrew/opt/openblas",
+    required_subdirs = [
+        "include",
+        "lib",
+    ],
+)

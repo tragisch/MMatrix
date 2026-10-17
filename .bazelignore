@@ -1,0 +1,12 @@
+# Local experiments and unused vendor trees; excluded from //... discovery.
+share/google_benchmark
+share/benchmarks
+third_party/cblas
+third_party/csparse
+third_party/hdf5
+third_party/jburkardt
+third_party/matmul
+third_party/mesch12b
+third_party/mm_offloading
+third_party/spmatrix
+third_party/spblas

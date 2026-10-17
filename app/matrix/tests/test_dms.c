@@ -1,0 +1,572 @@
+/*
+ * Copyright (c) 2025 @tragisch <https://github.com/tragisch>
+ * SPDX-License-Identifier: MIT
+ *
+ * This file is part of a project licensed under the MIT License.
+ * See the LICENSE file in the root directory for details.
+ */
+
+#include "dms.h"
+
+/******************************
+ ** Test preconditions:
+ *******************************/
+#define UNITY_INCLUDE_DOUBLE
+#define UNITY_DOUBLE_PRECISION 10
+
+/* Support for Meta Test Rig */
+// #define TEST_CASE(...)
+
+#if __has_include("unity.h")
+#include "unity.h"
+// #include "unity_internals.h"
+#endif
+
+#ifndef TEST_ASSERT_EQUAL
+#define TEST_ASSERT_EQUAL(expected, actual) \
+  do {                                      \
+    (void)(expected);                       \
+    (void)(actual);                         \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NULL
+#define TEST_ASSERT_NULL(value) \
+  do {                          \
+    (void)(value);              \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NOT_NULL
+#define TEST_ASSERT_NOT_NULL(value) \
+  do {                              \
+    (void)(value);                  \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_TRUE
+#define TEST_ASSERT_TRUE(condition) \
+  do {                              \
+    (void)(condition);              \
+  } while (0)
+#endif
+#ifndef TEST_ASSERT_NOT_EQUAL
+#define TEST_ASSERT_NOT_EQUAL(expected, actual) \
+  do {                                          \
+    (void)(expected);                           \
+    (void)(actual);                             \
+  } while (0)
+#endif
+/******************************
+ ** Creation of matrices:
+ *******************************/
+
+void test_dms_create(void) {
+  DoubleSparseMatrix *m = dms_create(3, 3, 3);
+  TEST_ASSERT_EQUAL(3, m->rows);
+  TEST_ASSERT_EQUAL(3, m->cols);
+  TEST_ASSERT_EQUAL(0, m->nnz);
+  TEST_ASSERT_EQUAL(3, m->capacity);
+  dms_destroy(m);
+}
+
+void test_dms_clone(void) {
+  DoubleSparseMatrix *m = dms_create(3, 3, 3);
+  DoubleSparseMatrix *m2 = dms_clone(m);
+  TEST_ASSERT_EQUAL(3, m2->rows);
+  TEST_ASSERT_EQUAL(3, m2->cols);
+  TEST_ASSERT_EQUAL(0, m2->nnz);
+  TEST_ASSERT_EQUAL(3, m2->capacity);
+  dms_destroy(m);
+  dms_destroy(m2);
+}
+
+void test_dms_identity_size_3(void) {
+  size_t n = 3;
+  DoubleSparseMatrix *mat = dms_create_identity(n);
+
+  // Verify the dimensions
+  TEST_ASSERT_EQUAL(n, mat->rows);
+  TEST_ASSERT_EQUAL(n, mat->cols);
+
+  // Verify the number of non-zero elements
+  TEST_ASSERT_EQUAL(n, mat->nnz);
+
+  // Verify the values and positions
+  for (size_t i = 0; i < n; i++) {
+    TEST_ASSERT_EQUAL(i, mat->row_indices[i]);
+    TEST_ASSERT_EQUAL(i, mat->col_indices[i]);
+    TEST_ASSERT_EQUAL(1.0, mat->values[i]);
+  }
+
+  dms_destroy(mat);
+}
+
+// Test to check if identity matrix of size 1 is created correctly
+void test_dms_identity_size_1(void) {
+  size_t n = 1;
+  DoubleSparseMatrix *mat = dms_create_identity(n);
+
+  // Verify the dimensions
+  TEST_ASSERT_EQUAL(n, mat->rows);
+  TEST_ASSERT_EQUAL(n, mat->cols);
+
+  // Verify the number of non-zero elements
+  TEST_ASSERT_EQUAL(n, mat->nnz);
+
+  // Verify the values and positions
+  TEST_ASSERT_EQUAL(0, mat->row_indices[0]);
+  TEST_ASSERT_EQUAL(0, mat->col_indices[0]);
+  TEST_ASSERT_EQUAL(1.0, mat->values[0]);
+
+  dms_destroy(mat);
+}
+
+// Test to check if identity matrix of size 0 is handled correctly
+void test_dms_identity_size_0(void) {
+  size_t n = 0;
+  DoubleSparseMatrix *mat = dms_create_identity(n);
+
+  // Verify the result is NULL for invalid size
+  TEST_ASSERT_NULL(mat);
+}
+
+// Helper function to count the number of unique non-zero elements
+size_t count_unique_non_zeros(const DoubleSparseMatrix *mat) {
+  size_t count = 0;
+  for (size_t i = 0; i < mat->nnz; i++) {
+    if (mat->values[i] != 0.0) {
+      count++;
+    }
+  }
+  return count;
+}
+
+// Test to check if a random sparse matrix of specified density is created
+// correctly
+void test_dms_rand_density(void) {
+  size_t rows = 10;
+  size_t cols = 10;
+  double density = 0.2;
+  DoubleSparseMatrix *mat = dms_create_random(rows, cols, density);
+
+  // Verify the dimensions
+  TEST_ASSERT_EQUAL(rows, mat->rows);
+  TEST_ASSERT_EQUAL(cols, mat->cols);
+
+  // Verify the number of non-zero elements
+  size_t expected_nnz = (size_t)(density * rows * cols);
+  TEST_ASSERT_EQUAL(expected_nnz, mat->nnz);
+
+  // Verify the values and positions
+  for (size_t i = 0; i < mat->nnz; i++) {
+    TEST_ASSERT_TRUE(mat->row_indices[i] < rows);
+    TEST_ASSERT_TRUE(mat->col_indices[i] < cols);
+    TEST_ASSERT_NOT_EQUAL(0.0, mat->values[i]);
+  }
+
+  // Verify the unique non-zero count matches expected density
+  size_t unique_nnz = count_unique_non_zeros(mat);
+  TEST_ASSERT_EQUAL(expected_nnz, unique_nnz);
+
+  dms_destroy(mat);
+}
+
+void test_dms_rand_zero_density_returns_empty_matrix(void) {
+  DoubleSparseMatrix *mat = dms_create_random(10, 12, 0.0);
+
+  TEST_ASSERT_NOT_NULL(mat);
+  TEST_ASSERT_EQUAL(10, mat->rows);
+  TEST_ASSERT_EQUAL(12, mat->cols);
+  TEST_ASSERT_EQUAL(0, mat->nnz);
+  TEST_ASSERT_TRUE(mat->capacity >= 1);
+
+  dms_destroy(mat);
+}
+
+void test_dms_rand_seeded_should_be_deterministic(void) {
+  DoubleSparseMatrix *a = dms_create_random_seeded(10, 10, 0.15, 1234ull);
+  DoubleSparseMatrix *b = dms_create_random_seeded(10, 10, 0.15, 1234ull);
+
+  TEST_ASSERT_NOT_NULL(a);
+  TEST_ASSERT_NOT_NULL(b);
+  TEST_ASSERT_EQUAL(a->nnz, b->nnz);
+
+  for (size_t i = 0; i < a->nnz; ++i) {
+    TEST_ASSERT_EQUAL(a->row_indices[i], b->row_indices[i]);
+    TEST_ASSERT_EQUAL(a->col_indices[i], b->col_indices[i]);
+    TEST_ASSERT_EQUAL(a->values[i], b->values[i]);
+  }
+
+  dms_destroy(a);
+  dms_destroy(b);
+}
+
+void test_dms_rand_global_seed_should_be_reproducible(void) {
+  dms_set_random_seed(777ull);
+  DoubleSparseMatrix *a = dms_create_random(9, 9, 0.2);
+  DoubleSparseMatrix *b = dms_create_random(9, 9, 0.2);
+
+  TEST_ASSERT_EQUAL(a->nnz, b->nnz);
+  for (size_t i = 0; i < a->nnz; ++i) {
+    TEST_ASSERT_EQUAL(a->row_indices[i], b->row_indices[i]);
+    TEST_ASSERT_EQUAL(a->col_indices[i], b->col_indices[i]);
+    TEST_ASSERT_EQUAL(a->values[i], b->values[i]);
+  }
+
+  dms_destroy(a);
+  dms_destroy(b);
+}
+
+void test_dms_convert_array(void) {
+  double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
+  TEST_ASSERT_EQUAL(3, m->rows);
+  TEST_ASSERT_EQUAL(3, m->cols);
+  TEST_ASSERT_EQUAL(9, m->nnz);
+  TEST_ASSERT_TRUE(m->capacity >= m->nnz);
+  dms_destroy(m);
+}
+
+void test_dms_get_row(void) {
+  double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
+  DoubleSparseMatrix *m2 = dms_get_row(m, 1);
+  TEST_ASSERT_EQUAL(1, m2->rows);
+  TEST_ASSERT_EQUAL(3, m2->cols);
+  TEST_ASSERT_EQUAL(3, m2->nnz);
+  TEST_ASSERT_TRUE(m2->capacity >= m2->nnz);
+  dms_destroy(m);
+  dms_destroy(m2);
+}
+
+void test_dms_get_last_row(void) {
+  double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
+  DoubleSparseMatrix *m2 = dms_get_last_row(m);
+  TEST_ASSERT_EQUAL(1, m2->rows);
+  TEST_ASSERT_EQUAL(3, m2->cols);
+  TEST_ASSERT_EQUAL(3, m2->nnz);
+  TEST_ASSERT_TRUE(m2->capacity >= m2->nnz);
+  dms_destroy(m);
+  dms_destroy(m2);
+}
+
+void test_dms_get_col(void) {
+  double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
+  DoubleSparseMatrix *m2 = dms_get_col(m, 1);
+  TEST_ASSERT_EQUAL(3, m2->rows);
+  TEST_ASSERT_EQUAL(1, m2->cols);
+  TEST_ASSERT_EQUAL(3, m2->nnz);
+  TEST_ASSERT_EQUAL(3, m2->capacity);
+  TEST_ASSERT_EQUAL(2, m2->values[0]);
+  TEST_ASSERT_EQUAL(5, m2->values[1]);
+  TEST_ASSERT_EQUAL(8, m2->values[2]);
+  dms_destroy(m);
+  dms_destroy(m2);
+}
+
+void test_dms_get_col_unsorted_input(void) {
+  size_t row_indices[] = {2, 0, 1};
+  size_t col_indices[] = {1, 1, 1};
+  double values[] = {30.0, 10.0, 20.0};
+  DoubleSparseMatrix *m =
+      dms_create_with_values(3, 2, 3, row_indices, col_indices, values);
+  DoubleSparseMatrix *col = dms_get_col(m, 1);
+
+  TEST_ASSERT_NOT_NULL(col);
+  TEST_ASSERT_EQUAL(3, col->nnz);
+  TEST_ASSERT_EQUAL(0, col->row_indices[0]);
+  TEST_ASSERT_EQUAL(1, col->row_indices[1]);
+  TEST_ASSERT_EQUAL(2, col->row_indices[2]);
+  TEST_ASSERT_EQUAL(10.0, col->values[0]);
+  TEST_ASSERT_EQUAL(20.0, col->values[1]);
+  TEST_ASSERT_EQUAL(30.0, col->values[2]);
+
+  dms_destroy(m);
+  dms_destroy(col);
+}
+
+void test_dms_get_last_col(void) {
+  double array[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+  DoubleSparseMatrix *m = dms_from_array_static(3, 3, array);
+  DoubleSparseMatrix *m2 = dms_get_last_col(m);
+  TEST_ASSERT_EQUAL(3, m2->rows);
+  TEST_ASSERT_EQUAL(1, m2->cols);
+  TEST_ASSERT_EQUAL(3, m2->nnz);
+  TEST_ASSERT_EQUAL(3, m2->capacity);
+  dms_destroy(m);
+  dms_destroy(m2);
+}
+
+// Test to check if transposition of a matrix is correct
+void test_dms_transpose_basic(void) {
+  size_t rows = 3, cols = 2;
+  size_t nnz = 3;
+  size_t row_indices[] = {0, 1, 2};
+  size_t col_indices[] = {0, 1, 0};
+  double values[] = {1.0, 2.0, 3.0};
+
+  DoubleSparseMatrix *mat =
+      dms_create_with_values(rows, cols, nnz, row_indices, col_indices, values);
+  DoubleSparseMatrix *transposed = dms_transpose(mat);
+
+  // Expected dimensions: transposed is 2 x 3
+  size_t expected_rows = 2, expected_cols = 3, expected_nnz = 3;
+
+  // Verify the dimensions
+  TEST_ASSERT_EQUAL(expected_rows, transposed->rows);
+  TEST_ASSERT_EQUAL(expected_cols, transposed->cols);
+
+  // Verify the number of non-zero elements
+  TEST_ASSERT_EQUAL(expected_nnz, transposed->nnz);
+
+  // Verify values via dms_get (independent of internal COO ordering)
+  // Original: (0,0)=1.0, (1,1)=2.0, (2,0)=3.0
+  // Transposed: (0,0)=1.0, (1,1)=2.0, (0,2)=3.0
+  TEST_ASSERT_EQUAL(1.0, dms_get(transposed, 0, 0));
+  TEST_ASSERT_EQUAL(3.0, dms_get(transposed, 0, 2));
+  TEST_ASSERT_EQUAL(2.0, dms_get(transposed, 1, 1));
+
+  dms_destroy(mat);
+  dms_destroy(transposed);
+}
+
+// Test to check if transposition of an empty matrix is handled correctly
+// void test_dms_transpose_empty(void) {
+//   size_t rows = 3, cols = 2;
+//   size_t nnz = 0;
+
+//   DoubleSparseMatrix *mat =
+//       dms_create_with_values(rows, cols, nnz, NULL, NULL, NULL);
+//   DoubleSparseMatrix *transposed = dms_transpose(mat);
+
+//   // Verify the dimensions
+//   TEST_ASSERT_EQUAL(cols, transposed->rows);
+//   TEST_ASSERT_EQUAL(rows, transposed->cols);
+
+//   // Verify the number of non-zero elements
+//   TEST_ASSERT_EQUAL(nnz, transposed->nnz);
+
+//   dms_destroy(mat);
+//   dms_destroy(transposed);
+// }
+
+// /******************************
+//  ** Matrix operations:
+//  *******************************/
+
+// Test to check if multiplication of two matrices is correct
+void test_dms_multiply_basic(void) {
+  double array_A[2][3] = {{3.0, 2.0, 1.0}, {1.0, 0.0, 2.0}};
+  DoubleSparseMatrix *m_A = dms_from_array_static(2, 3, array_A);
+
+  double array_B[3][2] = {{1.0, 2.0}, {0.0, 1.0}, {4.0, 0.0}};
+  DoubleSparseMatrix *m_B = dms_from_array_static(3, 2, array_B);
+
+  DoubleSparseMatrix *result = dms_multiply(m_A, m_B);
+  // Expected result matrix
+  double expected_array[2][2] = {{7.0, 8.0}, {9.0, 2.0}};
+  DoubleSparseMatrix *expected_result =
+      dms_from_array_static(2, 2, expected_array);
+
+  // test if result is expected_result
+  TEST_ASSERT_EQUAL(expected_result->rows, result->rows);
+  TEST_ASSERT_EQUAL(expected_result->cols, result->cols);
+  for (size_t i = 0; i < expected_result->rows; i++) {
+    for (size_t j = 0; j < expected_result->cols; j++) {
+      TEST_ASSERT_EQUAL(dms_get(expected_result, i, j), dms_get(result, i, j));
+    }
+  }
+
+  dms_destroy(m_A);
+  dms_destroy(m_B);
+  dms_destroy(result);
+  dms_destroy(expected_result);
+}
+
+// Test to check multiplication with incompatible dimensions
+void test_dms_multiply_incompatible_dimensions(void) {
+  size_t rows1 = 2, cols1 = 3;
+  size_t nnz1 = 3;
+  size_t row_indices1[] = {0, 1, 1};
+  size_t col_indices1[] = {0, 1, 2};
+  double values1[] = {1.0, 2.0, 3.0};
+
+  size_t rows2 = 2, cols2 = 2;
+  size_t nnz2 = 2;
+  size_t row_indices2[] = {0, 1};
+  size_t col_indices2[] = {1, 0};
+  double values2[] = {4.0, 5.0};
+
+  DoubleSparseMatrix *mat1 = dms_create_with_values(
+      rows1, cols1, nnz1, row_indices1, col_indices1, values1);
+  DoubleSparseMatrix *mat2 = dms_create_with_values(
+      rows2, cols2, nnz2, row_indices2, col_indices2, values2);
+
+  DoubleSparseMatrix *result = dms_multiply(mat1, mat2);
+
+  // Verify the result is NULL for incompatible dimensions
+  TEST_ASSERT_NULL(result);
+
+  dms_destroy(mat1);
+  dms_destroy(mat2);
+}
+
+void test_dms_realloc(void) {
+  DoubleSparseMatrix *m = dms_create(3, 3, 3);
+  dms_realloc(m, 200);
+  TEST_ASSERT_EQUAL(3, m->rows);
+  TEST_ASSERT_EQUAL(3, m->cols);
+  TEST_ASSERT_EQUAL(0, m->nnz);
+  TEST_ASSERT_EQUAL(200, m->capacity);
+  dms_destroy(m);
+}
+
+void test_dms_set(void) {
+  DoubleSparseMatrix *m = dms_create(3, 3, 3);
+  dms_set(m, 1, 1, 1);
+  TEST_ASSERT_EQUAL(1, m->values[0]);
+  dms_destroy(m);
+}
+
+void test_dms_get(void) {
+  DoubleSparseMatrix *m = dms_create(3, 3, 3);
+  dms_set(m, 1, 1, 1);
+  double value = dms_get(m, 1, 1);
+  TEST_ASSERT_EQUAL(1, value);
+  dms_destroy(m);
+}
+
+// /******************************
+//  ** Regression tests for native SpGEMM / builder / zero-pruning:
+//  *******************************/
+
+// Test: multiply with identity should return the original matrix.
+void test_dms_multiply_identity(void) {
+  double A[3][3] = {{1.0, 0.0, 3.0}, {0.0, 5.0, 0.0}, {7.0, 0.0, 9.0}};
+  DoubleSparseMatrix *mA = dms_from_array_static(3, 3, A);
+  DoubleSparseMatrix *mI = dms_create_identity(3);
+
+  // A × I == A
+  DoubleSparseMatrix *r1 = dms_multiply(mA, mI);
+  TEST_ASSERT_NOT_NULL(r1);
+  TEST_ASSERT_EQUAL(3, r1->rows);
+  TEST_ASSERT_EQUAL(3, r1->cols);
+  for (size_t i = 0; i < 3; i++) {
+    for (size_t j = 0; j < 3; j++) {
+      TEST_ASSERT_DOUBLE_WITHIN(1e-12, A[i][j], dms_get(r1, i, j));
+    }
+  }
+
+  // I × A == A
+  DoubleSparseMatrix *r2 = dms_multiply(mI, mA);
+  TEST_ASSERT_NOT_NULL(r2);
+  for (size_t i = 0; i < 3; i++) {
+    for (size_t j = 0; j < 3; j++) {
+      TEST_ASSERT_DOUBLE_WITHIN(1e-12, A[i][j], dms_get(r2, i, j));
+    }
+  }
+
+  dms_destroy(mA);
+  dms_destroy(mI);
+  dms_destroy(r1);
+  dms_destroy(r2);
+}
+
+// Test: zero-pruning — values that cancel out must not appear in nnz.
+// A = [[1,1],[0,0]], B = [[1,0],[-1,0]]  →  C = [[0,0],[0,0]]  →  nnz == 0.
+void test_dms_multiply_zero_pruning(void) {
+  double A[2][2] = {{1.0, 1.0}, {0.0, 0.0}};
+  double B[2][2] = {{1.0, 0.0}, {-1.0, 0.0}};
+  DoubleSparseMatrix *mA = dms_from_array_static(2, 2, A);
+  DoubleSparseMatrix *mB = dms_from_array_static(2, 2, B);
+
+  DoubleSparseMatrix *r = dms_multiply(mA, mB);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL(2, r->rows);
+  TEST_ASSERT_EQUAL(2, r->cols);
+  // All entries cancel → no stored nonzeros.
+  TEST_ASSERT_EQUAL(0, r->nnz);
+
+  dms_destroy(mA);
+  dms_destroy(mB);
+  dms_destroy(r);
+}
+
+// Test: builder mode dedup — setting the same position twice keeps last value.
+void test_dms_set_builder_dedup(void) {
+  DoubleSparseMatrix *m = dms_create(4, 4, 10);
+
+  // Write several entries, overwrite (1,1) three times.
+  dms_set(m, 0, 0, 1.0);
+  dms_set(m, 1, 1, 2.0);
+  dms_set(m, 1, 1, 3.0);
+  dms_set(m, 1, 1, 4.0);
+  dms_set(m, 2, 2, 5.0);
+
+  // After dedup the value at (1,1) must be the last one written.
+  TEST_ASSERT_DOUBLE_WITHIN(1e-12, 4.0, dms_get(m, 1, 1));
+
+  // Total stored nonzeros must be exactly 3 (no duplicates).
+  TEST_ASSERT_EQUAL(3, m->nnz);
+
+  dms_destroy(m);
+}
+
+// Test: larger random multiply (triggers the parallel path m>=128, nnz>=4096).
+// Verifies A × I == A for a 256×256 random matrix.
+void test_dms_multiply_parallel_path(void) {
+  const size_t n = 256;
+  const double density = 0.08; // ~5243 nnz → above 4096 threshold
+
+  dms_set_random_seed(42);
+  DoubleSparseMatrix *mA = dms_create_random(n, n, density);
+  DoubleSparseMatrix *mI = dms_create_identity(n);
+
+  DoubleSparseMatrix *r = dms_multiply(mA, mI);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL(n, r->rows);
+  TEST_ASSERT_EQUAL(n, r->cols);
+  TEST_ASSERT_EQUAL(mA->nnz, r->nnz);
+
+  // Spot-check all nonzero values of A appear in the result.
+  for (size_t k = 0; k < mA->nnz; k++) {
+    size_t i = mA->row_indices[k];
+    size_t j = mA->col_indices[k];
+    double expected = mA->values[k];
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, expected, dms_get(r, i, j));
+  }
+
+  dms_destroy(mA);
+  dms_destroy(mI);
+  dms_destroy(r);
+}
+
+// Test: multiply two non-trivial random matrices and verify against naive O(n³).
+void test_dms_multiply_random_correctness(void) {
+  const size_t m = 32, k = 48, n = 24;
+  const double density = 0.15;
+
+  dms_set_random_seed(123);
+  DoubleSparseMatrix *mA = dms_create_random(m, k, density);
+  DoubleSparseMatrix *mB = dms_create_random(k, n, density);
+
+  DoubleSparseMatrix *r = dms_multiply(mA, mB);
+  TEST_ASSERT_NOT_NULL(r);
+  TEST_ASSERT_EQUAL(m, r->rows);
+  TEST_ASSERT_EQUAL(n, r->cols);
+
+  // Naive dense multiply for reference.
+  for (size_t i = 0; i < m; i++) {
+    for (size_t j = 0; j < n; j++) {
+      double sum = 0.0;
+      for (size_t p = 0; p < k; p++) {
+        sum += dms_get(mA, i, p) * dms_get(mB, p, j);
+      }
+      TEST_ASSERT_DOUBLE_WITHIN(1e-9, sum, dms_get(r, i, j));
+    }
+  }
+
+  dms_destroy(mA);
+  dms_destroy(mB);
+  dms_destroy(r);
+}

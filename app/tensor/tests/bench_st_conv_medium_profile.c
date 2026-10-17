@@ -1,0 +1,380 @@
+#include "st.h"
+#include "st_backend.h"
+#include "st_conv.h"
+
+#include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+typedef struct BenchCountersDelta {
+  long mps_hit;
+  long mps_miss;
+  long fallback_gemm;
+  long fallback_ref;
+} BenchCountersDelta;
+
+typedef struct GpuStats {
+  size_t count;
+  size_t profile_count;
+  double sum_ms;
+  double min_ms;
+  double max_ms;
+  double last_ms;
+  StBufferGpuProfile profile_sum;
+  StBufferGpuProfile profile_last;
+} GpuStats;
+
+static uint64_t now_ns(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+static double elapsed_ms(uint64_t start, uint64_t end, size_t iters) {
+  return (double)(end - start) / 1000000.0 / (double)iters;
+}
+
+static FloatTensor *make4d(size_t n, size_t c, size_t h, size_t w) {
+  size_t shape[4] = {n, c, h, w};
+  return st_create(4, shape);
+}
+
+static void fill_rand(FloatTensor *t, uint32_t seed) {
+  for (size_t i = 0; i < t->numel; ++i) {
+    seed = seed * 1664525u + 1013904223u;
+    t->values[i] = ((float)(seed >> 8) / 16777216.0f) - 0.5f;
+  }
+}
+
+static float max_abs_diff(const FloatTensor *a, const FloatTensor *b) {
+  float max_abs = 0.0f;
+  if (!a || !b || a->numel != b->numel) return -1.0f;
+  for (size_t i = 0; i < a->numel; ++i) {
+    float d = fabsf(a->values[i] - b->values[i]);
+    if (d > max_abs) max_abs = d;
+  }
+  return max_abs;
+}
+
+static BenchCountersDelta counters_delta(StBackendCounters before,
+                                         StBackendCounters after) {
+  return (BenchCountersDelta){
+      .mps_hit = after.mps_hit - before.mps_hit,
+      .mps_miss = after.mps_miss - before.mps_miss,
+      .fallback_gemm = after.fallback_gemm - before.fallback_gemm,
+      .fallback_ref = after.fallback_ref - before.fallback_ref,
+  };
+}
+
+static void gpu_stats_add(GpuStats *stats, double ms) {
+  if (!stats) return;
+  if (stats->count == 0 || ms < stats->min_ms) {
+    stats->min_ms = ms;
+  }
+  if (stats->count == 0 || ms > stats->max_ms) {
+    stats->max_ms = ms;
+  }
+  stats->last_ms = ms;
+  stats->sum_ms += ms;
+  stats->count++;
+}
+
+static void gpu_stats_maybe_add(GpuStats *stats, const FloatTensor *out) {
+  double gpu_ms = 0.0;
+  if (out && out->buf && st_buffer_last_gpu_elapsed_ms(out->buf, &gpu_ms)) {
+    gpu_stats_add(stats, gpu_ms);
+  }
+  StBufferGpuProfile profile;
+  if (out && out->buf && st_buffer_last_gpu_profile(out->buf, &profile)) {
+    stats->profile_last = profile;
+    stats->profile_sum.feed_ms += profile.feed_ms;
+    stats->profile_sum.command_ms += profile.command_ms;
+    stats->profile_sum.encode_ms += profile.encode_ms;
+    stats->profile_sum.commit_ms += profile.commit_ms;
+    stats->profile_sum.sync_wait_ms += profile.sync_wait_ms;
+    stats->profile_sum.sync_wait_prewrite_ms += profile.sync_wait_prewrite_ms;
+    stats->profile_sum.sync_wait_boundary_ms += profile.sync_wait_boundary_ms;
+    stats->profile_count++;
+  }
+}
+
+static void print_optional_ms(bool valid, double value) {
+  if (valid) {
+    printf("%.6f", value);
+  } else {
+    printf("na");
+  }
+}
+
+static void print_header(void) {
+  printf("suite,case_name,variant,phase,requested_backend,observed_backend,"
+         "iters,ms_per_iter,mps_hit,mps_miss,fallback_gemm,fallback_ref,"
+         "max_abs_diff,out_buf_type,readbytes_delta,fastpath_delta,"
+         "fp_exec_nil_delta,fp_missing_feed_delta,fp_preout_nil_delta,"
+         "fp_cmd_buf_nil_delta,fp_encode_exc_delta,last_gpu_ms,gpu_samples,"
+         "gpu_avg_ms,gpu_min_ms,gpu_max_ms,cpu_overhead_ms,host_samples,"
+         "feed_avg_ms,command_avg_ms,encode_avg_ms,commit_avg_ms,"
+         "sync_wait_avg_ms,sync_wait_prewrite_avg_ms,"
+         "sync_wait_boundary_avg_ms\n");
+}
+
+static void print_row(const char *case_name, const char *variant,
+                      const char *phase, const char *requested_backend,
+                      const char *observed_backend, size_t iters, double ms,
+                      BenchCountersDelta d, float diff,
+                      const char *out_buf_type, long readbytes_delta,
+                      long fastpath_delta, long fp_exec_nil_delta,
+                      long fp_missing_feed_delta, long fp_preout_nil_delta,
+                      long fp_cmd_buf_nil_delta, long fp_encode_exc_delta,
+                      const GpuStats *gpu_stats) {
+  const bool gpu_valid = gpu_stats && gpu_stats->count > 0;
+  const double gpu_avg =
+      gpu_valid ? gpu_stats->sum_ms / (double)gpu_stats->count : 0.0;
+  const double cpu_overhead = gpu_valid ? ms - gpu_avg : 0.0;
+
+  printf("conv_medium_profile,%s,%s,%s,%s,%s,%zu,%.6f,%ld,%ld,%ld,%ld,",
+         case_name, variant, phase, requested_backend, observed_backend, iters,
+         ms, d.mps_hit, d.mps_miss, d.fallback_gemm, d.fallback_ref);
+  if (diff >= 0.0f) {
+    printf("%.8f", (double)diff);
+  } else {
+    printf("na");
+  }
+  printf(",%s,%ld,%ld,%ld,%ld,%ld,%ld,%ld,",
+         out_buf_type, readbytes_delta, fastpath_delta, fp_exec_nil_delta,
+         fp_missing_feed_delta, fp_preout_nil_delta, fp_cmd_buf_nil_delta,
+         fp_encode_exc_delta);
+  print_optional_ms(gpu_valid, gpu_valid ? gpu_stats->last_ms : 0.0);
+  printf(",%zu,", gpu_valid ? gpu_stats->count : 0);
+  print_optional_ms(gpu_valid, gpu_avg);
+  printf(",");
+  print_optional_ms(gpu_valid, gpu_valid ? gpu_stats->min_ms : 0.0);
+  printf(",");
+  print_optional_ms(gpu_valid, gpu_valid ? gpu_stats->max_ms : 0.0);
+  printf(",");
+  print_optional_ms(gpu_valid, cpu_overhead);
+  const bool profile_valid = gpu_stats && gpu_stats->profile_count > 0;
+  const double profile_count =
+      profile_valid ? (double)gpu_stats->profile_count : 1.0;
+  printf(",%zu,", profile_valid ? gpu_stats->profile_count : 0);
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.feed_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.command_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.encode_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.commit_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.sync_wait_ms / profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.sync_wait_prewrite_ms /
+                        profile_count);
+  printf(",");
+  print_optional_ms(profile_valid,
+                    gpu_stats->profile_sum.sync_wait_boundary_ms /
+                        profile_count);
+  printf("\n");
+}
+
+static int run_phase(const char *case_name, const char *variant,
+                     const char *phase, const StConv2dParams *params,
+                     const FloatTensor *input, const FloatTensor *weight,
+                     const FloatTensor *ref, FloatTensor **outs,
+                     size_t out_count, size_t iters, bool sync_each_iter,
+                     bool sync_at_end) {
+  if (!outs || out_count == 0) {
+    return 1;
+  }
+
+  FloatTensor *out0 = outs[0];
+  const bool out_is_metal =
+      (out0->buf && st_buffer_metal_handle(out0->buf) != NULL);
+  const char *out_buf_type = out_is_metal ? "metal" : "cpu";
+
+  StBackendCounters c0 = st_backend_get_counters();
+  GpuStats gpu_stats = {0};
+  uint64_t t0 = now_ns();
+  for (size_t i = 0; i < iters; ++i) {
+    FloatTensor *out = outs[i % out_count];
+    if (!st_conv2d_nchw(input, weight, NULL, params, out)) {
+      return 1;
+    }
+    if (sync_each_iter) {
+      st_tensor_sync(out);
+      gpu_stats_maybe_add(&gpu_stats, out);
+    } else if (i >= out_count) {
+      /* st_conv2d_nchw drains the previous pending command before enqueueing
+       * a new one when reusing the same output buffer. */
+      gpu_stats_maybe_add(&gpu_stats, out);
+    }
+  }
+  if (sync_at_end) {
+    for (size_t i = 0; i < out_count; ++i) {
+      st_tensor_sync(outs[i]);
+      gpu_stats_maybe_add(&gpu_stats, outs[i]);
+    }
+  }
+  uint64_t t1 = now_ns();
+  StBackendCounters c1 = st_backend_get_counters();
+
+  BenchCountersDelta d = counters_delta(c0, c1);
+  const long readbytes_delta = c1.conv_readbytes - c0.conv_readbytes;
+  const long fastpath_delta = c1.conv_fastpath_hit - c0.conv_fastpath_hit;
+  const long fp_exec_nil_delta =
+      c1.conv_fastpath_executable_nil - c0.conv_fastpath_executable_nil;
+  const long fp_missing_feed_delta =
+      c1.conv_fastpath_missing_feed - c0.conv_fastpath_missing_feed;
+  const long fp_preout_nil_delta =
+      c1.conv_fastpath_preout_nil - c0.conv_fastpath_preout_nil;
+  const long fp_cmd_buf_nil_delta =
+      c1.conv_fastpath_cmd_buf_nil - c0.conv_fastpath_cmd_buf_nil;
+  const long fp_encode_exc_delta =
+      c1.conv_fastpath_encode_exception - c0.conv_fastpath_encode_exception;
+
+  print_row(case_name, variant, phase, "mps", st_conv2d_last_backend(), iters,
+            elapsed_ms(t0, t1, iters), d, max_abs_diff(ref, outs[0]), out_buf_type,
+            readbytes_delta, fastpath_delta, fp_exec_nil_delta,
+            fp_missing_feed_delta, fp_preout_nil_delta, fp_cmd_buf_nil_delta,
+            fp_encode_exc_delta, &gpu_stats);
+  return 0;
+}
+
+static int run_variant(const char *case_name, const char *variant,
+                       const StConv2dParams *mps_params,
+                       const FloatTensor *input, const FloatTensor *weight,
+                       const FloatTensor *ref, FloatTensor **outs,
+                       size_t out_count, bool sync_each_iter,
+                       bool sync_at_end) {
+  if (run_phase(case_name, variant, "first_call", mps_params,
+                input, weight, ref, outs, out_count, 1,
+                sync_each_iter, sync_at_end) != 0) {
+    return 1;
+  }
+  if (run_phase(case_name, variant, "second_call", mps_params,
+                input, weight, ref, outs, out_count, 1,
+                sync_each_iter, sync_at_end) != 0) {
+    return 1;
+  }
+  if (run_phase(case_name, variant, "steady_state", mps_params,
+                input, weight, ref, outs, out_count, 20,
+                sync_each_iter, sync_at_end) != 0) {
+    return 1;
+  }
+  return 0;
+}
+
+static bool should_run_variant(const char *requested, const char *variant) {
+  return requested == NULL || strcmp(requested, "all") == 0 ||
+         strcmp(requested, variant) == 0;
+}
+
+int main(int argc, char **argv) {
+  int rc = 1;
+  const char *requested_variant = NULL;
+  const char *case_name = "conv_medium";
+  enum { OUT_RING_MAX = 4 };
+  const size_t n = 4, c_in = 32, c_out = 64, h = 56, w = 56, k = 3;
+  const size_t stride = 1, pad = 1;
+  size_t out_h = 0, out_w = 0;
+
+  if (argc > 2) {
+    fprintf(stderr,
+            "usage: %s [all|mps_zero_copy_sync|mps_true_async_boundary|"
+            "mps_true_async_boundary_ring4]\n",
+            argv[0]);
+    return 2;
+  }
+  if (argc == 2) {
+    requested_variant = argv[1];
+    if (strcmp(requested_variant, "all") != 0 &&
+        strcmp(requested_variant, "mps_zero_copy_sync") != 0 &&
+        strcmp(requested_variant, "mps_true_async_boundary") != 0 &&
+        strcmp(requested_variant, "mps_true_async_boundary_ring4") != 0) {
+      fprintf(stderr, "unknown variant: %s\n", requested_variant);
+      return 2;
+    }
+  }
+
+  StConv2dParams base = st_conv2d_default_params();
+  base.backend = ST_CONV_BACKEND_MPS;
+  base.stride_h = stride;
+  base.stride_w = stride;
+  base.pad_h = pad;
+  base.pad_w = pad;
+
+  if (!st_conv2d_output_hw(h, w, k, k, &base, &out_h, &out_w)) {
+    return 1;
+  }
+
+  FloatTensor *input = make4d(n, c_in, h, w);
+  FloatTensor *weight = make4d(c_out, c_in, k, k);
+  FloatTensor *ref = make4d(n, c_out, out_h, out_w);
+  FloatTensor *outs[OUT_RING_MAX] = {0};
+  for (size_t i = 0; i < OUT_RING_MAX; ++i) {
+    outs[i] = make4d(n, c_out, out_h, out_w);
+  }
+  if (!input || !weight || !ref || !outs[0] || !outs[1] || !outs[2] ||
+      !outs[3]) {
+    goto cleanup;
+  }
+
+  fill_rand(input, 1u);
+  fill_rand(weight, 2u);
+
+  StConv2dParams ref_params = base;
+  ref_params.backend = ST_CONV_BACKEND_GEMM;
+  if (!st_conv2d_nchw(input, weight, NULL, &ref_params, ref)) {
+    goto cleanup;
+  }
+
+  print_header();
+
+  if (should_run_variant(requested_variant, "mps_zero_copy_sync")) {
+    st_backend_reset_counters();
+    st_backend_set_conv_mps_async(true);
+    if (run_variant(case_name, "mps_zero_copy_sync", &base, input, weight,
+                    ref, outs, 1, true, true) != 0) {
+      goto cleanup;
+    }
+  }
+
+  if (should_run_variant(requested_variant, "mps_true_async_boundary")) {
+    st_backend_reset_counters();
+    st_backend_set_conv_mps_async(true);
+    if (run_variant(case_name, "mps_true_async_boundary", &base, input,
+                    weight, ref, outs, 1, false, true) != 0) {
+      goto cleanup;
+    }
+  }
+
+  if (should_run_variant(requested_variant, "mps_true_async_boundary_ring4")) {
+    st_backend_reset_counters();
+    st_backend_set_conv_mps_async(true);
+    if (run_variant(case_name, "mps_true_async_boundary_ring4", &base, input,
+                    weight, ref, outs, 4, false, true) != 0) {
+      goto cleanup;
+    }
+  }
+
+  rc = 0;
+
+cleanup:
+  st_backend_set_conv_mps_async(false);
+  for (size_t i = 0; i < OUT_RING_MAX; ++i) {
+    st_destroy(outs[i]);
+  }
+  st_destroy(ref);
+  st_destroy(weight);
+  st_destroy(input);
+  return rc;
+}
