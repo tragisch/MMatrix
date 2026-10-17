@@ -22,20 +22,39 @@ Starlark rules for installing files using Bazel.
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//lib:shell.bzl", "shell")
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 _INSTALLER_GEN_SUFFIX = "_gen"
 _TEMPLATE_TARGET = "//tools/install:installer_template"
 
-def _install_files_depset(default_info):
+def _install_files_depset(target):
+    default_info = target[DefaultInfo]
     direct = []
     transitive = []
+    if CcInfo in target:
+        cc_info = target[CcInfo]
+
+        # Umbrella libraries have no archive of their own. Include the actual
+        # link closure, including private helpers and external runtimes.
+        for linker_input in cc_info.linking_context.linker_inputs.to_list():
+            for library in linker_input.libraries:
+                archive = library.static_library or library.pic_static_library
+                if archive:
+                    direct.append(archive)
+                elif library.dynamic_library:
+                    direct.append(library.dynamic_library)
+        direct.extend([
+            header
+            for header in cc_info.compilation_context.headers.to_list()
+            if header.short_path.startswith("../")
+        ])
     if default_info.files:
         transitive.append(default_info.files)
     if default_info.default_runfiles:
         transitive.append(default_info.default_runfiles.files)
     if default_info.files_to_run and default_info.files_to_run.executable:
-        direct = [default_info.files_to_run.executable]
+        direct.append(default_info.files_to_run.executable)
     if direct or transitive:
         return depset(direct = direct, transitive = transitive)
     return None
@@ -44,26 +63,20 @@ def _gen_install_binary_impl(ctx):
     transitive_runfiles = []
     sources = []
     targets = []
+    seen = {}
     for input in ctx.attr.data:
-        input_files = _install_files_depset(input[DefaultInfo])
+        input_files = _install_files_depset(input)
         if not input_files:
             continue
         transitive_runfiles.append(input_files)
 
-        workspace = (input.label.workspace_name or ctx.workspace_name)
-        external_prefix = "external/" + workspace + "/"
-
         for file in input_files.to_list():
-            file_path = file.path
-            root_path = file.root.path + "/"
-
-            if file_path.startswith(root_path):
-                file_path = file_path[len(root_path):]
-
-            if file_path.startswith(external_prefix):
-                file_path = file_path[len(external_prefix):]
-
-            sources.append(workspace + "/" + file_path)
+            if file.path in seen:
+                continue
+            seen[file.path] = True
+            short_path = file.short_path
+            source = short_path[3:] if short_path.startswith("../") else ctx.workspace_name + "/" + short_path
+            sources.append(source)
             target = paths.join(ctx.attr.target_subdir, paths.basename(file.short_path))
             targets.append(target)
 

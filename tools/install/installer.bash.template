@@ -140,7 +140,7 @@ function create_bundle_library() {
   [[ -d "${prefix}/lib" ]] || \
     $sudo mkdir -p "${prefix}/lib"
   echo "Installing bundled static archive → ${prefix}/lib/libmatrix_full.a"
-  $sudo install -m 644 -T -- "${bundle_tmp}" "${prefix}/lib/libmatrix_full.a"
+  $sudo install -m 644 -- "${bundle_tmp}" "${prefix}/lib/libmatrix_full.a"
   rm -rf -- "${tmp_dir}"
 }
 
@@ -168,7 +168,7 @@ function install_file() {
     $sudo mkdir -p "${target_dir}"
 
   $sudo install -m "${target_mode}" \
-    -T -- "${source}" "${target_dir}/${target_name}"
+    -- "${source}" "${target_dir}/${target_name}"
 }
 
 function main() {

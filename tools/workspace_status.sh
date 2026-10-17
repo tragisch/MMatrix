@@ -10,7 +10,7 @@
 # Note: This script is called by Bazel. So it should not depend on
 # any external tools.
 echo "CURRENT_TIME $(date +%s)"
-echo "STABLE_GIT_COMMIT $(git rev-parse HEAD)"
+echo "STABLE_GIT_COMMIT $(git rev-parse HEAD 2>/dev/null || echo 'unknown')"
 echo "STABLE_USER_NAME $USER"
 echo "STABLE_HOST_NAME $(hostname)"
 echo "STABLE_REPOSITORY_STATUS $(git describe --tags --dirty 2>/dev/null || echo 'unknown')"

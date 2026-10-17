@@ -135,10 +135,7 @@ build:openmp_only --define=MATRIX_BACKEND=openmp
 # macOS defaults: OpenMP + Accelerate. MPS stays available as an optional
 # runtime backend via sm_set_backend(SM_BACKEND_MPS).
 build:macos --config=accelerate
-build:macos --repo_env=SUITESPARSE_ROOT=/opt/homebrew/opt/suite-sparse
 
 # Linux defaults: OpenMP + OpenBLAS.
 build:linux --config=openblas
-build:linux --repo_env=OPENBLAS_ROOT=/home/linuxbrew/.linuxbrew/opt/openblas
-build:linux --repo_env=SUITESPARSE_ROOT=/home/linuxbrew/.linuxbrew/opt/suite-sparse
 

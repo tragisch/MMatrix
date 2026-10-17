@@ -2,23 +2,49 @@ name: BUILD
 
 on:
   push:
-    branches:
-      - master
+    branches: [master, "codex/release-*"]
   pull_request:
-    branches:
-      - master
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-    test:
-     # virtual environments: https://github.com/actions/virtual-environments
-      runs-on: macos-latest
-
-      steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-  
-      - name: Test the code (unit tests)
-        run: bazel test //tests/...
-
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v3
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "2"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: bazel-contrib/setup-bazel@0.19.1
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+      - name: Prepare system OpenBLAS and LAPACKE
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libopenblas-pthread-dev liblapacke-dev gfortran ruby
+          prefix="$RUNNER_TEMP/mmatrix-openblas"
+          multiarch="$(gcc -print-multiarch)"
+          mkdir -p "$prefix/include" "$prefix/lib"
+          for header in /usr/include/"$multiarch"/openblas-pthread/*.h /usr/include/lapack*.h; do
+            ln -s "$header" "$prefix/include/$(basename "$header")"
+          done
+          ln -s /usr/lib/"$multiarch"/openblas-pthread/libopenblas.a "$prefix/lib/libopenblas.a"
+          ln -s /usr/lib/"$multiarch"/liblapacke.a "$prefix/lib/liblapacke.a"
+          echo "OPENBLAS_ROOT=$prefix" >> "$GITHUB_ENV"
+      - name: Build and test all published targets
+        run: bazel test //... --test_output=errors --color=no --curses=no
+      - name: Verify installed libraries
+        shell: bash
+        run: bash tools/ci/test_install.sh

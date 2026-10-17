@@ -35,7 +35,7 @@ cat >"${DOXYFILE}" <<EOF
 PROJECT_NAME           = "MMatrix Matrix API"
 OUTPUT_DIRECTORY       = ${TMP_DIR}/out
 INPUT                  = ${INCLUDE_DIR}
-FILE_PATTERNS          = dm.h sm.h dms.h m_io.h m_convert.h
+FILE_PATTERNS          = dm.h sm.h sm_mps.h dms.h m_io.h m_convert.h
 RECURSIVE              = NO
 EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO

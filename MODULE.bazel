@@ -13,7 +13,7 @@ For more details, please check https://github.com/bazelbuild/bazel/issues/18958
 
 module(
     name = "mmatrix",
-    version = "0.1.0",
+    version = "0.4.0",
 )
 
 ######################################################################
@@ -22,10 +22,9 @@ module(
 
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "zlib", version = "1.3.1.bcr.5")
-bazel_dep(name = "apple_support", version = "1.24.2")
+bazel_dep(name = "apple_support", version = "2.5.2")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "rules_shell", version = "0.6.1")
-bazel_dep(name = "google_benchmark", version = "1.9.2")
 bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "rules_docs", version = "0.3.0")
@@ -91,25 +90,7 @@ bazel_dep(name = "wolfd_bazel_compile_commands", version = "0.5.2", dev_dependen
 
 host_local_library = use_repo_rule("//tools:host_local_library.bzl", "host_local_library")
 
-#############################
-# Hombrew Local Libraries (MacOS)
-#############################
-
-# define new_local_repository rule for local installed non-Bazel libraries:
-new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
-
-# due to license issues in private lib folder.
-new_local_repository(
-    name = "hdf5",
-    path = "third_party/hdf5",
-)
-
-new_local_repository(
-    name = "log",
-    build_file = "@//:third_party/log.c/log.c.BUILD",
-    path = "third_party/log.c",
-)
-
+# System OpenBLAS (only fetched when the OpenBLAS backend is selected).
 # openblas is an optimized BLAS library based on GotoBLAS2 1.13 BSD version.
 host_local_library(
     name = "openblas",
@@ -117,19 +98,6 @@ host_local_library(
     env_var = "OPENBLAS_ROOT",
     linux_path = "/home/linuxbrew/.linuxbrew/opt/openblas",
     macos_path = "/opt/homebrew/opt/openblas",
-    required_subdirs = [
-        "include",
-        "lib",
-    ],
-)
-
-# Optional Homebrew SuiteSparse wrapper for the GraphBLAS benchmark only.
-host_local_library(
-    name = "suitesparse_graphblas_host",
-    build_file = "@//:third_party/suitesparse.BUILD",
-    env_var = "SUITESPARSE_ROOT",
-    linux_path = "/home/linuxbrew/.linuxbrew/opt/suite-sparse",
-    macos_path = "/opt/homebrew/opt/suite-sparse",
     required_subdirs = [
         "include",
         "lib",

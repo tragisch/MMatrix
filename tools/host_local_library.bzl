@@ -50,9 +50,7 @@ host_local_library = repository_rule(
     implementation = _host_local_library_impl,
     local = True,
     environ = [
-        "LIBOMP_ROOT",
         "OPENBLAS_ROOT",
-        "SUITESPARSE_ROOT",
     ],
     attrs = {
         "build_file": attr.label(mandatory = True, allow_single_file = True),

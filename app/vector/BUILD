@@ -130,7 +130,7 @@ accelerate_linkopts = select({
 openblas_linkopts = []
 
 default_deps = [
-    "@log",
+    "//third_party/log.c:log",
     "@openmp//:libomp",
 ]
 

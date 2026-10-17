@@ -4,24 +4,22 @@ load("@mkdocs//:defs.bzl", "mkdocs_build", "mkdocs_config", "mkdocs_serve")
 load("@rules_docs//docgen:defs.bzl", "docs")
 load("//tools/install:def.bzl", "installer")
 
-exports_files(["compile_commands.json"])
-
 installer(
     name = "matrix_installer",
     data = [
-        "//:LICENSE.txt",  # if available
-        "//app/matrix",  # the target to be installed
-        "//app/matrix:matrix_header",  # must be collected in a filegroup
+        "//:LICENSE.txt",
+        "//app/matrix",
+        "//app/matrix:matrix_header",
         "//app/vector",
         "//app/vector:vector_header",
-        "@log",
-        "@matio",
-        "@openblas//:install_files",
-        "@openmp//:libomp",
-        "@pcg",
-        "@suitesparse//:install_files",
-        "@zlib",
-    ],
+    ] + select({
+        "//app/matrix:macos": [
+            "//app/matrix:sm_mps",
+            "//app/tensor:st",
+            "//app/tensor:tensor_header",
+        ],
+        "//conditions:default": [],
+    }),
     system_integration = False,  # set "True" symlink to /usr/local/lib and /usr/local/include
 )
 
@@ -43,6 +41,7 @@ alias(
 docs(
     name = "docs_src",
     srcs = glob(["doc/**/*.md"]) + [
+        "CHANGELOG.md",
         "//doc/examples:tensor_basic.md",
     ],
     readme_content = "MMatrix Dokumentation.",

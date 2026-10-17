@@ -189,7 +189,7 @@ Parameters:
 
 ### `st_conv2d_last_backend`
 
-`constchar* st_conv2d_last_backend(void)`
+`const char * st_conv2d_last_backend(void)`
 
 Return backend label used by the latest st_conv2d_nchw call.
 

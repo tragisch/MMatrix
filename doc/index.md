@@ -9,12 +9,17 @@ This documentation is fully located under `doc/`.
 - [Convolution](api/tensor/st_conv.md)
 - [Pooling](api/tensor/st_pool.md)
 - [Shape Ops](api/tensor/st_shape_ops.md)
+- [Graph interpreter kernels](api/tensor/st_interp.md)
+- [IEEE binary16 conversions](api/tensor/st_f16.md)
+- [Tensor/matrix conversions](api/tensor/st_convert.md)
+- [Tensor/vector bridge](api/tensor/st_vector_bridge.md)
 - [NN Kernel Migration Map](nm_lib_kernels.md)
 
 ## Matrix API
 
 - [Dense Double (dm)](api/matrix/dm.md)
 - [Dense Float (sm)](api/matrix/sm.md)
+- [GPU-resident Float (sm_mps)](api/matrix/sm_mps.md)
 - [Sparse Double (dms)](api/matrix/dms.md)
 - [I/O (m_io)](api/matrix/m_io.md)
 - [Conversion (m_convert)](api/matrix/m_convert.md)

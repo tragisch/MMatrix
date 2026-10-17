@@ -79,7 +79,7 @@ mps_linkopts = [
 
 default_deps = [
     "@openmp//:libomp",
-    "@log",
+    "//third_party/log.c:log",
 ]
 
 clang_doc_target(
@@ -281,6 +281,12 @@ cc_library(
         ":st_ops_nn",
         ":st_runtime",
     ],
+)
+
+filegroup(
+    name = "tensor_header",
+    srcs = glob(["include/*.h"]),
+    visibility = ["//visibility:public"],
 )
 
 cc_library(

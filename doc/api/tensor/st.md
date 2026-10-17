@@ -268,7 +268,7 @@ Parameters:
 
 ### `st_tensor_shape`
 
-`constsize_t* st_tensor_shape(const FloatTensor *tensor)`
+`const size_t * st_tensor_shape(const FloatTensor *tensor)`
 
 Return shape pointer, or NULL for NULL tensor.
 
@@ -298,7 +298,7 @@ Parameters:
 
 ### `st_tensor_data`
 
-`constfloat* st_tensor_data(const FloatTensor *tensor)`
+`const float * st_tensor_data(const FloatTensor *tensor)`
 
 Return raw const data pointer.
 
@@ -308,7 +308,7 @@ Parameters:
 
 ### `st_tensor_mutable_data`
 
-`float* st_tensor_mutable_data(FloatTensor *tensor)`
+`float * st_tensor_mutable_data(FloatTensor *tensor)`
 
 Return raw mutable data pointer.
 
@@ -392,17 +392,99 @@ Parameters:
 - `activation` (`const FloatTensor *`)
 - `grad` (`FloatTensor *`)
 
-### Tensor activation kernels
+### `st_apply_sigmoid`
 
-`st_apply_sigmoid`, `st_apply_tanh`, `st_apply_gelu_tanh`,
-`st_apply_gelu_erf`, and `st_apply_softmax` update a contiguous tensor in place.
-Softmax is applied over the last axis. These operations promote BF16 tensors to
-F32 for computation and convert results back to BF16.
+`bool st_apply_sigmoid(FloatTensor *t)`
 
-The corresponding `st_apply_*_backward` functions update a contiguous gradient
-in place. Sigmoid and tanh backward consume the activation output; GELU
-backward consumes the original input. Functions return `false` for invalid,
-non-contiguous, or shape-incompatible tensors.
+Apply sigmoid in-place to every tensor element.
+
+Parameters:
+
+- `t` (`FloatTensor *`)
+
+### `st_apply_tanh`
+
+`bool st_apply_tanh(FloatTensor *t)`
+
+Apply hyperbolic tangent in-place to every tensor element.
+
+Parameters:
+
+- `t` (`FloatTensor *`)
+
+### `st_apply_gelu_tanh`
+
+`bool st_apply_gelu_tanh(FloatTensor *t)`
+
+Apply tanh-approximation GELU in-place.
+
+Parameters:
+
+- `t` (`FloatTensor *`)
+
+### `st_apply_gelu_erf`
+
+`bool st_apply_gelu_erf(FloatTensor *t)`
+
+Apply erf-form GELU in-place.
+
+Parameters:
+
+- `t` (`FloatTensor *`)
+
+### `st_apply_softmax`
+
+`bool st_apply_softmax(FloatTensor *t)`
+
+Apply softmax independently over the last tensor axis.
+
+Parameters:
+
+- `t` (`FloatTensor *`)
+
+### `st_apply_sigmoid_backward`
+
+`bool st_apply_sigmoid_backward(const FloatTensor *activation, FloatTensor *grad)`
+
+Multiply grad in-place by the sigmoid derivative at activation.
+
+Parameters:
+
+- `activation` (`const FloatTensor *`)
+- `grad` (`FloatTensor *`)
+
+### `st_apply_tanh_backward`
+
+`bool st_apply_tanh_backward(const FloatTensor *activation, FloatTensor *grad)`
+
+Multiply grad in-place by the tanh derivative at activation.
+
+Parameters:
+
+- `activation` (`const FloatTensor *`)
+- `grad` (`FloatTensor *`)
+
+### `st_apply_gelu_tanh_backward`
+
+`bool st_apply_gelu_tanh_backward(const FloatTensor *input, FloatTensor *grad)`
+
+Multiply grad in-place by the tanh-GELU derivative at input.
+
+Parameters:
+
+- `input` (`const FloatTensor *`)
+- `grad` (`FloatTensor *`)
+
+### `st_apply_gelu_erf_backward`
+
+`bool st_apply_gelu_erf_backward(const FloatTensor *input, FloatTensor *grad)`
+
+Multiply grad in-place by the erf-GELU derivative at input.
+
+Parameters:
+
+- `input` (`const FloatTensor *`)
+- `grad` (`FloatTensor *`)
 
 ### `st_sum_axes`
 

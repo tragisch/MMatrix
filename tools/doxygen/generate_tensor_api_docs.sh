@@ -35,7 +35,7 @@ cat >"${DOXYFILE}" <<EOF
 PROJECT_NAME           = "MMatrix Tensor API"
 OUTPUT_DIRECTORY       = ${TMP_DIR}/out
 INPUT                  = ${INCLUDE_DIR}
-FILE_PATTERNS          = st.h st_batchnorm.h st_conv.h st_pool.h st_shape_ops.h
+FILE_PATTERNS          = st.h st_batchnorm.h st_conv.h st_pool.h st_shape_ops.h st_convert.h st_f16.h st_interp.h st_vector_bridge.h
 RECURSIVE              = NO
 EXTRACT_ALL            = YES
 EXTRACT_PRIVATE        = NO

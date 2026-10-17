@@ -24,11 +24,23 @@ Values:
 - `SM_NO_TRANSPOSE`
 - `SM_TRANSPOSE`
 
+### `SmActivation`
+
+Activation applied by fused matrix kernels.
+
+Values:
+
+- `SM_ACT_NONE`
+- `SM_ACT_RELU`
+- `SM_ACT_SIGMOID`
+- `SM_ACT_TANH`
+
 ### Typedefs
 
 - `enum SmBackend` — Available compute backends (runtime selection).
 - `struct FloatMatrix FloatMatrix` — Dense float matrix with row-major storage: values[i * cols + j].
 - `enum SmTranspose` — Transpose mode for BLAS-style operations.
+- `enum SmActivation` — Activation applied by fused matrix kernels.
 
 ## Functions
 
@@ -490,24 +502,120 @@ Parameters:
 
 Returns: Solution vector x, or NULL on allocation/singularity error.
 
-### In-place activation kernels
+### `sm_apply_relu`
 
-`sm_apply_relu`, `sm_apply_sigmoid`, `sm_apply_tanh`, `sm_apply_gelu_tanh`,
-`sm_apply_gelu_erf`, and `sm_apply_softmax` update a matrix in place. Softmax
-is applied independently to each row and subtracts the row maximum before
-exponentiation.
+`bool sm_apply_relu(FloatMatrix *mat)`
 
-The backward kernels `sm_apply_relu_backward`, `sm_apply_sigmoid_backward`,
-`sm_apply_tanh_backward`, `sm_apply_gelu_tanh_backward`, and
-`sm_apply_gelu_erf_backward` multiply the supplied gradient in place. Sigmoid
-and tanh backward consume the activation output; GELU backward consumes the
-original input.
+Apply ReLU in-place to every matrix element.
 
-These functions return `false` for null storage or incompatible shapes.
-Accelerate builds use vForce for vector transcendental operations; the
-OpenMP/scalar fallback uses the corresponding C math functions. The two GELU
-forms are explicitly named: `*_gelu_tanh` is the tanh approximation, while
-`*_gelu_erf` uses the erf definition.
+Parameters:
+
+- `mat` (`FloatMatrix *`)
+
+### `sm_apply_sigmoid`
+
+`bool sm_apply_sigmoid(FloatMatrix *mat)`
+
+Apply sigmoid in-place to every matrix element.
+
+Parameters:
+
+- `mat` (`FloatMatrix *`)
+
+### `sm_apply_tanh`
+
+`bool sm_apply_tanh(FloatMatrix *mat)`
+
+Apply hyperbolic tangent in-place to every matrix element.
+
+Parameters:
+
+- `mat` (`FloatMatrix *`)
+
+### `sm_apply_gelu_tanh`
+
+`bool sm_apply_gelu_tanh(FloatMatrix *mat)`
+
+Apply tanh-approximation GELU in-place.
+
+Parameters:
+
+- `mat` (`FloatMatrix *`)
+
+### `sm_apply_gelu_erf`
+
+`bool sm_apply_gelu_erf(FloatMatrix *mat)`
+
+Apply erf-form GELU in-place.
+
+Parameters:
+
+- `mat` (`FloatMatrix *`)
+
+### `sm_apply_softmax`
+
+`bool sm_apply_softmax(FloatMatrix *mat)`
+
+Apply numerically stable softmax independently to each row.
+
+Parameters:
+
+- `mat` (`FloatMatrix *`)
+
+### `sm_apply_relu_backward`
+
+`bool sm_apply_relu_backward(const FloatMatrix *activation, FloatMatrix *grad)`
+
+Multiply grad in-place by the ReLU mask at activation.
+
+Parameters:
+
+- `activation` (`const FloatMatrix *`)
+- `grad` (`FloatMatrix *`)
+
+### `sm_apply_sigmoid_backward`
+
+`bool sm_apply_sigmoid_backward(const FloatMatrix *activation, FloatMatrix *grad)`
+
+Multiply grad in-place by the sigmoid derivative at activation.
+
+Parameters:
+
+- `activation` (`const FloatMatrix *`)
+- `grad` (`FloatMatrix *`)
+
+### `sm_apply_tanh_backward`
+
+`bool sm_apply_tanh_backward(const FloatMatrix *activation, FloatMatrix *grad)`
+
+Multiply grad in-place by the tanh derivative at activation.
+
+Parameters:
+
+- `activation` (`const FloatMatrix *`)
+- `grad` (`FloatMatrix *`)
+
+### `sm_apply_gelu_tanh_backward`
+
+`bool sm_apply_gelu_tanh_backward(const FloatMatrix *input, FloatMatrix *grad)`
+
+Multiply grad in-place by the tanh-GELU derivative at input.
+
+Parameters:
+
+- `input` (`const FloatMatrix *`)
+- `grad` (`FloatMatrix *`)
+
+### `sm_apply_gelu_erf_backward`
+
+`bool sm_apply_gelu_erf_backward(const FloatMatrix *input, FloatMatrix *grad)`
+
+Multiply grad in-place by the erf-GELU derivative at input.
+
+Parameters:
+
+- `input` (`const FloatMatrix *`)
+- `grad` (`FloatMatrix *`)
 
 ### `sm_gemm`
 
@@ -531,17 +639,17 @@ Returns: true on success, false on shape mismatch or allocation failure.
 
 `bool sm_gemm_bias_act(FloatMatrix *C, const FloatMatrix *A, SmTranspose trans_a, const FloatMatrix *B, SmTranspose trans_b, const FloatMatrix *bias, SmActivation activation)`
 
-Fused GEMM + optional bias + ReLU, sigmoid, or tanh activation.
+Fused GEMM + optional row bias + activation.
 
 Parameters:
 
-- `C` (`FloatMatrix *`): Output matrix with shape `M x N`.
+- `C` (`FloatMatrix *`): Output matrix, shape M x N.
 - `A` (`const FloatMatrix *`): Left input matrix.
 - `trans_a` (`SmTranspose`): Transpose mode for A.
 - `B` (`const FloatMatrix *`): Right input matrix.
 - `trans_b` (`SmTranspose`): Transpose mode for B.
-- `bias` (`const FloatMatrix *`): Bias with shape `1 x N`, `M x N`, or NULL.
-- `activation` (`SmActivation`): Activation applied after GEMM and bias.
+- `bias` (`const FloatMatrix *`): Bias row (1 x N), per-element bias (M x N), or NULL.
+- `activation` (`SmActivation`): Activation to apply after bias.
 
 Returns: true on success, false on invalid input or incompatible shapes.
 
@@ -566,49 +674,78 @@ Returns: true on success, false on shape/allocation error.
 
 `bool sm_add_rowwise(FloatMatrix *mat, const FloatMatrix *row)`
 
-Add the `1 x cols` row to every row of `mat` in place. If `row` aliases the
-matrix storage, its values are snapshotted before the update.
+Add a 1 x cols row to every row of a matrix in place.
 
-Returns: true on success, false on null storage or shape mismatch.
+Parameters:
+
+- `mat` (`FloatMatrix *`)
+- `row` (`const FloatMatrix *`)
+
+Returns: true on success, false on null input or shape mismatch.
 
 ### `sm_sum_rows`
 
-`FloatMatrix *sm_sum_rows(const FloatMatrix *mat)`
+`sm_sum_rows(const FloatMatrix *mat)`
 
-Sum each column in fixed row order and return the result as a `1 x cols`
-matrix. Columns may be processed in parallel without changing their
-accumulation order.
+Sum matrix rows in fixed row order.
 
-Returns: New row-sum matrix, or NULL on invalid input/allocation failure.
+Parameters:
+
+- `mat` (`const FloatMatrix *`)
+
+Returns: New 1 x cols matrix, or NULL on invalid input/allocation failure.
 
 ### `sm_argmax_rows`
 
-`FloatMatrix *sm_argmax_rows(const FloatMatrix *mat)`
+`sm_argmax_rows(const FloatMatrix *mat)`
 
-Return each row's first maximal column index in a `rows x 1` float matrix.
+Return the first maximal column index for every row as float values.
 
-Returns: New index matrix, or NULL on invalid input/allocation failure.
+Parameters:
+
+- `mat` (`const FloatMatrix *`)
+
+Returns: New rows x 1 matrix, or NULL on invalid input/allocation failure.
 
 ### `sm_softmax_ce_grad`
 
 `bool sm_softmax_ce_grad(const FloatMatrix *predicted, const FloatMatrix *target, FloatMatrix *grad)`
 
-Write `predicted - target` to `grad` in place.
+In-place softmax-cross-entropy gradient predicted - target.
 
-Returns: true on success, false on shape mismatch.
+Parameters:
 
-### Losses
+- `predicted` (`const FloatMatrix *`)
+- `target` (`const FloatMatrix *`)
+- `grad` (`FloatMatrix *`)
+
+Returns: true on success, false on null input or shape mismatch.
+
+### `sm_loss_mse`
 
 `float sm_loss_mse(const FloatMatrix *predicted, const FloatMatrix *target)`
 
-Return mean squared error over all elements.
+Mean squared error, matching nm_lib reduction semantics.
+
+Parameters:
+
+- `predicted` (`const FloatMatrix *`)
+- `target` (`const FloatMatrix *`)
+
+Returns: Loss value, or -1.0f for invalid/empty inputs.
+
+### `sm_loss_cross_entropy`
 
 `float sm_loss_cross_entropy(const FloatMatrix *predicted, const FloatMatrix *target)`
 
-Return cross entropy summed over elements and averaged by the number of rows;
-probabilities are clamped below at `1e-7`, matching nm_lib.
+Cross-entropy loss, averaged over rows and clamped at 1e-7.
 
-Both return `-1.0f` for invalid inputs.
+Parameters:
+
+- `predicted` (`const FloatMatrix *`)
+- `target` (`const FloatMatrix *`)
+
+Returns: Loss value, or -1.0f for invalid inputs.
 
 ### `sm_inplace_add`
 

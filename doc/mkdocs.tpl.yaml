@@ -10,6 +10,7 @@ nav:
       - Matrix:
         - Dense Double (dm): doc/api/matrix/dm.md
         - Dense Float (sm): doc/api/matrix/sm.md
+        - GPU-resident Float (sm_mps): doc/api/matrix/sm_mps.md
         - Sparse Double (dms): doc/api/matrix/dms.md
         - I/O (m_io): doc/api/matrix/m_io.md
         - Conversion (m_convert): doc/api/matrix/m_convert.md
@@ -19,6 +20,10 @@ nav:
       - Convolution: doc/api/tensor/st_conv.md
       - Pooling: doc/api/tensor/st_pool.md
       - Shape Ops: doc/api/tensor/st_shape_ops.md
+      - Interpreter kernels: doc/api/tensor/st_interp.md
+      - IEEE binary16 conversions: doc/api/tensor/st_f16.md
+      - Tensor/matrix conversions: doc/api/tensor/st_convert.md
+      - Tensor/vector bridge: doc/api/tensor/st_vector_bridge.md
       - nm_lib kernel migration: doc/nm_lib_kernels.md
   - Examples:
       - Tensor NN forward pass: doc/examples/tensor_basic.md

@@ -15,6 +15,10 @@ PROFILE_CONFIG = {
             "st_conv.h": "st_conv.md",
             "st_pool.h": "st_pool.md",
             "st_shape_ops.h": "st_shape_ops.md",
+            "st_convert.h": "st_convert.md",
+            "st_f16.h": "st_f16.md",
+            "st_interp.h": "st_interp.md",
+            "st_vector_bridge.h": "st_vector_bridge.md",
         },
         "title_map": {
             "st.h": "Public Core Tensor API",
@@ -22,12 +26,17 @@ PROFILE_CONFIG = {
             "st_conv.h": "Convolution API",
             "st_pool.h": "Pooling API",
             "st_shape_ops.h": "Shape/View Operations API",
+            "st_convert.h": "Tensor/Matrix Conversion API",
+            "st_f16.h": "IEEE Binary16 Conversion API",
+            "st_interp.h": "Graph Interpreter Kernel API",
+            "st_vector_bridge.h": "Tensor/Vector Bridge API",
         },
     },
     "matrix": {
         "file_map": {
             "dm.h": "dm.md",
             "sm.h": "sm.md",
+            "sm_mps.h": "sm_mps.md",
             "dms.h": "dms.md",
             "m_io.h": "m_io.md",
             "m_convert.h": "m_convert.md",
@@ -35,9 +44,10 @@ PROFILE_CONFIG = {
         "title_map": {
             "dm.h": "Dense Double Matrix API",
             "sm.h": "Dense Float Matrix API",
+            "sm_mps.h": "GPU-resident Float Matrix API",
             "dms.h": "Sparse Double Matrix API",
             "m_io.h": "Matrix I/O API",
-            "m_convert.h": "Matrix/Tensor Conversion API",
+            "m_convert.h": "Dense/Sparse Matrix Conversion API",
         },
     },
 }

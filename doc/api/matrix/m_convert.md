@@ -1,6 +1,6 @@
-# `m_convert.h` – Matrix/Tensor Conversion API
+# `m_convert.h` – Dense/Sparse Matrix Conversion API
 
-Public conversion API between dense/sparse matrix and tensor types.
+Public conversion API between dense and sparse matrix types.
 
 ## Functions
 
@@ -51,27 +51,3 @@ Parameters:
 - `src` (`const DoubleMatrix *`): Source double matrix.
 
 Returns: Dense float matrix with precision-reduced values, or NULL on allocation failure.
-
-### `st_from_sm`
-
-`FloatTensor * st_from_sm(const FloatMatrix *src)`
-
-Convert dense float matrix to float tensor.
-
-Parameters:
-
-- `src` (`const FloatMatrix *`): Source float matrix (shape: rows x cols interpreted as batch 1, rows, cols, 1).
-
-Returns: Float tensor with matrix reshaped, or NULL on allocation failure.
-
-### `sm_from_st`
-
-`sm_from_st(const FloatTensor *src)`
-
-Convert float tensor to dense float matrix.
-
-Parameters:
-
-- `src` (`const FloatTensor *`): Source float tensor (extracted as 2D: flatten/reshape to rows x cols).
-
-Returns: Dense float matrix, or NULL on allocation failure or invalid tensor shape.

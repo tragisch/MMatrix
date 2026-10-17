@@ -79,10 +79,7 @@ Temporary Items
 /bazel-*
 /bazel.iml
 /output/
-.bazelversion
-.bazelignore
 user.bazelrc
-MODULE.bazel.lock
 
 #-------------------------------------------------------------------------------
 # Temporary files
@@ -108,6 +105,7 @@ MODULE.bazel.lock
 /share/simple_benchmark/*
 !/share/simple_benchmark/BUILD
 !/share/simple_benchmark/bench_sm_mps.c
+!/share/simple_benchmark/simple_bench.h
 /lib/*
 /_archive/*
 /archive/*
@@ -129,15 +127,12 @@ MODULE.bazel.lock
 /third_party/cblas
 
 #-------------------------------------------------------------------------------
-*.in
 .clang-tidy
-.clangd
 .envrc
 compile_commands.json
 *.png
 StyleGuide.md
 
-MODULE.bazel.lock
 profile.gz
 
 /.venv-bench/
@@ -145,3 +140,8 @@ profile.gz
 TENSOR_ARCHITECTURE_ANALYSIS.md
 TENSOR_PATTERNS_QUICK_REF.md
 app/tensor/docs/mps-performance.md
+
+# Generated benchmark and documentation output
+*.profraw
+*.profdata
+/site/

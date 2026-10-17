@@ -249,7 +249,7 @@ void test_st_binary_broadcast_rejects_bad_input(void) {
 
 void test_st_binary_broadcast_thread_count_bit_identical(void) {
   /* Above the OpenMP threshold the row split must not change any bit. */
-  const size_t shape_a[3] = {32, 129, 64};  /* 264k elements, odd middle */
+  const size_t shape_a[3] = {32, 1025, 64};  /* > 2M elements, odd middle */
   const size_t shape_b[3] = {32, 1, 64};
   FloatTensor *a = make_tensor(3, shape_a);
   FloatTensor *b = make_tensor(3, shape_b);
@@ -807,7 +807,7 @@ void test_st_reduce_max_rejects_bad_input(void) {
 void test_st_reduce_max_thread_count_bit_identical(void) {
   /* Above the parallel threshold; slots are independent so results must be
    * bit-identical across thread counts. */
-  const size_t shape[4] = {2, 4, 129, 128};  /* 264k input, 2064 slots */
+  const size_t shape[4] = {2, 4, 1025, 128};  /* > 1M input, 8200 slots */
   FloatTensor *x = make_tensor(4, shape);
   omp_set_num_threads(1);
   FloatTensor *one = st_reduce_max(x, 0x8, false);
@@ -1031,11 +1031,12 @@ void test_st_matmul_batched_thread_count_within_tolerance(void) {
   /* MatMul is the one interpreter kernel that is NOT bit-identical across
    * thread counts: the BLAS backend's accumulation order may differ, so
    * the comparison uses the documented 1e-4 relative tolerance instead. */
-  const size_t a_shape[4] = {2, 4, 65, 32};
+  /* Eight batches, each below the 262144-work parallel GEMM ceiling. */
+  const size_t a_shape[4] = {2, 4, 63, 32};
   const size_t b_shape[4] = {2, 4, 32, 129};
   FloatTensor *a = make_tensor(4, a_shape);
   FloatTensor *b = make_tensor(4, b_shape);
-  const size_t c_shape[4] = {2, 4, 65, 129};
+  const size_t c_shape[4] = {2, 4, 63, 129};
   FloatTensor *one = st_create(4, c_shape);
   FloatTensor *eight = st_create(4, c_shape);
   TEST_ASSERT_NOT_NULL(one);
@@ -1413,6 +1414,65 @@ void test_st_permute_copy_into_bytes_handles_i64(void) {
   }
   TEST_ASSERT_FALSE(st_permute_copy_into_bytes(src, 3, shape,
                                                (size_t[3]){0, 0, 1}, 8, out));
+}
+
+void test_st_copy_bytes_rejects_overflow_without_writing(void) {
+  const uint8_t src[4] = {1, 2, 3, 4};
+  uint8_t out[4] = {9, 9, 9, 9};
+  const uint8_t expected[4] = {9, 9, 9, 9};
+  const int64_t index = 0;
+  const size_t gather_shape[3] = {2, SIZE_MAX / 2 + 1, 2};
+  TEST_ASSERT_FALSE(st_gather_bytes(src, 3, gather_shape, &index, 1, 0, 1, out));
+  TEST_ASSERT_FALSE(st_gather_bytes(src, 2, (size_t[2]){2, 2}, &index,
+                                    SIZE_MAX / 2 + 1, 1, 1, out));
+  TEST_ASSERT_FALSE(st_gather_bytes(src, 1, (size_t[1]){2}, &index, 1, 0,
+                                    SIZE_MAX, out));
+  const size_t shape[2] = {SIZE_MAX / 2 + 1, 2};
+  const size_t perm[2] = {0, 1};
+  TEST_ASSERT_FALSE(st_permute_copy_into_bytes(src, 2, shape, perm, 1, out));
+  TEST_ASSERT_FALSE(st_permute_copy_into_bytes(
+      src, 1, (size_t[1]){2}, (size_t[1]){0}, SIZE_MAX / 2 + 1, out));
+  TEST_ASSERT_EQUAL_MEMORY(expected, out, sizeof(out));
+}
+
+void test_st_permute_copy_into_rejects_out_of_range_axis(void) {
+  FloatTensor *src = make_tensor(2, (size_t[2]){2, 3});
+  FloatTensor *out = make_tensor(2, (size_t[2]){3, 2});
+  float before[6];
+  memcpy(before, out->values, sizeof(before));
+  TEST_ASSERT_FALSE(st_permute_copy_into(src, (size_t[2]){SIZE_MAX, 0}, out));
+  TEST_ASSERT_FALSE(st_permute_copy_into(src, (size_t[2]){0, 0}, out));
+  TEST_ASSERT_EQUAL_MEMORY(before, out->values, sizeof(before));
+  st_destroy(out);
+  st_destroy(src);
+}
+
+void test_st_permute_copy_bytes_preserves_unaligned_payloads(void) {
+  const uint32_t bits[6] = {0x7fc12345u, 0x80000000u, 0xffffffffu,
+                           0x12345678u, 0u, 0x7f800001u};
+  uint8_t src[sizeof(bits) + 1];
+  uint8_t out[sizeof(bits) + 1];
+  memcpy(src + 1, bits, sizeof(bits));
+  TEST_ASSERT_TRUE(st_permute_copy_into_bytes(
+      src + 1, 2, (size_t[2]){2, 3}, (size_t[2]){1, 0}, 4, out + 1));
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      TEST_ASSERT_EQUAL_MEMORY(bits + j * 3 + i, out + 1 + (i * 2 + j) * 4, 4);
+    }
+  }
+  const uint64_t wide[6] = {0, UINT64_MAX, UINT64_C(0x7ff0000000000001),
+                            UINT64_C(0x8000000000000000), 123, 456};
+  uint8_t src_wide[sizeof(wide) + 1];
+  uint8_t out_wide[sizeof(wide) + 1];
+  memcpy(src_wide + 1, wide, sizeof(wide));
+  TEST_ASSERT_TRUE(st_permute_copy_into_bytes(
+      src_wide + 1, 2, (size_t[2]){2, 3}, (size_t[2]){1, 0}, 8, out_wide + 1));
+  for (size_t i = 0; i < 3; ++i) {
+    for (size_t j = 0; j < 2; ++j) {
+      TEST_ASSERT_EQUAL_MEMORY(wide + j * 3 + i,
+                               out_wide + 1 + (i * 2 + j) * 8, 8);
+    }
+  }
 }
 
 /* ---- Aliasing policy (in-place) ------------------------------------------ */

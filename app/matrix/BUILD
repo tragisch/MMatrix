@@ -25,6 +25,7 @@ config_setting(
     constraint_values = [
         "@platforms//os:macos",
     ],
+    visibility = ["//visibility:public"],
 )
 
 config_setting(
@@ -186,7 +187,7 @@ default_deps = [
     "@matio",
     "@openmp//:libomp",
     "@pcg",
-    "@log",
+    "//third_party/log.c:log",
 ]
 
 #############################

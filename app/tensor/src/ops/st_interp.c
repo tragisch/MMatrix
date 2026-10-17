@@ -703,9 +703,6 @@ static void st_layernorm_group(const float *in, const float *scale,
     }
   }
 }
-#if defined(__clang__)
-#pragma float_control(pop)
-#endif
 
 static bool st_layernorm_f32(const float *in, const float *scale,
                              const float *bias, size_t group, size_t groups,
@@ -1364,20 +1361,32 @@ bool st_gather_bytes(const void *table, size_t table_ndim,
   size_t dim = table_shape[axis];
   size_t inner = 1;
   for (size_t i = 0; i < table_ndim; ++i) {
-    if (table_shape[i] == 0) {
+    if (table_shape[i] == 0 || table_shape[i] > INT64_MAX) {
       ST_LOG_ERROR("st_gather_bytes: invalid shape.");
       return false;
     }
     if (i < axis) {
+      if (outer > SIZE_MAX / table_shape[i]) {
+        return false;
+      }
       outer *= table_shape[i];
     } else if (i > axis) {
+      if (inner > SIZE_MAX / table_shape[i]) {
+        return false;
+      }
       inner *= table_shape[i];
     }
   }
+  if (inner > SIZE_MAX / elem_bytes) {
+    return false;
+  }
   const size_t bytes = inner * elem_bytes;
+  if (dim > SIZE_MAX / bytes || count > SIZE_MAX / bytes) {
+    return false;
+  }
   const size_t row_bytes = dim * bytes;
   const size_t total = count * bytes;
-  if (row_bytes > SIZE_MAX / outer || total > SIZE_MAX / (outer * dim)) {
+  if (row_bytes > SIZE_MAX / outer || total > SIZE_MAX / outer) {
     return false;
   }
 
@@ -1460,12 +1469,15 @@ bool st_permute_copy_into_bytes(const void *src, size_t ndim,
   size_t in_stride[ST_MAX_DIMS];
   size_t running = 1;
   for (size_t i = ndim; i-- > 0;) {
-    if (shape[i] == 0) {
+    if (shape[i] == 0 || running > (size_t)PTRDIFF_MAX / shape[i]) {
       ST_LOG_ERROR("st_permute_copy_into_bytes: invalid shape.");
       return false;
     }
     in_stride[i] = running;
     running *= shape[i];
+  }
+  if (running > SIZE_MAX / elem_bytes) {
+    return false;
   }
   for (size_t i = 0; i < ndim; ++i) {
     if (perm[i] >= ndim || seen[perm[i]]) {
@@ -1501,16 +1513,12 @@ bool st_permute_copy_into_bytes(const void *src, size_t ndim,
     if (step == 1) {
       memcpy(dst, from, inner * elem_bytes);
     } else if (elem_bytes == 4) {
-      const float *from_f = (const float *)(const void *)from;
-      float *to_f = (float *)(void *)dst;
       for (size_t i = 0; i < inner; ++i) {
-        to_f[i] = from_f[(ptrdiff_t)i * step];
+        memcpy(dst + i * 4, from + (size_t)((ptrdiff_t)i * step) * 4, 4);
       }
     } else if (elem_bytes == 8) {
-      const int64_t *from_i = (const int64_t *)(const void *)from;
-      int64_t *to_i = (int64_t *)(void *)dst;
       for (size_t i = 0; i < inner; ++i) {
-        to_i[i] = from_i[(ptrdiff_t)i * step];
+        memcpy(dst + i * 8, from + (size_t)((ptrdiff_t)i * step) * 8, 8);
       }
     } else {
       for (size_t i = 0; i < inner; ++i) {
@@ -1534,7 +1542,13 @@ bool st_permute_copy_into(const FloatTensor *src, const size_t *perm,
     ST_LOG_ERROR("st_permute_copy_into: invalid input.");
     return false;
   }
+  bool seen[ST_MAX_DIMS] = {false};
   for (size_t i = 0; i < src->ndim; ++i) {
+    if (perm[i] >= src->ndim || seen[perm[i]]) {
+      ST_LOG_ERROR("st_permute_copy_into: perm is not a permutation.");
+      return false;
+    }
+    seen[perm[i]] = true;
     if (out->shape[i] != src->shape[perm[i]]) {
       ST_LOG_ERROR("st_permute_copy_into: output shape mismatch.");
       return false;
