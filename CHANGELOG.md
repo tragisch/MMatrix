@@ -24,6 +24,7 @@ Changes since `v0.3.1`.
 
 ### Fixed during release preparation
 
+- Produce ordinary Linux object archives rather than forcing LLVM LTO; check system-linker consumption and choose the platform archive bundler.
 - Link separately packaged LAPACKE on Linux and preserve NN-kernel NaN/thread semantics under optimized builds.
 
 - Exercise actual OpenMP branches in interpreter thread-comparison tests and remove an unmatched floating-point pragma.

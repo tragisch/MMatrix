@@ -1,5 +1,6 @@
 /* Exercise public APIs using installed headers and archives only. */
 #include <assert.h>
+#include <math.h>
 #include <stddef.h>
 #include "sm.h"
 #include "dms.h"
@@ -17,6 +18,11 @@ int main(void) {
   for (size_t i = 0; i < 4; ++i) a->values[i] = (float)(i + 1);
   FloatMatrix *product = sm_multiply(a, a);
   assert(product && product->values[0] == 7.0f && product->values[3] == 22.0f);
+  FloatMatrix *rhs = sm_create_with_values(2, 1, (float[]){5.0f, 11.0f});
+  assert(rhs);
+  FloatMatrix *solution = sm_solve_system(a, rhs);
+  assert(solution && fabsf(solution->values[0] - 1.0f) < 1e-5f &&
+         fabsf(solution->values[1] - 2.0f) < 1e-5f);
   DoubleSparseMatrix *sparse = dms_create_identity(2);
   assert(sparse && dms_get(sparse, 1, 1) == 1.0);
   float parameter = 1.0f, gradient = 2.0f;
@@ -35,6 +41,8 @@ int main(void) {
   st_destroy(x);
 #endif
   dms_destroy(sparse);
+  sm_destroy(solution);
+  sm_destroy(rhs);
   sm_destroy(product);
   sm_destroy(a);
   return 0;

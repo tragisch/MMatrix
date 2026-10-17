@@ -4,6 +4,8 @@ set -euo pipefail
 workspace="${BUILD_WORKSPACE_DIRECTORY:-$(pwd)}"
 output="$(mktemp -d "${TMPDIR:-/tmp}/mmatrix-install-test.XXXXXX")"
 trap 'rm -rf "$output"' EXIT
+archive_begin=()
+archive_end=()
 
 case "$(uname -s)" in
   Darwin)
@@ -13,6 +15,10 @@ case "$(uname -s)" in
     ;;
   Linux)
     compiler=(clang)
+    # GNU ld resolves static archives from left to right; the dependency
+    # closure is installed as separate archives rather than one link order.
+    archive_begin=(-Wl,--start-group)
+    archive_end=(-Wl,--end-group)
     linkopts=(-lstdc++ -lgfortran -lquadmath -lm -lpthread -ldl)
     ;;
   *) echo "Unsupported installation test host" >&2; exit 1 ;;
@@ -22,6 +28,7 @@ for mode in standard bundle; do
   prefix="$output/$mode"
   bazel run //:matrix_installer --color=no --curses=no -- --mode="$mode" "$prefix"
   "${compiler[@]}" "$workspace/tools/ci/install_consumer.c" -I"$prefix/include" \
-    "$prefix"/lib/*.a "${linkopts[@]}" -o "$output/consumer-$mode"
+    "${archive_begin[@]}" "$prefix"/lib/*.a "${archive_end[@]}" \
+    "${linkopts[@]}" -o "$output/consumer-$mode"
   "$output/consumer-$mode"
 done

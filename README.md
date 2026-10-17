@@ -89,7 +89,7 @@ bazel run //:matrix_installer -- --mode=bundle "$PWD/lib/matrix_bundle"
 
 Standard mode keeps separate libraries; bundle mode combines static archives into `libmatrix_full.a`.
 On macOS the installation includes tensor and MPS libraries; Linux installs matrix and vector libraries.
-System frameworks still need to be linked by consumers. Installation does not create a portable binary SDK:
+System frameworks still need to be linked by consumers. On Linux, link separate static archives as a dependency group (`-Wl,--start-group ... -Wl,--end-group`) together with the system C++, Fortran, math, threading, and dynamic-loader runtimes; `tools/ci/test_install.sh` contains a complete example. Installation does not create a portable binary SDK:
 compiler/runtime compatibility and third-party notices must be checked before redistributing binary bundles.
 
 ## License

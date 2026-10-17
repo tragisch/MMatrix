@@ -61,9 +61,12 @@ The workflow uses the documented upstream [checkout](https://github.com/actions/
 - GitHub workflow `BUILD` was manually disabled and has been re-enabled for validation.
 - [Initial run](https://github.com/tragisch/MMatrix/actions/runs/39021224152): macOS passed all 32 test targets and both installation consumers.
 - Ubuntu x86-64 exposed a missing link to separately packaged LAPACKE and two failing NN tests (NaN propagation and thread-independent activation results).
-- Repairs: include a separate LAPACKE archive when present; compile the shared NN kernel translation unit without fast-math/reassociation or floating-point contraction. The default matrix/backend optimization flags remain unchanged.
+- Repairs: include a separate LAPACKE archive when present; compile the shared NN kernel translation unit without fast-math/reassociation or floating-point contraction.
 - The CPU-only NN suite also passes locally with `--config=openmp_only` after the repair.
-- The corrected revision is being validated in the same macOS/Ubuntu matrix.
+- [Second run](https://github.com/tragisch/MMatrix/actions/runs/39022026793): all 14 Linux-supported test targets pass; 18 macOS-only targets are skipped. The separate installation check then reproduced unreadable LLVM-bitcode archives (`file format not recognized`) with the system linker.
+- Remove forced Linux `-flto` so installed archives contain ordinary object code; group separate archives for GNU ld, and select Apple libtool only on macOS.
+- Installation consumers now also solve a linear system, exercising LAPACKE from the installed artifacts.
+- The corrected revision is being validated in the same macOS/Ubuntu matrix. Build caching is enabled for subsequent runs.
 
 ## Before tagging
 

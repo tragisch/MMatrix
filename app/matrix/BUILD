@@ -120,7 +120,6 @@ perf_copts = select({
         "-fomit-frame-pointer",
         "-march=native",
         "-mtune=native",
-        "-flto",
         "-fno-math-errno",
         "-fno-trapping-math",
         "-falign-functions=32",

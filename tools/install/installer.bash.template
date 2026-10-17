@@ -120,7 +120,7 @@ function create_bundle_library() {
   tmp_dir="$(mktemp -d)"
 
   local bundle_tmp="${tmp_dir}/libmatrix_full.a"
-  if command -v libtool >/dev/null 2>&1; then
+  if [[ "$(uname -s)" == "Darwin" ]] && command -v libtool >/dev/null 2>&1; then
     libtool -static -o "${bundle_tmp}" "${archives[@]}"
   elif command -v ar >/dev/null 2>&1; then
     local mri="${tmp_dir}/bundle.mri"

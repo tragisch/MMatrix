@@ -27,6 +27,7 @@ jobs:
       - uses: bazel-contrib/setup-bazel@0.19.1
         with:
           bazelisk-cache: true
+          disk-cache: true
           repository-cache: true
       - name: Prepare system OpenBLAS and LAPACKE
         if: runner.os == 'Linux'
