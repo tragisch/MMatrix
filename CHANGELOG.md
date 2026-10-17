@@ -24,6 +24,8 @@ Changes since `v0.3.1`.
 
 ### Fixed during release preparation
 
+- Link separately packaged LAPACKE on Linux and preserve NN-kernel NaN/thread semantics under optimized builds.
+
 - Exercise actual OpenMP branches in interpreter thread-comparison tests and remove an unmatched floating-point pragma.
 - Reject size overflows before gather/permute byte copies; validate permutation indices before shape access; preserve arbitrary unaligned byte payloads.
 - Remove stale SuiteSparse and local HDF5 wiring, obsolete vendor build wrappers, and benchmark targets whose sources were not published.

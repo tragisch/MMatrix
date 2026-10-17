@@ -270,7 +270,6 @@ cc_library(
     name = "sm",
     srcs = [
         "src/sm.c",
-        "src/sm_kernels.c",
     ],
     hdrs = [
         "include/sm.h",
@@ -290,10 +289,32 @@ cc_library(
     visibility = ["//visibility:public"],
     deps = default_deps + [
         ":m_rng",
+        ":sm_kernels",
     ] + select({
         ":backend_openblas_linux": ["@openblas"],
         "//conditions:default": [],
     }),
+)
+
+cc_library(
+    name = "sm_kernels",
+    srcs = ["src/sm_kernels.c"],
+    hdrs = [
+        "include/sm.h",
+        "src/sm_kernels.h",
+    ],
+    # NaN propagation and thread-independent results are part of this API.
+    copts = default_copts + perf_copts + package_copts + openmp_copts + [
+        "-fno-fast-math",
+        "-ffp-contract=off",
+    ],
+    includes = [
+        "include",
+        "src",
+    ],
+    linkopts = openmp_linkopts + accelerate_linkopts,
+    visibility = ["//visibility:private"],
+    deps = ["@openmp//:libomp"],
 )
 
 objc_library(

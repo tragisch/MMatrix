@@ -34,6 +34,8 @@ bazel build //app/matrix --config=openblas --repo_env=OPENBLAS_ROOT=/path/to/ope
 ```
 
 The default OpenBLAS prefixes are `/opt/homebrew/opt/openblas` on macOS and `/home/linuxbrew/.linuxbrew/opt/openblas` on Linux.
+The OpenBLAS prefix must expose headers under `include/` and `libopenblas.a` under `lib/`.
+LAPACKE must be included in OpenBLAS or supplied as `lib/liblapacke.a`; the Ubuntu CI job stages the distribution packages into this layout.
 SuiteSparse and the former CSparse conversion API have been removed.
 
 ## Build and test

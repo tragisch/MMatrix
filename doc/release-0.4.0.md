@@ -56,6 +56,15 @@ source-release completeness and installation. This is not exhaustive verificatio
 
 The workflow uses the documented upstream [checkout](https://github.com/actions/checkout) and [Bazel setup](https://github.com/bazel-contrib/setup-bazel) action versions.
 
+## Cross-platform CI
+
+- GitHub workflow `BUILD` was manually disabled and has been re-enabled for validation.
+- [Initial run](https://github.com/tragisch/MMatrix/actions/runs/39021224152): macOS passed all 32 test targets and both installation consumers.
+- Ubuntu x86-64 exposed a missing link to separately packaged LAPACKE and two failing NN tests (NaN propagation and thread-independent activation results).
+- Repairs: include a separate LAPACKE archive when present; compile the shared NN kernel translation unit without fast-math/reassociation or floating-point contraction. The default matrix/backend optimization flags remain unchanged.
+- The CPU-only NN suite also passes locally with `--config=openmp_only` after the repair.
+- The corrected revision is being validated in the same macOS/Ubuntu matrix.
+
 ## Before tagging
 
 - Complete the GitHub Actions matrix on macOS and Ubuntu x86-64, including standard/bundle installation checks. Linux uses system OpenBLAS and LAPACKE.

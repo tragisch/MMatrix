@@ -3,7 +3,8 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 # homebrew installed local openblas
 cc_library(
     name = "openblas",
-    srcs = ["lib/libopenblas.a"],
+    # Homebrew includes LAPACKE in OpenBLAS; distro packages may split it out.
+    srcs = ["lib/libopenblas.a"] + glob(["lib/liblapacke.a"]),
     hdrs = glob([
         "include/*.h",
     ]),
@@ -15,7 +16,10 @@ cc_library(
 
 filegroup(
     name = "install_files",
-    srcs = ["lib/libopenblas.a"] + glob(["include/*.h"]),
+    srcs = ["lib/libopenblas.a"] + glob([
+        "lib/liblapacke.a",
+        "include/*.h",
+    ]),
     visibility = ["//visibility:public"],
 )
 
