@@ -2,7 +2,7 @@ name: BUILD
 
 on:
   push:
-    branches: [master, "codex/release-*"]
+    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:

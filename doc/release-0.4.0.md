@@ -66,11 +66,12 @@ The workflow uses the documented upstream [checkout](https://github.com/actions/
 - [Second run](https://github.com/tragisch/MMatrix/actions/runs/39022026793): all 14 Linux-supported test targets pass; 18 macOS-only targets are skipped. The separate installation check then reproduced unreadable LLVM-bitcode archives (`file format not recognized`) with the system linker.
 - Remove forced Linux `-flto` so installed archives contain ordinary object code; group separate archives for GNU ld, and select Apple libtool only on macOS.
 - Installation consumers now also solve a linear system, exercising LAPACKE from the installed artifacts.
-- The corrected revision is being validated in the same macOS/Ubuntu matrix. Build caching is enabled for subsequent runs.
+- [Successful cross-platform run](https://github.com/tragisch/MMatrix/actions/runs/39022691316) for `ebfc694`: macOS passes all 32 test targets; Ubuntu x86-64 passes all 14 supported targets (18 macOS-only targets skipped). Both standard and bundle installations build and run the system-compiler consumer, including the LAPACKE solver.
+- Build caching is enabled. Branch pushes no longer duplicate pull-request validation; pushes to master and pull requests retain CI, with manual dispatch available. The final documentation/trigger update is checked by a single PR run.
 
 ## Before tagging
 
-- Complete the GitHub Actions matrix on macOS and Ubuntu x86-64, including standard/bundle installation checks. Linux uses system OpenBLAS and LAPACKE.
-- Inspect any failed jobs and fix release blockers before tagging.
+- Confirm the latest PR commit retains green macOS/Ubuntu checks before merging. Linux uses system OpenBLAS and LAPACKE.
+- Merge the reviewed PR; no release tag or publication has been created by this validation task.
 - Existing optimized builds emit compiler warnings (including fast-math/NaN assumptions). Numerical tests pass locally, but cross-toolchain numerical guarantees and GPU performance have not been newly established.
 - Tag the reviewed release commit as `v0.4.0` and publish the source release with the changelog.
