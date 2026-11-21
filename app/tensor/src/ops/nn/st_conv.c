@@ -535,67 +535,81 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
     return false;
   }
 
-  float *col_buf = st_workspace_alloc(ws, out_spatial * patch_size);
-  float *y_buf = st_workspace_alloc(ws, out_spatial * c_out);
+  size_t total_rows = 0;
+  if (!st_safe_mul(n, out_spatial, &total_rows)) {
+    log_error("Error: st_conv2d_gemm_nchw size overflow in batch rows.");
+    return false;
+  }
+
+  float *col_buf = st_workspace_alloc(ws, total_rows * patch_size);
+  float *y_buf = st_workspace_alloc(ws, total_rows * c_out);
   if (!col_buf || !y_buf) {
     return false;
   }
 
   FloatMatrix w_mat = {.rows = patch_size, .cols = c_out,
                        .capacity = patch_size * c_out, .values = wp->data};
-  FloatMatrix col = {.rows = out_spatial, .cols = patch_size,
-                     .capacity = out_spatial * patch_size, .values = col_buf};
-  FloatMatrix y = {.rows = out_spatial, .cols = c_out,
-                   .capacity = out_spatial * c_out, .values = y_buf};
 
-  for (size_t ni = 0; ni < n; ++ni) {
-    /* im2col: build column matrix — parallelise over output rows. */
-#pragma omp parallel for if (out_spatial >= 256)
-    for (size_t out_row = 0; out_row < out_spatial; ++out_row) {
-      const size_t oh = out_row / out_w;
-      const size_t ow = out_row % out_w;
+  /* im2col over the whole batch in a single parallel region (the old
+   * per-image loop left small spatial sizes — e.g. 14x14 after pooling —
+   * serial because of the out_spatial >= 256 guard). */
+#pragma omp parallel for if (total_rows >= 256)
+  for (size_t out_row = 0; out_row < total_rows; ++out_row) {
+    const size_t ni = out_row / out_spatial;
+    const size_t rem = out_row % out_spatial;
+    const size_t oh = rem / out_w;
+    const size_t ow = rem % out_w;
 
-      for (size_t ci = 0; ci < c_in; ++ci) {
-        for (size_t kh = 0; kh < k_h; ++kh) {
-          for (size_t kw = 0; kw < k_w; ++kw) {
-            const ptrdiff_t in_h =
-                (ptrdiff_t)(oh * stride_h + kh * dil_h) - (ptrdiff_t)pad_h;
-            const ptrdiff_t in_w =
-                (ptrdiff_t)(ow * stride_w + kw * dil_w) - (ptrdiff_t)pad_w;
-            const size_t col_idx = ((ci * k_h) + kh) * k_w + kw;
+    for (size_t ci = 0; ci < c_in; ++ci) {
+      for (size_t kh = 0; kh < k_h; ++kh) {
+        const ptrdiff_t in_h =
+            (ptrdiff_t)(oh * stride_h + kh * dil_h) - (ptrdiff_t)pad_h;
+        if (in_h < 0 || (size_t)in_h >= h) {
+          /* whole kernel row out of bounds: patch slice stays zero */
+          float *dst = &col_buf[out_row * patch_size + ((ci * k_h) + kh) * k_w];
+          for (size_t kw = 0; kw < k_w; ++kw) dst[kw] = 0.0f;
+          continue;
+        }
+        const size_t in_row_off = ((ni * c_in + ci) * h + (size_t)in_h) * w;
+        for (size_t kw = 0; kw < k_w; ++kw) {
+          const ptrdiff_t in_w =
+              (ptrdiff_t)(ow * stride_w + kw * dil_w) - (ptrdiff_t)pad_w;
+          const size_t col_idx = ((ci * k_h) + kh) * k_w + kw;
 
-            float v = 0.0f;
-            if (in_h >= 0 && in_w >= 0 && (size_t)in_h < h &&
-                (size_t)in_w < w) {
-              const size_t in_idx =
-                  ((ni * c_in + ci) * h + (size_t)in_h) * w + (size_t)in_w;
-              v = input->values[in_idx];
-            }
-
-            col.values[out_row * patch_size + col_idx] = v;
+          float v = 0.0f;
+          if (in_w >= 0 && (size_t)in_w < w) {
+            v = input->values[in_row_off + (size_t)in_w];
           }
+
+          col_buf[out_row * patch_size + col_idx] = v;
         }
       }
     }
+  }
 
-    if (!sm_gemm(&y, 1.0f, &col, SM_NO_TRANSPOSE, &w_mat, SM_NO_TRANSPOSE,
-                 0.0f)) {
-      return false;
-    }
+  /* One GEMM for the whole batch: [n*out_spatial, patch] @ [patch, c_out]. */
+  FloatMatrix col = {.rows = total_rows, .cols = patch_size,
+                     .capacity = total_rows * patch_size, .values = col_buf};
+  FloatMatrix y = {.rows = total_rows, .cols = c_out,
+                   .capacity = total_rows * c_out, .values = y_buf};
+  if (!sm_gemm(&y, 1.0f, &col, SM_NO_TRANSPOSE, &w_mat, SM_NO_TRANSPOSE,
+               0.0f)) {
+    return false;
+  }
 
-    for (size_t oh = 0; oh < out_h; ++oh) {
-      for (size_t ow = 0; ow < out_w; ++ow) {
-        const size_t out_row = oh * out_w + ow;
-        for (size_t co = 0; co < c_out; ++co) {
-          float v = y.values[out_row * c_out + co];
-          if (bias) {
-            v += bias->values[co];
-          }
-          const size_t out_idx =
-              ((ni * c_out + co) * out_h + oh) * out_w + ow;
-          output->values[out_idx] = v;
-        }
-      }
+  /* Scatter y -> NCHW output (+bias).  Parallelise over (batch, channel)
+   * rows so each thread writes a contiguous out_spatial run; the read from
+   * y is strided but the write side stays streaming. */
+  const size_t out_planes = n * c_out;
+#pragma omp parallel for if (out_planes >= 64)
+  for (size_t plane = 0; plane < out_planes; ++plane) {
+    const size_t co = plane % c_out;
+    const float bias_v = bias ? bias->values[co] : 0.0f;
+    const size_t ni = plane / c_out;
+    float *out_row = &output->values[plane * out_spatial];
+    const float *y_base = &y_buf[ni * out_spatial * c_out];
+    for (size_t r = 0; r < out_spatial; ++r) {
+      out_row[r] = y_base[r * c_out + co] + bias_v;
     }
   }
 
