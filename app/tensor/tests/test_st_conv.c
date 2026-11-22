@@ -343,9 +343,9 @@ void test_st_conv2d_nchw_cpu_opt_should_match_reference_result(void) {
 }
 
 void test_st_conv2d_nchw_gemm_should_match_reference_result(void) {
-  FloatTensor *input = create_tensor_4d(1, 1, 3, 3);
+  FloatTensor *input = create_tensor_4d(2, 1, 3, 3);
   FloatTensor *weight = create_tensor_4d(1, 1, 2, 2);
-  FloatTensor *output = create_tensor_4d(1, 1, 2, 2);
+  FloatTensor *output = create_tensor_4d(2, 1, 2, 2);
 
   TEST_ASSERT_NOT_NULL(input);
   TEST_ASSERT_NOT_NULL(weight);
@@ -361,8 +361,8 @@ void test_st_conv2d_nchw_gemm_should_match_reference_result(void) {
       0.0f, -1.0f,
   };
 
-  for (size_t i = 0; i < 9; ++i) {
-    input->values[i] = in_vals[i];
+  for (size_t i = 0; i < 18; ++i) {
+    input->values[i] = in_vals[i % 9] + (float)(i / 9) * 10.0f;
   }
   for (size_t i = 0; i < 4; ++i) {
     weight->values[i] = k_vals[i];
@@ -374,7 +374,7 @@ void test_st_conv2d_nchw_gemm_should_match_reference_result(void) {
   bool ok = st_conv2d_nchw(input, weight, NULL, &p, output);
   TEST_ASSERT_TRUE(ok);
 
-  for (size_t i = 0; i < 4; ++i) {
+  for (size_t i = 0; i < 8; ++i) {
     TEST_ASSERT_FLOAT_WITHIN(EPSILON, -4.0f, output->values[i]);
   }
 

@@ -526,6 +526,18 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
     return false;
   }
 
+  size_t total_rows = 0;
+  size_t col_elements = 0;
+  size_t y_elements = 0;
+  size_t out_planes = 0;
+  if (!st_safe_mul(n, out_spatial, &total_rows) ||
+      !st_safe_mul(total_rows, patch_size, &col_elements) ||
+      !st_safe_mul(total_rows, c_out, &y_elements) ||
+      !st_safe_mul(n, c_out, &out_planes)) {
+    log_error("Error: st_conv2d_gemm_nchw size overflow in batch buffers.");
+    return false;
+  }
+
   StWorkspace *ws = st_workspace_get();
   st_workspace_reset(ws);
 
@@ -535,14 +547,8 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
     return false;
   }
 
-  size_t total_rows = 0;
-  if (!st_safe_mul(n, out_spatial, &total_rows)) {
-    log_error("Error: st_conv2d_gemm_nchw size overflow in batch rows.");
-    return false;
-  }
-
-  float *col_buf = st_workspace_alloc(ws, total_rows * patch_size);
-  float *y_buf = st_workspace_alloc(ws, total_rows * c_out);
+  float *col_buf = st_workspace_alloc(ws, col_elements);
+  float *y_buf = st_workspace_alloc(ws, y_elements);
   if (!col_buf || !y_buf) {
     return false;
   }
@@ -589,9 +595,9 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
 
   /* One GEMM for the whole batch: [n*out_spatial, patch] @ [patch, c_out]. */
   FloatMatrix col = {.rows = total_rows, .cols = patch_size,
-                     .capacity = total_rows * patch_size, .values = col_buf};
+                     .capacity = col_elements, .values = col_buf};
   FloatMatrix y = {.rows = total_rows, .cols = c_out,
-                   .capacity = total_rows * c_out, .values = y_buf};
+                   .capacity = y_elements, .values = y_buf};
   if (!sm_gemm(&y, 1.0f, &col, SM_NO_TRANSPOSE, &w_mat, SM_NO_TRANSPOSE,
                0.0f)) {
     return false;
@@ -600,7 +606,6 @@ static bool st_conv2d_gemm_nchw(const FloatTensor *input,
   /* Scatter y -> NCHW output (+bias).  Parallelise over (batch, channel)
    * rows so each thread writes a contiguous out_spatial run; the read from
    * y is strided but the write side stays streaming. */
-  const size_t out_planes = n * c_out;
 #pragma omp parallel for if (out_planes >= 64)
   for (size_t plane = 0; plane < out_planes; ++plane) {
     const size_t co = plane % c_out;
