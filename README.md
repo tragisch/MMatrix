@@ -1,7 +1,7 @@
 # MMatrix
 
 MMatrix is a C library for dense and sparse matrix, vector, and tensor operations, built with Bazel.
-The next release candidate is **0.4.0**; see [CHANGELOG.md](CHANGELOG.md) for changes and migration notes.
+The next release candidate is **0.4.1**; see [CHANGELOG.md](CHANGELOG.md) for changes and migration notes.
 
 ## What is included
 
@@ -18,7 +18,7 @@ The next release candidate is **0.4.0**; see [CHANGELOG.md](CHANGELOG.md) for ch
 | Linux x86-64 | Matrix and vector | OpenBLAS + OpenMP |
 
 The tensor target currently requires macOS frameworks, including for CPU execution.
-Linux support does not include the tensor module. Release validation status is recorded in [doc/release-0.4.0.md](doc/release-0.4.0.md).
+Linux support does not include the tensor module. The [0.4.0 release validation report](doc/release-0.4.0.md) documents the previous release baseline.
 
 Install Bazelisk and the platform's C/C++ development tools. The repository pins Bazel in `.bazelversion`.
 On macOS, install Xcode command line tools (`xcode-select --install`). No Homebrew SuiteSparse installation is required.

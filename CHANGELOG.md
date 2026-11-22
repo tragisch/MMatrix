@@ -1,6 +1,19 @@
 # Changelog
 
-## 0.4.0 (unreleased)
+## 0.4.1 (unreleased)
+
+Changes since `0.4.0`.
+
+### Changed
+
+- Batch the convolution GEMM path's im2col, GEMM, and output scatter across the full batch.
+
+### Fixed
+
+- Check convolution GEMM batch-buffer sizes for overflow before allocation.
+- Exercise multi-image batches in the convolution GEMM regression test.
+
+## 0.4.0
 
 Changes since `v0.3.1`.
 
